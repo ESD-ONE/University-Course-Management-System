@@ -19,7 +19,9 @@ multiplied by seven before anyone notices it. Instead, this phase implements one
   mechanically for the remaining 6 services
 - authentication end to end, matching [`flow-04-login.mmd`](architecture/flow-04-login.mmd)
   branch for branch (valid credentials, wrong credentials, suspended account)
-- CI (build + test) and a real deployment to shared infrastructure
+- CI/CD via the existing Jenkins instance, and a real deployment to shared infrastructure,
+  verified live (login, authenticated profile lookup, admin listing, unauthenticated
+  rejection all exercised against the deployed containers, not just local tests)
 
 The remaining 6 services (Academic Structure, Enrollment, Assignment & Grading,
 Notification, Analytics & Reporting, Reference Data) follow the same template in
@@ -56,6 +58,29 @@ Git-flow, adapted to a brand-new repository:
 - **`develop`** — integration branch; every finished slice merges here first.
 - **`feature/*`** — one branch per unit of work, cut from `develop` (this slice lived on
   `feature/identity-access-vertical-slice`).
+
+## 3a. CI/CD: Jenkins, not GitHub Actions
+
+The shared Contabo host already runs Jenkins (snap install, `JENKINS_HOME=/var/snap/jenkins/5108`)
+with an existing multibranch pipeline job (`TravelSriLankaNow`) reading a `Jenkinsfile`
+from its repo root. This repo follows the same pattern instead of introducing a second
+CI system: the root [`Jenkinsfile`](../Jenkinsfile) runs `./mvnw verify` on every branch
+and, only on `develop`/`release`/`main`, deploys — copying the built jars and
+`infra/docker-compose.deploy.yml` into `/opt/ucms-app` and running `docker compose up
+--build`. No SSH hop is needed for deploy: Jenkins and the deploy target are the same
+host.
+
+The Maven Wrapper (`./mvnw`) is committed so the pipeline doesn't depend on whatever
+Maven version happens to be on the Jenkins host — at the time of writing, the host has
+JDK 17 system-wide but no system Maven at all.
+
+**Known gap:** the Jenkins multibranch job itself (pointing at this repo, mirroring the
+existing `TravelSriLankaNow` job's `GitSCMSource` + `BranchDiscoveryTrait` config) could
+not be created automatically — the provided Jenkins admin credentials returned `401
+Unauthorized` against both the UI login and the REST API. Creating the job manually
+(Jenkins → New Item → Multibranch Pipeline → Git source →
+`https://github.com/ESD-ONE/University-Course-Management-System.git` → script path
+`Jenkinsfile`) is the one manual step left once Jenkins access is sorted out.
 
 ## 4. Infrastructure topology
 

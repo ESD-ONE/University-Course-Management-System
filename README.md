@@ -67,8 +67,16 @@ password: ChangeMe123!
 ## Build & test
 
 ```bash
-mvn verify
+./mvnw verify
 ```
+
+## CI/CD
+
+Jenkins (already running on the shared Contabo host) builds, tests, and deploys via the
+root [`Jenkinsfile`](Jenkinsfile) — a multibranch pipeline, same pattern as the existing
+`TravelSriLankaNow` job on that instance. `./mvnw verify` runs on every branch; the
+`Deploy` stage (local shell, no SSH hop needed since Jenkins and the target host are the
+same machine) only runs on `develop`, `release`, and `main`.
 
 ## Project layout
 
