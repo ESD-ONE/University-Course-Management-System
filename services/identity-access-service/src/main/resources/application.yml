@@ -7,8 +7,8 @@ spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:identity_db}
-    username: ${DB_USER:ucms_admin}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ucms}
+    username: ${DB_USER:identity_access_svc}
     password: ${DB_PASSWORD:}
   jpa:
     hibernate:
@@ -17,9 +17,18 @@ spring:
     properties:
       hibernate:
         jdbc.time_zone: UTC
+        # One shared "ucms" database, one schema per service — this service only
+        # ever reads/writes its own schema, and its DB role has no grants outside
+        # it. See docs/architecture/DATA_GOVERNANCE.md.
+        default_schema: identity_access
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: identity_access
+    default-schema: identity_access
+    # The schema is created by infra/init-schemas.sh as the admin role, not by
+    # this service's own (deliberately schema-scoped, non-superuser) role.
+    create-schemas: false
 
 ucms:
   jwt:
