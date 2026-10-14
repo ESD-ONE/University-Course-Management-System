@@ -2,6 +2,9 @@ package com.ucms.identity.web;
 
 import com.ucms.identity.service.UserService;
 import com.ucms.identity.web.dto.CreateUserRequest;
+import com.ucms.identity.web.dto.CreatedUserResponse;
+import com.ucms.identity.web.dto.UpdateUserRoleRequest;
+import com.ucms.identity.web.dto.UpdateUserStatusRequest;
 import com.ucms.identity.web.dto.UserResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -22,8 +25,8 @@ public class UserController {
     }
 
     @PostMapping("/users")
-    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request,
-                                                    @AuthenticationPrincipal UUID currentUserId) {
+    public ResponseEntity<CreatedUserResponse> createUser(@Valid @RequestBody CreateUserRequest request,
+                                                            @AuthenticationPrincipal UUID currentUserId) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(request, currentUserId));
     }
 
@@ -35,5 +38,19 @@ public class UserController {
     @GetMapping("/users/me")
     public UserResponse me(@AuthenticationPrincipal UUID currentUserId) {
         return userService.getById(currentUserId);
+    }
+
+    @PatchMapping("/users/{id}/status")
+    public UserResponse updateStatus(@PathVariable("id") UUID id,
+                                      @Valid @RequestBody UpdateUserStatusRequest request,
+                                      @AuthenticationPrincipal UUID currentUserId) {
+        return userService.updateStatus(id, request.status(), currentUserId);
+    }
+
+    @PutMapping("/users/{id}/role")
+    public UserResponse updateRole(@PathVariable("id") UUID id,
+                                    @Valid @RequestBody UpdateUserRoleRequest request,
+                                    @AuthenticationPrincipal UUID currentUserId) {
+        return userService.updateRole(id, request.role(), currentUserId);
     }
 }
