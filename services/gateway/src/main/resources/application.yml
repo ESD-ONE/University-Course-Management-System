@@ -13,6 +13,16 @@ spring:
             - Path=/api/identity/**
           filters:
             - StripPrefix=2
+      # The Gateway is the only thing a browser talks to — CORS is handled here once,
+      # not per-service. Angular dev server runs on 4200; a real deployed FE origin
+      # replaces this once one exists.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:4200}"
+            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowedHeaders: "*"
+            allowCredentials: true
 
 management:
   endpoints:

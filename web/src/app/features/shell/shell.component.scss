@@ -1,0 +1,63 @@
+.app-shell { height: 100%; display: flex; flex-direction: column; }
+
+.topbar {
+  height: 64px;
+  flex: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 20px;
+
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; flex: none; }
+  .mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, #4e68e8, var(--accent-dark));
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .spacer { flex: 1; }
+}
+
+.user-menu-wrap { position: relative; }
+.user-btn {
+  display: flex; align-items: center; gap: 10px; background: none; border: none; padding: 4px 6px; border-radius: 10px;
+  &:hover { background: var(--bg); }
+  .who { text-align: left; }
+  .who b { display: block; font-size: 12px; }
+  .who span { font-size: 10.5px; color: var(--ink-faint); }
+}
+.user-dropdown {
+  position: absolute; right: 0; top: 48px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(22, 27, 41, .14); min-width: 180px; overflow: hidden; z-index: 30;
+
+  button {
+    width: 100%; text-align: left; padding: 11px 16px; border: none; background: none; font-size: 13px; color: var(--ink);
+    &:hover { background: var(--bg); }
+    &.danger { color: var(--danger); }
+  }
+}
+
+.main { flex: 1; display: flex; min-height: 0; }
+.sidebar {
+  width: 252px; flex: none; background: var(--surface); border-right: 1px solid var(--line);
+  overflow-y: auto; padding: 18px 0 20px;
+}
+.group-label { font-size: 10px; font-weight: 700; color: var(--ink-faint); letter-spacing: .07em; padding: 12px 24px 8px; }
+.navitem {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 24px; margin: 1px 10px; border-radius: 9px;
+  font-size: 13.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer; border: none; background: none;
+  width: calc(100% - 20px); text-align: left; text-decoration: none;
+
+  &:hover { background: var(--surface2); }
+  &.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); flex: none; }
+  &.active .dot { background: var(--accent); }
+  &.placeholder { color: var(--ink-faint); cursor: default; }
+  .badge-soon {
+    margin-left: auto; font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+    background: var(--surface2); color: var(--ink-faint);
+  }
+}
+
+.content { flex: 1; min-width: 0; overflow-y: auto; padding: 36px 40px 60px; }

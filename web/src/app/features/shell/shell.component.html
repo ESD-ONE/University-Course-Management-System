@@ -1,0 +1,51 @@
+<div class="app-shell">
+  <div class="topbar">
+    <div class="brand"><span class="mark">U</span> UCMS</div>
+    <div class="spacer"></div>
+
+    @if (auth.currentUser(); as user) {
+      <div class="user-menu-wrap">
+        <button class="user-btn" (click)="toggleUserMenu()">
+          <span class="role-pill">{{ user.role }}</span>
+          <div class="avatar" style="width:34px;height:34px;font-size:12px;">{{ initialsOf(user.name) }}</div>
+          <div class="who"><b>{{ user.name }}</b><span>{{ user.email }}</span></div>
+        </button>
+        @if (userMenuOpen()) {
+          <div class="user-dropdown">
+            <button routerLink="/app/profile" (click)="toggleUserMenu()">My Profile</button>
+            <button class="danger" (click)="logout()">Log Out</button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="main">
+    <nav class="sidebar">
+      <div class="group-label">General</div>
+      <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active">
+        <span class="dot"></span> Dashboard
+      </a>
+      <a class="navitem" routerLink="/app/profile" routerLinkActive="active">
+        <span class="dot"></span> My Profile
+      </a>
+
+      @if (auth.currentUser()?.role === 'ADMIN') {
+        <div class="group-label">Administration</div>
+        <a class="navitem" routerLink="/app/users" routerLinkActive="active">
+          <span class="dot"></span> Users
+        </a>
+      }
+
+      <div class="group-label">Coming soon</div>
+      <span class="navitem placeholder">Academic Structure<span class="badge-soon">Soon</span></span>
+      <span class="navitem placeholder">Enrollment<span class="badge-soon">Soon</span></span>
+      <span class="navitem placeholder">Assignments &amp; Grading<span class="badge-soon">Soon</span></span>
+      <span class="navitem placeholder">Analytics &amp; Reports<span class="badge-soon">Soon</span></span>
+    </nav>
+
+    <div class="content">
+      <router-outlet />
+    </div>
+  </div>
+</div>

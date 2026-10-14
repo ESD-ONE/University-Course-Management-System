@@ -1,0 +1,26 @@
+<div class="eyebrow">Overview</div>
+<h1 class="page-title">
+  @if (auth.currentUser(); as user) {
+    Welcome back, {{ user.name }}
+  }
+</h1>
+<p class="page-sub">University Course Management System.</p>
+
+<div class="card" style="margin-bottom:20px;">
+  <b style="display:block;font-size:14px;margin-bottom:8px;">What's live right now</b>
+  <p style="font-size:13px;color:var(--ink-soft);line-height:1.7;margin:0;">
+    Identity &amp; Access is the first service built end to end — sign-in, user accounts, and
+    role assignment all talk to the real backend. Academic Structure, Enrollment,
+    Assignments &amp; Grading, Notifications, and Analytics &amp; Reporting are designed
+    (see the architecture diagrams) but not implemented yet, so there's nothing on this
+    dashboard to show for them beyond what's in the sidebar.
+  </p>
+</div>
+
+@if (auth.currentUser()?.role === 'ADMIN') {
+  <div class="note-box">
+    <b>Administrator</b>
+    Go to <b>Users</b> in the sidebar to create accounts, assign roles, and activate, deactivate,
+    or suspend existing users.
+  </div>
+}

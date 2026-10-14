@@ -1,0 +1,34 @@
+<div class="eyebrow">Account</div>
+<h1 class="page-title">My Profile</h1>
+<p class="page-sub">Your account details, as stored by Identity &amp; Access.</p>
+
+@if (auth.currentUser(); as user) {
+  <div class="card" style="max-width:480px;">
+    <div class="field">
+      <label>Full Name</label>
+      <div style="font-size:14px;font-weight:600;">{{ user.name }}</div>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <div style="font-size:14px;">{{ user.email }}</div>
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <span class="role-pill">{{ user.role }}</span>
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>Status</label>
+      <span class="badge" [class.b-success]="user.status === 'ACTIVE'"
+                           [class.b-gold]="user.status === 'INACTIVE'"
+                           [class.b-danger]="user.status === 'SUSPENDED'">
+        {{ user.status }}
+      </span>
+    </div>
+  </div>
+
+  <div class="note-box warn" style="margin-top:20px;max-width:480px;">
+    <b>Not implemented yet</b>
+    Password changes and notification preferences are part of the designed Profile screen
+    but have no backend endpoint yet — only read access to your own profile exists so far.
+  </div>
+}
