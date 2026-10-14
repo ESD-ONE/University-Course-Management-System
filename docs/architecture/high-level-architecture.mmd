@@ -1,0 +1,47 @@
+flowchart TB
+    WEB["Angular SPA<br/>Admin · Lecturer · Student"]
+
+    WEB -->|HTTPS REST| GW["API Gateway<br/>routing · token check · rate limiting"]
+    WEB <-.->|WebSocket| WSG["WebSocket Gateway<br/>real-time push"]
+
+    subgraph SVCLAYER["Microservices Layer — 7 services"]
+        SVC["Identity & Access · Academic Structure<br/>Enrollment · Assignment & Grading<br/>Notification · Analytics & Reporting<br/>Reference Data"]
+    end
+
+    GW --> SVCLAYER
+
+    subgraph DATALAYER["Data Layer"]
+        PG[("PostgreSQL<br/>one database per service")]
+        REDIS[("Redis<br/>cache + session store")]
+    end
+
+    SVCLAYER --> PG
+    SVCLAYER <--> REDIS
+
+    subgraph ASYNC["Asynchronous Backbone"]
+        MQ{{"Message Broker<br/>RabbitMQ"}}
+    end
+
+    SVCLAYER -->|publish domain events| MQ
+    MQ -->|consume events| SVCLAYER
+    MQ --> WSG
+
+    subgraph PIPE["Delivery Pipeline"]
+        GIT["Git"] --> CI["Jenkins CI/CD"] --> DOCKER["Docker Images"] --> DEPLOY["Deployed Containers"]
+    end
+
+    DEPLOY -.->|releases| SVCLAYER
+
+    classDef client fill:#3450D6,color:#fff,stroke:none
+    classDef gateway fill:#E4E8FC,color:#161B29,stroke:#3450D6
+    classDef svc fill:#FFFFFF,color:#161B29,stroke:#3450D6,stroke-width:2px
+    classDef data fill:#FBEEDC,color:#161B29,stroke:#B4791F
+    classDef async fill:#EEE7FC,color:#161B29,stroke:#7A4FD6
+    classDef pipe fill:#161B29,color:#fff,stroke:none
+
+    class WEB client
+    class GW,WSG gateway
+    class SVC svc
+    class PG,REDIS data
+    class MQ async
+    class GIT,CI,DOCKER,DEPLOY pipe

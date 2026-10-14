@@ -1,0 +1,55 @@
+flowchart TB
+    GW["API Gateway"]
+
+    IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions, Profile"]
+    IAMDB[("auth_db")]
+    IAM --- IAMDB
+
+    ACAD["2. Academic Structure Service<br/>Calendar, Programs, Curriculum, Catalog, Offerings"]
+    ACADDB[("academic_db")]
+    ACAD --- ACADDB
+
+    ENR["3. Enrollment Service<br/>Program and Course Registration, Capacity, Waitlist"]
+    ENRDB[("enrollment_db")]
+    ENR --- ENRDB
+
+    GRADE["4. Assignment and Grading Service<br/>Assignments, Submissions, Grading"]
+    GRADEDB[("grading_db")]
+    GRADE --- GRADEDB
+
+    NOTIF["5. Notification Service<br/>Email and In-App Notifications"]
+    NOTIFDB[("notification_db")]
+    NOTIF --- NOTIFDB
+
+    ANALYTICS["6. Analytics and Reporting Service<br/>Dashboards, Reports"]
+    ANALYTICSDB[("analytics_db")]
+    ANALYTICS --- ANALYTICSDB
+
+    REF["7. Reference Data Service<br/>Faculties, Grading Scales, Categories"]
+    REFDB[("reference_db")]
+    REF --- REFDB
+
+    GW --> IAM
+    GW --> ACAD
+    GW --> ENR
+    GW --> GRADE
+    GW --> ANALYTICS
+    GW --> REF
+
+    ENR -->|validates| ACAD
+    ACAD -->|resolves| REF
+    GRADE -->|validates| ENR
+    GRADE -->|resolves| REF
+
+    MQ{{Message Broker}}
+    ENR -.-> MQ
+    GRADE -.-> MQ
+    ACAD -.-> MQ
+    IAM -.-> MQ
+    MQ -.-> NOTIF
+    MQ -.-> ANALYTICS
+
+    ANALYTICS -->|reads| IAM
+    ANALYTICS -->|reads| ACAD
+    ANALYTICS -->|reads| ENR
+    ANALYTICS -->|reads| GRADE

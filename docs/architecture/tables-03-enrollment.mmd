@@ -1,0 +1,46 @@
+---
+title: 3. Enrollment Service — enrollment_db
+---
+erDiagram
+    STUDENT_PROGRAM_ENROLLMENTS {
+        uuid id PK
+        uuid student_id "ref Identity and Access, no FK"
+        uuid degree_program_id "ref Academic Structure, no FK"
+        uuid intake_academic_year_id "ref Academic Structure, no FK"
+        int current_year_of_study
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    COURSE_ENROLLMENTS {
+        uuid id PK
+        uuid student_id "ref Identity and Access, no FK"
+        uuid course_id "ref Academic Structure, no FK"
+        date enrolled_on
+        string status
+        int version "optimistic lock — guards concurrent seat writes"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete on drop"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    REGISTRATION_LOG {
+        uuid id PK
+        uuid student_id "ref Identity and Access, no FK"
+        string target_type
+        uuid target_id
+        uuid actor_id "ref Identity and Access, no FK"
+        string actor_role
+        string action
+        timestamptz created_at
+    }
+
+    STUDENT_PROGRAM_ENROLLMENTS }o..o{ REGISTRATION_LOG : "audited (polymorphic target_id)"
+    COURSE_ENROLLMENTS }o..o{ REGISTRATION_LOG : "audited (polymorphic target_id)"

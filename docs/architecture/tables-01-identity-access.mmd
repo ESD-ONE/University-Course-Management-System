@@ -1,0 +1,63 @@
+---
+title: 1. Identity and Access Service — auth_db
+---
+erDiagram
+    USERS {
+        uuid id PK
+        string name
+        string email UK
+        string password_hash
+        uuid role_id FK
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by FK "self-ref users.id, null for seed user"
+        timestamptz updated_at
+        uuid updated_by FK "self-ref users.id"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by FK "self-ref users.id, nullable"
+    }
+    ROLES {
+        uuid id PK
+        string name
+        string kind
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by FK "ref users.id"
+        timestamptz updated_at
+        uuid updated_by FK "ref users.id"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by FK "ref users.id, nullable"
+    }
+    PERMISSIONS {
+        uuid id PK
+        string module
+        string action_key
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by FK "ref users.id"
+        timestamptz updated_at
+        uuid updated_by FK "ref users.id"
+    }
+    ROLE_PERMISSIONS {
+        uuid role_id FK
+        uuid permission_id FK
+        boolean granted
+        int version "optimistic lock — guards concurrent toggles"
+        timestamptz created_at
+        uuid created_by FK "ref users.id"
+        timestamptz updated_at
+        uuid updated_by FK "ref users.id"
+    }
+    USER_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        string token_hash
+        timestamptz expires_at
+        timestamptz created_at
+    }
+
+    ROLES ||--o{ USERS : "assigned to"
+    ROLES ||--o{ ROLE_PERMISSIONS : "grants"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "included in"
+    USERS ||--o{ USER_SESSIONS : "signs in via"

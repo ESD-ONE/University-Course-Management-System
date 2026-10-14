@@ -1,0 +1,39 @@
+---
+title: Flow 1 — Student Self-Service Course Enrollment
+---
+sequenceDiagram
+    actor Student
+    participant Client as Angular SPA
+    participant GW as API Gateway
+    participant IAM as Identity and Access
+    participant ACAD as Academic Structure
+    participant ENR as Enrollment
+    participant MQ as Message Broker
+    participant NOTIF as Notification
+    participant WS as WebSocket Gateway
+
+    Student->>Client: Click "Enroll" on COSC5105
+    Client->>GW: POST /courses/COSC5105/enrollments (JWT)
+    GW->>IAM: validate token
+    IAM-->>GW: valid, role = Student
+    GW->>ENR: forward enroll request
+
+    ENR->>ACAD: GET course COSC5105 (open? seats left?)
+    ACAD-->>ENR: open, 8 seats remaining
+
+    alt seats available
+        ENR->>ENR: lock row, insert CourseEnrollment, decrement capacity
+        ENR-->>GW: 201 Created
+        GW-->>Client: Enrolled successfully
+        Client-->>Student: "Enrolled in COSC5105"
+        ENR-)MQ: publish StudentEnrolled (async, fire-and-forget)
+        MQ-)NOTIF: consume StudentEnrolled
+        NOTIF->>NOTIF: send confirmation email + in-app notification
+        MQ-)WS: consume StudentEnrolled
+        WS--)Client: live push "You're enrolled"
+    else course full
+        ENR-->>GW: 409 Conflict (no seats)
+        GW-->>Client: Enrollment failed
+        Client-->>Student: "Course is full — join waitlist?"
+        Note over ENR,MQ: No event published — nothing happened, so nothing to notify
+    end
