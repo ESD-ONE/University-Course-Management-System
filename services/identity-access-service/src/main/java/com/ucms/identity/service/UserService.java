@@ -7,6 +7,7 @@ import com.ucms.identity.exception.EmailAlreadyInUseException;
 import com.ucms.identity.repository.RoleRepository;
 import com.ucms.identity.repository.UserRepository;
 import com.ucms.identity.web.dto.CreateUserRequest;
+import com.ucms.identity.web.dto.UserResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,10 @@ import java.util.UUID;
  * Users are always admin-created and admin-assigned a role (no self-service role picker) —
  * matches the earlier UX decision that was deliberately corrected away from self-service
  * sign-in-as. See docs/ARCHITECTURE_ANALYSIS.md.
+ *
+ * DTO mapping happens inside these @Transactional methods, not in the controller: User.role
+ * is lazily fetched, and with open-in-view disabled the Hibernate session is gone by the
+ * time the controller would otherwise touch it, which throws LazyInitializationException.
  */
 @Service
 public class UserService {
@@ -33,7 +38,7 @@ public class UserService {
     }
 
     @Transactional
-    public User createUser(CreateUserRequest request, UUID createdBy) {
+    public UserResponse createUser(CreateUserRequest request, UUID createdBy) {
         userRepository.findByEmailAndDeletedAtIsNull(request.email()).ifPresent(u -> {
             throw new EmailAlreadyInUseException("A user with this email already exists");
         });
@@ -50,16 +55,22 @@ public class UserService {
         user.setCreatedBy(createdBy);
         user.setUpdatedBy(createdBy);
 
-        return userRepository.save(user);
+        return UserResponse.from(userRepository.save(user));
     }
 
-    public List<User> listUsers() {
-        return userRepository.findAll().stream().filter(u -> !u.isDeleted()).toList();
+    @Transactional(readOnly = true)
+    public List<UserResponse> listUsers() {
+        return userRepository.findAll().stream()
+                .filter(u -> !u.isDeleted())
+                .map(UserResponse::from)
+                .toList();
     }
 
-    public User getById(UUID id) {
-        return userRepository.findById(id)
+    @Transactional(readOnly = true)
+    public UserResponse getById(UUID id) {
+        User user = userRepository.findById(id)
                 .filter(u -> !u.isDeleted())
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("User not found"));
+        return UserResponse.from(user);
     }
 }

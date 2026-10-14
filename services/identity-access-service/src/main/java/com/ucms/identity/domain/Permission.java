@@ -5,7 +5,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "permissions")
-public class Permission extends Auditable {
+public class Permission extends AuditableNoSoftDelete {
 
     @Id
     @GeneratedValue

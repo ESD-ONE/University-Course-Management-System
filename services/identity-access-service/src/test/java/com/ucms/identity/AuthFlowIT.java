@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -90,5 +91,26 @@ class AuthFlowIT {
                         .contentType("application/json")
                         .content("{\"email\":\"nobody@ucms.local\",\"password\":\"CorrectPass1!\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void usersMe_withValidToken_returnsOwnProfileIncludingRole() throws Exception {
+        String body = mockMvc.perform(post("/auth/login")
+                        .contentType("application/json")
+                        .content("{\"email\":\"active@ucms.local\",\"password\":\"CorrectPass1!\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String token = objectMapper.readTree(body).get("token").asText();
+
+        mockMvc.perform(get("/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("active@ucms.local"))
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+    }
+
+    @Test
+    void usersMe_withNoToken_isRejected() throws Exception {
+        mockMvc.perform(get("/users/me"))
+                .andExpect(status().isForbidden());
     }
 }

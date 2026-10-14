@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: identity-access-service
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:identity_db}
     username: ${DB_USER:ucms_admin}

@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "role_permissions")
 @IdClass(RolePermissionId.class)
-public class RolePermission extends Auditable {
+public class RolePermission extends AuditableNoSoftDelete {
 
     @Id
     @ManyToOne(fetch = FetchType.LAZY)

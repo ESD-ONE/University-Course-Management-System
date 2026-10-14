@@ -24,17 +24,16 @@ public class UserController {
     @PostMapping("/users")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request,
                                                     @AuthenticationPrincipal UUID currentUserId) {
-        var created = userService.createUser(request, currentUserId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(created));
+        return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(request, currentUserId));
     }
 
     @GetMapping("/users")
     public List<UserResponse> listUsers() {
-        return userService.listUsers().stream().map(UserResponse::from).toList();
+        return userService.listUsers();
     }
 
     @GetMapping("/users/me")
     public UserResponse me(@AuthenticationPrincipal UUID currentUserId) {
-        return UserResponse.from(userService.getById(currentUserId));
+        return userService.getById(currentUserId);
     }
 }
