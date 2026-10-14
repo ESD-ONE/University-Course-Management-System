@@ -23,6 +23,18 @@ multiplied by seven before anyone notices it. Instead, this phase implements one
   verified live (login, authenticated profile lookup, admin listing, unauthenticated
   rejection all exercised against the deployed containers, not just local tests)
 
+### Landmine for the next service: test class naming
+
+Name test classes `*Test.java`, never `*IT.java`. Surefire's default include pattern
+(bound to the `test` phase, which every `mvn verify`/`package`/CI run goes through) is
+`**/*Test.java` — `*IT` is Failsafe's convention, for a plugin this project never
+configured. Both `AuthFlowIT` and `UserManagementIT` were named this way initially and
+Surefire silently matched and ran **zero** tests every single time — `mvn test` reported
+`BUILD SUCCESS` because there was nothing to fail, not because anything was verified.
+This went unnoticed for several commits. If a class is added as `*IT` again, check for
+`[INFO] Tests run: 0` — a 0.4s "no-op" surefire phase (no `Tests run:` line, no
+`T E S T S` banner at all) is the tell, not just the exit code.
+
 The remaining 6 services (Academic Structure, Enrollment, Assignment & Grading,
 Notification, Analytics & Reporting, Reference Data) follow the same template in
 subsequent iterations — same module layout, same audit base class, same Flyway +
