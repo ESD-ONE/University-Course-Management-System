@@ -11,7 +11,7 @@ flowchart TB
     GW --> SVCLAYER
 
     subgraph DATALAYER["Data Layer"]
-        PG[("PostgreSQL<br/>one database per service")]
+        PG[("PostgreSQL<br/>one instance, one schema per service")]
         REDIS[("Redis<br/>cache + session store")]
     end
 

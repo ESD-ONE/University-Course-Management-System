@@ -60,11 +60,24 @@ dependent rows point at nothing.
 
 ## The `created_by` / `updated_by` FK rule
 
-This follows the same database-per-service rule as every other field in
-these diagrams (see the main `README.md`):
+This follows the same schema-per-service rule as every other field in
+these diagrams (see the main `README.md`): all 7 services share one
+PostgreSQL **instance** and **database** (`ucms`), but each one owns its
+own **schema**, and a real foreign key only ever exists within that same
+schema — never across schema boundaries, even though the tables are
+physically reachable in the same database:
 
-- **Inside the Identity & Access service** (`roles`, `permissions`, `role_permissions`, and `users` itself), `created_by` / `updated_by` / `deleted_by` are real, enforceable foreign keys to `users.id` — marked `FK` in the diagrams, because both tables live in the same `auth_db`.
-- **In every other service**, the same columns hold a `uuid` with no `FK` marker and a `"ref Identity and Access, no FK"` comment — the value is a user ID resolved through the Identity & Access API, not a database-level join, because that user lives in a different database entirely.
+- **Inside the Identity & Access service** (`roles`, `permissions`, `role_permissions`, and `users` itself), `created_by` / `updated_by` / `deleted_by` are real, enforceable foreign keys to `users.id` — marked `FK` in the diagrams, because both tables live in the same `identity_access` schema.
+- **In every other service**, the same columns hold a `uuid` with no `FK` marker and a `"ref Identity and Access, no FK"` comment — the value is a user ID resolved through the Identity & Access API, not a database-level join, because that user lives in a different schema, owned and queried by a different service.
+
+This isolation is enforced at the database role level, not just by
+convention: each service connects with its own PostgreSQL role, granted
+privileges on its own schema only (`GRANT ALL ON SCHEMA identity_access TO
+identity_access_svc`, and so on) — a service's connection simply cannot
+read or write another service's tables, even though nothing stops a
+human `psql` superuser from doing so. See
+[`infra/docker-compose.infra.yml`](../../infra/docker-compose.infra.yml)
+and `infra/init-schemas.sql` for the actual role/grant setup.
 
 `users.created_by` is a deliberate exception within that rule: it
 self-references `users.id` and is nullable, because the very first user in
