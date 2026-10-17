@@ -1,0 +1,264 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Program Management</div>
+    <h1 class="page-title">Degree Programs</h1>
+    <p class="page-sub">Which reference degrees run in which academic year - some degrees don't continue every academic calendar.</p>
+  </div>
+  <button class="btn btn-primary" (click)="openAssignDialog()">+ Assign Degree to Year</button>
+</div>
+
+<div class="card" style="margin-bottom:16px;padding:12px 16px;">
+  <div class="field" style="margin:0;max-width:320px;">
+    <label for="yearFilter">Filter by Academic Year</label>
+    <select id="yearFilter" [ngModel]="yearFilter()" (ngModelChange)="onYearFilterChange($event)">
+      <option value="">All Years</option>
+      @for (y of allYears(); track y.id) { <option [value]="y.id">{{ y.name }}</option> }
+    </select>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card">
+    @for (i of [1,2,3,4]; track i) {
+      <div class="skeleton-row">
+        <span class="skeleton" style="width:70px;height:14px;"></span>
+        <span class="skeleton" style="width:180px;height:14px;"></span>
+        <span class="skeleton" style="width:110px;height:14px;"></span>
+        <span class="skeleton" style="width:80px;height:14px;"></span>
+        <span class="skeleton" style="width:80px;height:14px;"></span>
+        <span class="skeleton" style="width:80px;height:20px;border-radius:12px;"></span>
+      </div>
+    }
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="card">
+    <table>
+      <thead><tr><th>Code</th><th>Degree Program</th><th>Academic Year</th><th>Duration</th><th>Credits</th><th>Status</th><th></th><th style="width:36px;"></th></tr></thead>
+      <tbody>
+        @for (a of assignments(); track a.id) {
+          <tr>
+            <td class="cell-code">{{ a.degreeProgramCode }}</td>
+            <td class="cell-name">
+              {{ a.degreeProgramName }}
+              @if (referenceOf(a.degreeProgramId); as ref) {
+                @if (a.durationYears !== ref.durationYears || a.totalCredits !== ref.totalCredits) {
+                  <div style="font-size:11px;color:var(--ink-faint);">overrides reference defaults ({{ ref.durationYears }}y / {{ ref.totalCredits }} cr)</div>
+                }
+              }
+            </td>
+            <td class="cell-soft">{{ a.academicYearName }}</td>
+            <td class="cell-soft">{{ a.durationYears }} years</td>
+            <td class="cell-soft">{{ a.totalCredits }} credits</td>
+            <td>
+              <span class="badge" [class.b-accent]="a.status === 'PLANNED'" [class.b-success]="a.status === 'ACTIVE'" [class.b-ink]="a.status === 'DISCONTINUED'">{{ a.status }}</span>
+            </td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditDialog(a)">Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteAssignment(a)">Remove</button>
+            </td>
+            <td>
+              <button type="button" class="collapse-toggle" [class.open]="expandedAssignmentId() === a.id"
+                      (click)="toggleExpand(a)" [attr.aria-label]="expandedAssignmentId() === a.id ? 'Collapse courses' : 'Expand courses'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </td>
+          </tr>
+          @if (expandedAssignmentId() === a.id) {
+            <tr>
+              <td colspan="8" style="background:var(--surface2);padding:16px 20px;">
+                <div style="font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px;">
+                  Courses running in {{ a.academicYearName }}
+                </div>
+                @if (expandedCoursesLoading()) {
+                  <p style="color:var(--ink-faint);font-size:12.5px;">Loading…</p>
+                } @else if (expandedCourses().length) {
+                  <table>
+                    <thead><tr><th>Code</th><th>Name</th><th>Year of Study</th><th>Capacity</th><th>Status</th><th>Lecturer</th><th></th></tr></thead>
+                    <tbody>
+                      @for (c of expandedCourses(); track c.id) {
+                        <tr>
+                          <td class="cell-code">{{ c.catalogCourseCode }}</td>
+                          <td class="cell-name">{{ c.catalogCourseName }}</td>
+                          <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
+                          <td class="cell-soft">{{ c.capacity }}</td>
+                          <td><span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span></td>
+                          <td style="min-width:200px;">
+                            @if (editingCourseLecturerId() === c.id) {
+                              <app-searchable-select
+                                placeholder="Search lecturers…"
+                                [options]="lecturerOptions()"
+                                [ngModel]="lecturerEditValue()"
+                                (ngModelChange)="lecturerEditValue.set($event)"
+                                [ngModelOptions]="{standalone: true}"
+                              ></app-searchable-select>
+                            } @else {
+                              {{ lecturerName(c.lecturerId) }}
+                            }
+                          </td>
+                          <td>
+                            @if (editingCourseLecturerId() === c.id) {
+                              <div style="display:flex;gap:6px;">
+                                <button type="button" class="btn btn-primary btn-sm" (click)="submitCourseLecturer(c)">Save</button>
+                                <button type="button" class="btn btn-secondary btn-sm" (click)="cancelEditCourseLecturer()">Cancel</button>
+                              </div>
+                            } @else {
+                              <button type="button" class="btn btn-secondary btn-sm" (click)="openEditCourseLecturer(c)">Assign Lecturer</button>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <p style="color:var(--ink-faint);font-size:12.5px;">No courses from this program are assigned to this academic year yet - use Course Management → Manage Years.</p>
+                }
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr><td colspan="8" style="padding:24px;color:var(--ink-faint);">No degree programs are assigned for this filter yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:12px;color:var(--ink-faint);margin-top:14px;">
+    Need a brand-new degree? Define it first on <b>Reference Degree Details</b>, then assign it here to an academic year.
+  </p>
+}
+
+@if (showAssignDialog()) {
+  <div class="modal-overlay" (click)="showAssignDialog.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()" style="max-width:560px;">
+      <div class="modal-head">
+        <div>
+          <h3>Assign Degree to Year</h3>
+          <p>Pick a reference degree and an academic year, and choose which of its courses also run that year.</p>
+        </div>
+        <button class="modal-close" (click)="showAssignDialog.set(false)">✕</button>
+      </div>
+      <form [formGroup]="assignForm" (ngSubmit)="submitAssign()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field-row">
+            <div class="field">
+              <label for="assignYear">Academic Year</label>
+              <select id="assignYear" formControlName="academicYearId" (change)="onAssignYearChange(assignForm.getRawValue().academicYearId ?? '')">
+                @for (y of assignableYears(); track y.id) { <option [value]="y.id">{{ y.name }} ({{ y.status }})</option> }
+              </select>
+            </div>
+            <div class="field">
+              <label for="assignDegree">Reference Degree</label>
+              <app-searchable-select
+                inputId="assignDegree"
+                placeholder="Search reference degrees…"
+                [options]="availableToAssignOptions()"
+                formControlName="degreeProgramId"
+                (valueChange)="onAssignProgramChange($event)"
+              ></app-searchable-select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="assignDuration">Duration Override (years)</label>
+              <input id="assignDuration" type="number" min="1" max="6" formControlName="durationYears" placeholder="use reference default" />
+            </div>
+            <div class="field">
+              <label for="assignCredits">Credits Override</label>
+              <input id="assignCredits" type="number" min="1" formControlName="totalCredits" placeholder="use reference default" />
+            </div>
+          </div>
+          <p class="hint" style="margin:-10px 0 18px;">Pre-filled from the reference degree's defaults - change only if this year runs differently.</p>
+          <div class="field">
+            <label for="assignStatus">Status</label>
+            <select id="assignStatus" formControlName="status">
+              <option value="PLANNED">Planned</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DISCONTINUED">Discontinued</option>
+            </select>
+          </div>
+
+          @if (assignForm.getRawValue().degreeProgramId) {
+            <div class="field">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <label>Courses to run this year</label>
+                <span style="font-size:11px;color:var(--ink-faint);">{{ selectedCourseIds().size }} / {{ assignCourses().length }} selected</span>
+              </div>
+              <input type="text" [ngModel]="courseSearch()" (ngModelChange)="courseSearch.set($event)" [ngModelOptions]="{standalone: true}" placeholder="Search courses by code or name…" style="margin-bottom:8px;" />
+              <div style="display:flex;gap:10px;margin-bottom:8px;">
+                <button type="button" class="btn-link" (click)="selectAllCourses()">Select all</button>
+                <button type="button" class="btn-link" (click)="clearAllCourses()">Clear all</button>
+              </div>
+              <div style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;">
+                @if (assignCoursesLoading()) {
+                  <p style="color:var(--ink-faint);font-size:12.5px;margin:6px 0;">Loading courses…</p>
+                } @else if (filteredAssignCourses().length) {
+                  @for (c of filteredAssignCourses(); track c.id) {
+                    <label style="display:flex;gap:9px;align-items:center;padding:6px 0;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--line);">
+                      <input type="checkbox" [checked]="isCourseSelected(c.id)" (change)="toggleCourse(c.id)" style="accent-color:var(--accent);width:15px;height:15px;" />
+                      <span><b>{{ c.catalogCourseCode }}</b> - {{ c.catalogCourseName }} <span style="color:var(--ink-faint);">(Year {{ c.yearOfStudy }})</span></span>
+                    </label>
+                  }
+                } @else {
+                  <p style="color:var(--ink-faint);font-size:12.5px;margin:6px 0;">No courses in this program yet.</p>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="showAssignDialog.set(false)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting() || !availableToAssign().length">{{ submitting() ? 'Assigning…' : 'Assign to Year' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (editingAssignment(); as a) {
+  <div class="modal-overlay" (click)="editingAssignment.set(null)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>Edit Assignment</h3>
+          <p>{{ a.degreeProgramName }} - {{ a.academicYearName }}</p>
+        </div>
+        <button class="modal-close" (click)="editingAssignment.set(null)">✕</button>
+      </div>
+      <form [formGroup]="editForm" (ngSubmit)="submitEdit()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field-row">
+            <div class="field">
+              <label for="editDuration">Duration Override (years)</label>
+              <input id="editDuration" type="number" min="1" max="6" formControlName="durationYears" placeholder="use reference default" />
+            </div>
+            <div class="field">
+              <label for="editCredits">Credits Override</label>
+              <input id="editCredits" type="number" min="1" formControlName="totalCredits" placeholder="use reference default" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="editStatus">Status</label>
+            <select id="editStatus" formControlName="status">
+              <option value="PLANNED">Planned</option>
+              <option value="ACTIVE">Active</option>
+              <option value="DISCONTINUED">Discontinued</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="editingAssignment.set(null)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting()">{{ submitting() ? 'Saving…' : 'Save Changes' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

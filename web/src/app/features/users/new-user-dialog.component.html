@@ -4,7 +4,7 @@
       <div class="modal-head">
         <div>
           <h3>New {{ roleLabels[lockedRole] }}</h3>
-          <p>Create a {{ roleLabels[lockedRole].toLowerCase() }} account — the role is fixed to this tab.</p>
+          <p>Create a {{ roleLabels[lockedRole].toLowerCase() }} account - the role is fixed to this tab.</p>
         </div>
         <button class="modal-close" (click)="close()">✕</button>
       </div>
@@ -54,7 +54,7 @@
         @if (result()!.temporaryPassword) {
           <div class="info-strip warn" style="background:var(--gold-soft);color:var(--gold);">
             <b style="display:block;margin-bottom:6px;">One-time temporary password</b>
-            This is shown once and cannot be retrieved again — share it with the user out of band.
+            This is shown once and cannot be retrieved again - share it with the user out of band.
           </div>
           <div class="card" style="text-align:center;font-size:18px;font-weight:700;letter-spacing:.04em;font-family:monospace;padding:16px;">
             {{ result()!.temporaryPassword }}

@@ -79,7 +79,7 @@ export class ProfileComponent {
   savePassword(): void {
     this.passwordError.set(null);
     if (this.passwordForm.invalid) {
-      this.passwordError.set('Fill in all three fields — the new password needs at least 8 characters.');
+      this.passwordError.set('Fill in all three fields - the new password needs at least 8 characters.');
       return;
     }
     const { currentPassword, newPassword, confirmPassword } = this.passwordForm.getRawValue();

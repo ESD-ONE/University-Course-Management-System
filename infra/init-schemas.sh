@@ -26,13 +26,26 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-S
     CREATE SCHEMA IF NOT EXISTS analytics;
     CREATE SCHEMA IF NOT EXISTS reference_data;
 
-    -- Only Identity & Access is implemented so far — its role is created and
-    -- scoped now; each further service gets its own role (same pattern) added
-    -- here as it's built, rather than all 7 pre-provisioned with unused passwords.
+    -- Each implemented service gets its own role (same pattern), added here as
+    -- it's built, rather than all 7 pre-provisioned with unused passwords.
     CREATE ROLE identity_access_svc LOGIN PASSWORD '${IDENTITY_ACCESS_SVC_PASSWORD}';
     GRANT USAGE, CREATE ON SCHEMA identity_access TO identity_access_svc;
     ALTER DEFAULT PRIVILEGES IN SCHEMA identity_access
         GRANT ALL PRIVILEGES ON TABLES TO identity_access_svc;
     ALTER DEFAULT PRIVILEGES IN SCHEMA identity_access
         GRANT ALL PRIVILEGES ON SEQUENCES TO identity_access_svc;
+
+    CREATE ROLE reference_data_svc LOGIN PASSWORD '${REFERENCE_DATA_SVC_PASSWORD}';
+    GRANT USAGE, CREATE ON SCHEMA reference_data TO reference_data_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA reference_data
+        GRANT ALL PRIVILEGES ON TABLES TO reference_data_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA reference_data
+        GRANT ALL PRIVILEGES ON SEQUENCES TO reference_data_svc;
+
+    CREATE ROLE academic_structure_svc LOGIN PASSWORD '${ACADEMIC_STRUCTURE_SVC_PASSWORD}';
+    GRANT USAGE, CREATE ON SCHEMA academic TO academic_structure_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA academic
+        GRANT ALL PRIVILEGES ON TABLES TO academic_structure_svc;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA academic
+        GRANT ALL PRIVILEGES ON SEQUENCES TO academic_structure_svc;
 SQL

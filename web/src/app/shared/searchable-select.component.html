@@ -1,0 +1,37 @@
+<div class="searchable-select" [class.disabled]="disabled()">
+  <input
+    type="text"
+    [id]="inputId"
+    [placeholder]="placeholder"
+    [value]="query()"
+    [disabled]="disabled()"
+    autocomplete="off"
+    (focus)="onFocus()"
+    (input)="onInput($any($event.target).value)"
+    (keydown)="onKeydown($event)"
+  />
+  <svg class="searchable-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+
+  @if (open()) {
+    <div class="searchable-select-panel">
+      @if (filteredOptions().length) {
+        @for (o of filteredOptions(); track o.value; let i = $index) {
+          <button
+            type="button"
+            class="searchable-select-option"
+            [class.highlighted]="i === highlightedIndex()"
+            [class.selected]="o.value === selectedOption()?.value"
+            (mousedown)="onOptionMouseDown($event, o)"
+          >
+            <span>{{ o.label }}</span>
+            @if (o.sublabel) { <span class="searchable-select-sublabel">{{ o.sublabel }}</span> }
+          </button>
+        }
+      } @else {
+        <div class="searchable-select-empty">No matches</div>
+      }
+    </div>
+  }
+</div>

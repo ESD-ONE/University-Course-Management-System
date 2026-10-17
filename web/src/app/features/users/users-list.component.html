@@ -2,7 +2,7 @@
   <div>
     <div class="eyebrow">Administration</div>
     <h1 class="page-title">Users</h1>
-    <p class="page-sub">Create accounts and assign roles — users never choose their own role.</p>
+    <p class="page-sub">Create accounts and assign roles - users never choose their own role.</p>
   </div>
   <button class="btn btn-primary" (click)="showNewUserDialog.set(true)">{{ activeTab().addLabel }}</button>
 </div>
@@ -13,6 +13,15 @@
     <div class="card stat-tile"><div class="stat-label">Active</div><div class="stat-value">{{ s.active }}</div></div>
     <div class="card stat-tile"><div class="stat-label">Students</div><div class="stat-value">{{ s.students }}</div></div>
     <div class="card stat-tile"><div class="stat-label">Staff &amp; Admin</div><div class="stat-value">{{ s.staff }}</div></div>
+  </div>
+} @else {
+  <div class="grid g4" style="margin-bottom:20px;">
+    @for (i of [1,2,3,4]; track i) {
+      <div class="card stat-tile">
+        <span class="skeleton" style="width:70px;height:10px;margin-bottom:10px;"></span>
+        <span class="skeleton" style="width:40px;height:24px;"></span>
+      </div>
+    }
   </div>
 }
 
@@ -27,6 +36,8 @@
       {{ tab.label }}
       @if (tabState()[tab.role].totalElements > 0 || !tabState()[tab.role].loading) {
         <span class="user-tab-count">{{ tabState()[tab.role].totalElements }}</span>
+      } @else {
+        <span class="skeleton" style="display:inline-block;width:16px;height:16px;border-radius:9px;vertical-align:middle;margin-left:6px;"></span>
       }
     </button>
   }
@@ -53,7 +64,15 @@
 
 <div class="card" style="padding:0;overflow:hidden;margin-top:20px;" role="tabpanel">
   @if (current().loading) {
-    <p style="padding:24px;color:var(--ink-faint);">Loading {{ activeTab().label.toLowerCase() }}…</p>
+    <div style="padding:8px 20px;">
+      @for (i of [1,2,3,4,5]; track i) {
+        <div class="skeleton-row">
+          <span class="skeleton" style="width:36px;height:36px;border-radius:50%;"></span>
+          <span class="skeleton" style="width:180px;height:14px;"></span>
+          <span class="skeleton" style="width:80px;height:20px;border-radius:12px;"></span>
+        </div>
+      }
+    </div>
   } @else if (current().error) {
     <p style="padding:24px;color:var(--danger);">{{ current().error }}</p>
   } @else {

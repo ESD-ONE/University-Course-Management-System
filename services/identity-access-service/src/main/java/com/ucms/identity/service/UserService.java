@@ -2,11 +2,14 @@ package com.ucms.identity.service;
 
 import com.ucms.identity.domain.Role;
 import com.ucms.identity.domain.RoleKind;
+import com.ucms.identity.domain.RoleScopeAssignment;
+import com.ucms.identity.domain.ScopeType;
 import com.ucms.identity.domain.User;
 import com.ucms.identity.domain.UserStatus;
 import com.ucms.identity.exception.EmailAlreadyInUseException;
 import com.ucms.identity.exception.WrongPasswordException;
 import com.ucms.identity.repository.RoleRepository;
+import com.ucms.identity.repository.RoleScopeAssignmentRepository;
 import com.ucms.identity.repository.UserRepository;
 import com.ucms.identity.repository.UserSpecifications;
 import com.ucms.identity.web.dto.CreateUserRequest;
@@ -45,12 +48,15 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final RoleScopeAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public UserService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, RoleRepository roleRepository,
+                        RoleScopeAssignmentRepository assignmentRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.assignmentRepository = assignmentRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -88,7 +94,21 @@ public class UserService {
             user.setStudentId(generateUniqueStudentId());
         }
 
-        return CreatedUserResponse.from(userRepository.save(user), temporaryPassword);
+        user = userRepository.save(user);
+
+        // Every user gets a baseline GLOBAL assignment matching their account role, so
+        // they start out behaviorally equivalent to pre-RBAC accounts — same as the V5
+        // migration's one-time backfill for pre-existing users. See
+        // docs/SYSTEM_ARCHITECTURE_REPORT.md section 14 step 5.
+        RoleScopeAssignment assignment = new RoleScopeAssignment();
+        assignment.setUser(user);
+        assignment.setRole(role);
+        assignment.setScopeType(ScopeType.GLOBAL);
+        assignment.setCreatedBy(createdBy);
+        assignment.setUpdatedBy(createdBy);
+        assignmentRepository.save(assignment);
+
+        return CreatedUserResponse.from(user, temporaryPassword);
     }
 
     @Transactional(readOnly = true)

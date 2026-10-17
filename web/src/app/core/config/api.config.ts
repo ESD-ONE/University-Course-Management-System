@@ -8,3 +8,9 @@
  * Revisit when there's a real deployed Gateway URL to point at.
  */
 export const API_BASE_URL = 'http://localhost:8082/api/identity';
+
+/** Same Gateway, routed to reference-data-service instead (StripPrefix=2 on /api/reference/**). */
+export const REFERENCE_API_BASE_URL = 'http://localhost:8082/api/reference';
+
+/** Same Gateway, routed to academic-structure-service instead (StripPrefix=2 on /api/academic/**). */
+export const ACADEMIC_API_BASE_URL = 'http://localhost:8082/api/academic';
