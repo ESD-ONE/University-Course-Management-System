@@ -81,6 +81,22 @@ services:
     networks:
       - ucms_default
 
+  web:
+    build:
+      context: ../web
+    container_name: ucms-web
+    restart: unless-stopped
+    ports:
+      # Bound to loopback only, same as the Gateway above — this host has no DNS/TLS
+      # set up for UCMS yet, and ports 80/443 already belong to another project's
+      # nginx-proxy. Reach it via an SSH tunnel:
+      #   ssh -L 8091:127.0.0.1:8091 root@<host>  then open http://localhost:8091
+      - "127.0.0.1:8091:80"
+    depends_on:
+      - gateway
+    networks:
+      - ucms_default
+
 networks:
   ucms_default:
     external: true
