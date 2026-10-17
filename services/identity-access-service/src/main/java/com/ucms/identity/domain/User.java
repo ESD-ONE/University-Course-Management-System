@@ -28,6 +28,9 @@ public class User extends Auditable {
     @Column(nullable = false)
     private UserStatus status;
 
+    @Column(name = "student_id", unique = true)
+    private String studentId;
+
     public UUID getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -39,4 +42,6 @@ public class User extends Auditable {
     public void setRole(Role role) { this.role = role; }
     public UserStatus getStatus() { return status; }
     public void setStatus(UserStatus status) { this.status = status; }
+    public String getStudentId() { return studentId; }
+    public void setStudentId(String studentId) { this.studentId = studentId; }
 }

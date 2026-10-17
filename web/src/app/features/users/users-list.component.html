@@ -4,32 +4,76 @@
     <h1 class="page-title">Users</h1>
     <p class="page-sub">Create accounts and assign roles — users never choose their own role.</p>
   </div>
-  <button class="btn btn-primary" (click)="showNewUserDialog.set(true)">+ New User</button>
+  <button class="btn btn-primary" (click)="showNewUserDialog.set(true)">{{ activeTab().addLabel }}</button>
 </div>
 
-<div class="card" style="padding:0;overflow:hidden;">
-  @if (loading()) {
-    <p style="padding:24px;color:var(--ink-faint);">Loading users…</p>
-  } @else if (loadError()) {
-    <p style="padding:24px;color:var(--danger);">{{ loadError() }}</p>
+@if (summary(); as s) {
+  <div class="grid g4" style="margin-bottom:20px;">
+    <div class="card stat-tile"><div class="stat-label">Total Users</div><div class="stat-value">{{ s.total }}</div></div>
+    <div class="card stat-tile"><div class="stat-label">Active</div><div class="stat-value">{{ s.active }}</div></div>
+    <div class="card stat-tile"><div class="stat-label">Students</div><div class="stat-value">{{ s.students }}</div></div>
+    <div class="card stat-tile"><div class="stat-label">Staff &amp; Admin</div><div class="stat-value">{{ s.staff }}</div></div>
+  </div>
+}
+
+<div class="user-tabs" role="tablist" aria-label="Filter users by role">
+  @for (tab of tabs; track tab.role) {
+    <button
+      class="user-tab"
+      role="tab"
+      [attr.aria-selected]="activeTab().role === tab.role"
+      [class.active]="activeTab().role === tab.role"
+      (click)="selectTab(tab)">
+      {{ tab.label }}
+      @if (tabState()[tab.role].totalElements > 0 || !tabState()[tab.role].loading) {
+        <span class="user-tab-count">{{ tabState()[tab.role].totalElements }}</span>
+      }
+    </button>
+  }
+</div>
+
+<div class="card" style="margin-bottom:0;">
+  <div class="field-row" style="margin-bottom:0;">
+    <div class="field" style="flex:1.4;">
+      <label for="userSearch">Search</label>
+      <input id="userSearch" type="text" placeholder="Search by name or email"
+             [ngModel]="current().q" (ngModelChange)="onSearchInput($event)" />
+    </div>
+    <div class="field">
+      <label for="userStatusFilter">Status</label>
+      <select id="userStatusFilter" [ngModel]="current().status" (ngModelChange)="onStatusFilterChange($event)">
+        <option value="">All Statuses</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+        <option value="SUSPENDED">Suspended</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;margin-top:20px;" role="tabpanel">
+  @if (current().loading) {
+    <p style="padding:24px;color:var(--ink-faint);">Loading {{ activeTab().label.toLowerCase() }}…</p>
+  } @else if (current().error) {
+    <p style="padding:24px;color:var(--danger);">{{ current().error }}</p>
   } @else {
     <table>
       <thead>
         <tr>
           <th>User</th>
-          <th>Role</th>
+          @if (activeTab().role === 'STUDENT') { <th>Student ID</th> }
           <th>Status</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        @for (user of users(); track user.id) {
+        @for (user of current().users; track user.id) {
           <tr>
             <td>
               <div class="cell-name">{{ user.name }}</div>
               <div class="cell-faint">{{ user.email }}</div>
             </td>
-            <td><span class="role-pill">{{ user.role }}</span></td>
+            @if (activeTab().role === 'STUDENT') { <td class="cell-faint">{{ user.studentId }}</td> }
             <td>
               <span class="badge" [class.b-success]="user.status === 'ACTIVE'"
                                    [class.b-gold]="user.status === 'INACTIVE'"
@@ -49,15 +93,30 @@
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No users yet.</td></tr>
+          <tr><td [attr.colspan]="activeTab().role === 'STUDENT' ? 4 : 3" style="padding:24px;color:var(--ink-faint);">
+            No {{ activeTab().label.toLowerCase() }} match these filters.
+          </td></tr>
         }
       </tbody>
     </table>
   }
 </div>
 
+@if (!current().loading && !current().error && current().totalElements > 0) {
+  <div class="pagination-bar">
+    <span class="cell-faint">
+      Showing {{ pageRangeStart() }}–{{ pageRangeEnd() }}
+      of {{ current().totalElements }} {{ activeTab().label.toLowerCase() }}
+    </span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary btn-sm" [disabled]="current().page === 0" (click)="goToPage(current().page - 1)">Previous</button>
+      <button class="btn btn-secondary btn-sm" [disabled]="current().page + 1 >= current().totalPages" (click)="goToPage(current().page + 1)">Next</button>
+    </div>
+  </div>
+}
+
 @if (showNewUserDialog()) {
-  <app-new-user-dialog (closed)="showNewUserDialog.set(false)" (created)="onUserCreated()" />
+  <app-new-user-dialog [lockedRole]="activeTab().role" (closed)="showNewUserDialog.set(false)" (created)="onUserCreated($event)" />
 }
 
 @if (roleDialogTarget(); as target) {

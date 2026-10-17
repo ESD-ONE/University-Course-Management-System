@@ -3,8 +3,8 @@
     @if (!result()) {
       <div class="modal-head">
         <div>
-          <h3>New User</h3>
-          <p>Create an account and assign its role — the role decides what they can access from their first sign-in.</p>
+          <h3>New {{ roleLabels[lockedRole] }}</h3>
+          <p>Create a {{ roleLabels[lockedRole].toLowerCase() }} account — the role is fixed to this tab.</p>
         </div>
         <button class="modal-close" (click)="close()">✕</button>
       </div>
@@ -21,14 +21,6 @@
             <label for="nuEmail">Email</label>
             <input id="nuEmail" type="email" formControlName="email" placeholder="e.g. s.herath@university.edu" />
           </div>
-          <div class="field">
-            <label for="nuRole">Role</label>
-            <select id="nuRole" formControlName="role">
-              <option value="STUDENT">Student</option>
-              <option value="LECTURER">Lecturer</option>
-              <option value="ADMIN">Administrator</option>
-            </select>
-          </div>
           <div class="field" style="margin-bottom:0;">
             <label for="nuStatus">Status</label>
             <select id="nuStatus" formControlName="status">
@@ -40,19 +32,25 @@
         <div class="modal-foot">
           <button type="button" class="btn btn-secondary" (click)="close()">Cancel</button>
           <button type="submit" class="btn btn-primary" [disabled]="submitting()">
-            {{ submitting() ? 'Creating…' : 'Create User' }}
+            {{ submitting() ? 'Creating…' : 'Create ' + roleLabels[lockedRole] }}
           </button>
         </div>
       </form>
     } @else {
       <div class="modal-head">
         <div>
-          <h3>User Created</h3>
+          <h3>{{ roleLabels[lockedRole] }} Created</h3>
           <p>{{ result()!.name }} · {{ result()!.email }}</p>
         </div>
         <button class="modal-close" (click)="close()">✕</button>
       </div>
       <div class="modal-body">
+        @if (result()!.studentId) {
+          <div class="field">
+            <label>Student ID</label>
+            <div style="font-size:14px;font-weight:700;">{{ result()!.studentId }}</div>
+          </div>
+        }
         @if (result()!.temporaryPassword) {
           <div class="info-strip warn" style="background:var(--gold-soft);color:var(--gold);">
             <b style="display:block;margin-bottom:6px;">One-time temporary password</b>

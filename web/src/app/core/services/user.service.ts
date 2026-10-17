@@ -1,8 +1,17 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
-import { CreatedUserResponse, CreateUserRequest, RoleKind, UserResponse, UserStatus } from '../models/user.model';
+import {
+  CreatedUserResponse,
+  CreateUserRequest,
+  PagedResponse,
+  RoleKind,
+  UserListQuery,
+  UserResponse,
+  UserStatus,
+  UserSummary,
+} from '../models/user.model';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
@@ -12,8 +21,16 @@ export class UserService {
     return this.http.get<UserResponse>(`${API_BASE_URL}/users/me`);
   }
 
-  list(): Observable<UserResponse[]> {
-    return this.http.get<UserResponse[]>(`${API_BASE_URL}/users`);
+  list(query: UserListQuery): Observable<PagedResponse<UserResponse>> {
+    let params = new HttpParams().set('page', query.page ?? 0).set('size', query.size ?? 20);
+    if (query.role) params = params.set('role', query.role);
+    if (query.status) params = params.set('status', query.status);
+    if (query.q) params = params.set('q', query.q);
+    return this.http.get<PagedResponse<UserResponse>>(`${API_BASE_URL}/users`, { params });
+  }
+
+  summary(): Observable<UserSummary> {
+    return this.http.get<UserSummary>(`${API_BASE_URL}/users/summary`);
   }
 
   create(request: CreateUserRequest): Observable<CreatedUserResponse> {
