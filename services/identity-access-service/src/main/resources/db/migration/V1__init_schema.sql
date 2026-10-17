@@ -1,10 +1,13 @@
--- Identity & Access Service schema — auth_db (identity_db)
+-- Identity & Access Service schema — database "ucms", schema "identity_access"
+-- (one shared database, one schema per service — see DATA_GOVERNANCE.md).
 -- Audit standard per docs/architecture/DATA_GOVERNANCE.md.
 -- Exceptions honoured exactly as drawn in docs/architecture/tables-01-identity-access.mmd:
 --   permissions / role_permissions carry the audit block without soft delete;
 --   user_sessions is ephemeral (created_at only).
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+--
+-- pgcrypto (for gen_random_uuid()) is created once at the database level by
+-- infra/init-schemas.sh, run as the admin role — this service's own role is
+-- schema-scoped and deliberately lacks CREATE EXTENSION privilege.
 
 CREATE TABLE roles (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

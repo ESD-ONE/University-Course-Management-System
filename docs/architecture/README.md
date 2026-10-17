@@ -14,11 +14,11 @@ the more reliable way to make each piece identifiable at a glance:
 | File | Shows |
 |---|---|
 | `high-level-architecture.mmd` / `.png` | Client → Gateway → services layer → data layer → async backbone → delivery pipeline (container view) |
-| `microservices-architecture.mmd` / `.png` | All 7 services, their databases, and the actual calls between them — solid = synchronous REST, dotted = async event via the message broker (component view) |
+| `microservices-architecture.mmd` / `.png` | All 7 services, their schemas (one shared PostgreSQL instance and database — `ucms` — with a schema per service), and the actual calls between them — solid = synchronous REST, dotted = async event via the message broker (component view) |
 
-## 2. Service-level (what each service's database actually contains)
+## 2. Service-level (what each service's schema actually contains)
 
-One ER diagram per service — small enough that Mermaid lays each one out cleanly, and focused enough that "which table belongs to which service" is never in question. Every mutable table carries a standard audit block (`version`, `created_at`/`by`, `updated_at`/`by`, `deleted_at`/`by`) — see **`DATA_GOVERNANCE.md`** for the full standard, the optimistic-locking mechanics, and the deliberate exceptions (append-only logs and session data don't get versioned or soft-deleted, and the doc explains why).
+One ER diagram per service — small enough that Mermaid lays each one out cleanly, and focused enough that "which table belongs to which service" is never in question. Each service's tables live in their own PostgreSQL **schema** inside the one shared `ucms` database (not a separate database per service — see the note below and `DATA_GOVERNANCE.md`), with isolation enforced by giving each service its own database role scoped to its own schema. Every mutable table carries a standard audit block (`version`, `created_at`/`by`, `updated_at`/`by`, `deleted_at`/`by`) — see **`DATA_GOVERNANCE.md`** for the full standard, the optimistic-locking mechanics, and the deliberate exceptions (append-only logs and session data don't get versioned or soft-deleted, and the doc explains why).
 
 | File | Service | Tables |
 |---|---|---|
@@ -45,8 +45,10 @@ Sequence diagrams — each service gets its own vertical lane, and the arrows sh
 
 1. **Start with `microservices-architecture.png`** to see which services talk to which, and whether that call is synchronous or event-driven, as a static map.
 2. **Open the matching `flow-0N-*.png`** to see that same relationship play out as an actual sequence of calls for a real scenario — this is where "synchronous" and "asynchronous" stop being a line style and become a concrete order of events.
-3. **Open the matching `tables-0N-*.png`** to see exactly what each service in that flow stores — real primary keys, real foreign keys, and real relationships, but only *within* that service's own database.
-4. **A field like `lecturer_id "ref Identity and Access, no FK"`** is not a mistake — it's the point. Database-per-service means no table ever has a real foreign key into another service's database. Cross-service references are IDs resolved through that other service's API, never a SQL join — which is exactly what you see happening, call by call, in the flow diagrams.
+3. **Open the matching `tables-0N-*.png`** to see exactly what each service in that flow stores — real primary keys, real foreign keys, and real relationships, but only *within* that service's own schema.
+4. **A field like `lecturer_id "ref Identity and Access, no FK"`** is not a mistake — it's the point. Schema-per-service (one shared database, `ucms`, but a dedicated schema and database role per service) means no table ever has a real foreign key into another service's schema. Cross-service references are IDs resolved through that other service's API, never a SQL join — which is exactly what you see happening, call by call, in the flow diagrams.
+
+**Why one database with 7 schemas, not 7 databases:** the diagrams originally showed a separate database per service — functionally equivalent for the "no cross-service SQL join" invariant, but operationally heavier for this project's actual scale (one Postgres instance to run, back up, and monitor instead of seven). A schema boundary plus a schema-scoped database role gives the same isolation guarantee — a service's credentials simply have no grants outside its own schema — without the extra instances. Revisit if a service's data genuinely needs to scale or fail independently of the others.
 
 ## Regenerating
 

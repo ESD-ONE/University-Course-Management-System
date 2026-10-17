@@ -12,8 +12,9 @@ multiplied by seven before anyone notices it. Instead, this phase implements one
 **vertical slice** end to end — Gateway + Identity & Access — covering:
 
 - a real deployable service, not a stub
-- its own database (`identity_db`), migrated with Flyway, matching
-  [`tables-01-identity-access.mmd`](architecture/tables-01-identity-access.mmd) exactly
+- its own schema (`identity_access`, inside the shared `ucms` database), migrated with
+  Flyway, matching [`tables-01-identity-access.mmd`](architecture/tables-01-identity-access.mmd)
+  exactly
 - the full [data governance standard](architecture/DATA_GOVERNANCE.md) (optimistic
   locking via JPA `@Version`, audit columns, soft delete) — proven here, then repeated
   mechanically for the remaining 6 services
@@ -46,7 +47,7 @@ Spring Security + JWT pattern — once this slice is validated in production.
 |---|---|---|
 | Backend framework | Spring Boot 3 / Java 17 | Matches this team's existing Java/Maven tooling; enterprise-standard DI, JPA, Flyway, Actuator out of the box. |
 | Gateway | Spring Cloud Gateway | Same JVM ecosystem as every service behind it; declarative route config, no separate language/runtime to operate. |
-| Persistence | PostgreSQL per service (database-per-service) | Matches the architecture's core non-negotiable — no service ever has a real FK into another service's data. |
+| Persistence | One shared PostgreSQL instance and database (`ucms`), one schema per service, each with its own schema-scoped database role | Matches the architecture's core non-negotiable — no service ever has a real FK into another service's data — without the operational overhead of running a separate Postgres instance per service. See §4 and `DATA_GOVERNANCE.md`. |
 | Optimistic locking | JPA `@Version` on a shared `Auditable` base class | `@Version` is JPA's native mechanism for exactly the `version` column semantics `DATA_GOVERNANCE.md` specifies — no custom SQL needed. |
 | Auth | Self-issued JWT (HS256), `Authorization: Bearer` | Matches `flow-04-login.mmd`; stateless, so the Gateway doesn't need session affinity. |
 | User provisioning | Admin-created only, admin-assigned role | Matches the earlier, deliberate UX decision to reject a self-service "sign in as" role picker. |
@@ -118,4 +119,32 @@ run as separate containers on the same host, joined to the infra stack's Docker 
 localhost-only ports, which exist only for the SSH-tunnelled local dev workflow.
 
 See [`infra/docker-compose.deploy.yml`](../infra/docker-compose.deploy.yml) for the
-exact deployment definition.
+exact deployment definition and
+[`infra/docker-compose.infra.yml`](../infra/docker-compose.infra.yml) /
+[`infra/init-schemas.sh`](../infra/init-schemas.sh) for the Postgres/Redis/RabbitMQ/MinIO
+stack itself.
+
+### One database, one schema per service — not one database per service
+
+The architecture diagrams originally showed a separate PostgreSQL *database* per
+service. This repository uses a single shared instance and database (`ucms`) with a
+dedicated **schema** per service instead — `identity_access` for this slice, with
+`academic`, `enrollment`, `assignment_grading`, `notification`, `analytics`, and
+`reference_data` pre-created and waiting for their services.
+
+The isolation property that actually matters — no service can ever read or write
+another service's tables — is preserved by giving each service its own PostgreSQL
+login role, granted privileges on its own schema only (`identity_access_svc` can use
+`identity_access`; it has no grant at all on `academic`, verified with
+`has_schema_privilege('identity_access_svc', 'academic', 'USAGE')` returning `false`).
+A schema boundary plus a schema-scoped role enforces the same thing a separate database
+would, at the connection/credential level, not just by convention — without the
+operational cost of running, backing up, and monitoring seven Postgres instances for a
+system at this scale. Revisit if a service's data genuinely needs to scale or fail
+independently of the others.
+
+One practical consequence worth flagging: extensions (e.g. `pgcrypto`, used for
+`gen_random_uuid()`) are database-scoped in Postgres, not schema-scoped, and a
+schema-scoped role deliberately doesn't have `CREATE EXTENSION` privilege. Extensions
+are created once, up front, by the admin role in `init-schemas.sh` — a service's own
+Flyway migrations never attempt it.

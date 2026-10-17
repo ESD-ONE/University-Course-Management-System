@@ -1,33 +1,36 @@
+---
+title: All schemas below live in one shared PostgreSQL instance and database — "ucms" — isolated from each other by per-service database roles, not separate databases
+---
 flowchart TB
     GW["API Gateway"]
 
     IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions, Profile"]
-    IAMDB[("auth_db")]
-    IAM --- IAMDB
+    IAMSCHEMA[("ucms.identity_access")]
+    IAM --- IAMSCHEMA
 
     ACAD["2. Academic Structure Service<br/>Calendar, Programs, Curriculum, Catalog, Offerings"]
-    ACADDB[("academic_db")]
-    ACAD --- ACADDB
+    ACADSCHEMA[("ucms.academic")]
+    ACAD --- ACADSCHEMA
 
     ENR["3. Enrollment Service<br/>Program and Course Registration, Capacity, Waitlist"]
-    ENRDB[("enrollment_db")]
-    ENR --- ENRDB
+    ENRSCHEMA[("ucms.enrollment")]
+    ENR --- ENRSCHEMA
 
     GRADE["4. Assignment and Grading Service<br/>Assignments, Submissions, Grading"]
-    GRADEDB[("grading_db")]
-    GRADE --- GRADEDB
+    GRADESCHEMA[("ucms.assignment_grading")]
+    GRADE --- GRADESCHEMA
 
     NOTIF["5. Notification Service<br/>Email and In-App Notifications"]
-    NOTIFDB[("notification_db")]
-    NOTIF --- NOTIFDB
+    NOTIFSCHEMA[("ucms.notification")]
+    NOTIF --- NOTIFSCHEMA
 
     ANALYTICS["6. Analytics and Reporting Service<br/>Dashboards, Reports"]
-    ANALYTICSDB[("analytics_db")]
-    ANALYTICS --- ANALYTICSDB
+    ANALYTICSSCHEMA[("ucms.analytics")]
+    ANALYTICS --- ANALYTICSSCHEMA
 
     REF["7. Reference Data Service<br/>Faculties, Grading Scales, Categories"]
-    REFDB[("reference_db")]
-    REF --- REFDB
+    REFSCHEMA[("ucms.reference_data")]
+    REF --- REFSCHEMA
 
     GW --> IAM
     GW --> ACAD
@@ -53,3 +56,6 @@ flowchart TB
     ANALYTICS -->|reads| ACAD
     ANALYTICS -->|reads| ENR
     ANALYTICS -->|reads| GRADE
+
+    classDef schema fill:#FBEEDC,stroke:#B4791F,color:#161B29
+    class IAMSCHEMA,ACADSCHEMA,ENRSCHEMA,GRADESCHEMA,NOTIFSCHEMA,ANALYTICSSCHEMA,REFSCHEMA schema
