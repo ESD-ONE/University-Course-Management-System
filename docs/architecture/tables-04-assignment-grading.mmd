@@ -1,0 +1,49 @@
+---
+title: 4. Assignment and Grading Service — ucms.assignment_grading schema
+---
+erDiagram
+    ASSIGNMENTS {
+        uuid id PK
+        uuid course_id "ref Academic Structure, no FK"
+        string title
+        text description
+        timestamptz due_date
+        int max_marks
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    SUBMISSIONS {
+        uuid id PK
+        uuid assignment_id FK
+        uuid student_id "ref Identity and Access, no FK"
+        string file_name
+        timestamptz submitted_at
+        string status
+        int version "optimistic lock — guards resubmission races"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+    }
+    GRADES {
+        uuid id PK
+        uuid submission_id FK
+        decimal marks
+        text feedback
+        uuid graded_by "ref Identity and Access, no FK"
+        timestamptz graded_at
+        int version "optimistic lock — guards re-grading races"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+    }
+
+    ASSIGNMENTS ||--o{ SUBMISSIONS : "receives"
+    SUBMISSIONS ||--o| GRADES : "graded as"

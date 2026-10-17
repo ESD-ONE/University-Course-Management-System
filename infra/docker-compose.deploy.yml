@@ -1,0 +1,47 @@
+# Deploys the application services onto the Contabo host, joining the existing
+# `ucms_default` network created by the infra stack at /opt/ucms/docker-compose.infra.yml
+# (Postgres/Redis/RabbitMQ/MinIO). Services reach those by container name on the
+# internal network — the 127.0.0.1-only published ports are for the SSH-tunnelled
+# local dev workflow only, not used here.
+#
+# One shared Postgres database ("ucms"), one schema per service — identity-access-service
+# connects with its own schema-scoped role (identity_access_svc), not the admin role.
+# See infra/init-schemas.sh and docs/architecture/DATA_GOVERNANCE.md.
+#
+# Usage on the server:
+#   cd /opt/ucms-app && docker compose --env-file .env up -d --build
+
+services:
+  identity-access-service:
+    build:
+      context: ../services/identity-access-service
+    container_name: ucms-identity-access-service
+    restart: unless-stopped
+    environment:
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: identity_access_svc
+      DB_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MINUTES: 60
+    networks:
+      - ucms_default
+
+  gateway:
+    build:
+      context: ../services/gateway
+    container_name: ucms-gateway
+    restart: unless-stopped
+    environment:
+      IDENTITY_SERVICE_URI: http://ucms-identity-access-service:8081
+    ports:
+      - "127.0.0.1:8090:8080"
+    depends_on:
+      - identity-access-service
+    networks:
+      - ucms_default
+
+networks:
+  ucms_default:
+    external: true

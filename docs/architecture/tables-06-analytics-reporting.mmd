@@ -1,0 +1,39 @@
+---
+title: 6. Analytics and Reporting Service — ucms.analytics schema
+---
+erDiagram
+    DASHBOARD_SNAPSHOTS {
+        uuid id PK
+        string role
+        string metric_key
+        string metric_value
+        timestamptz computed_at
+    }
+    REPORTS {
+        uuid id PK
+        string name
+        string description
+        string format
+        timestamptz last_generated_at
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+    }
+    SCHEDULED_REPORTS {
+        uuid id PK
+        uuid report_id FK
+        string frequency
+        string recipients
+        string status
+        int version "optimistic lock — guards concurrent pause/resume"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+
+    REPORTS ||--o{ SCHEDULED_REPORTS : "delivered on a schedule as"
