@@ -87,11 +87,12 @@ services:
     container_name: ucms-web
     restart: unless-stopped
     ports:
-      # Bound to loopback only, same as the Gateway above — this host has no DNS/TLS
-      # set up for UCMS yet, and ports 80/443 already belong to another project's
-      # nginx-proxy. Reach it via an SSH tunnel:
-      #   ssh -L 8091:127.0.0.1:8091 root@<host>  then open http://localhost:8091
-      - "127.0.0.1:8091:80"
+      # Exposed directly on the host's public IP, not loopback-only — this host has
+      # no DNS/TLS set up for UCMS yet, and ports 80/443 already belong to another
+      # project's nginx-proxy, so this is plain HTTP on a non-standard port:
+      #   http://<host>:8091
+      # Requires `ufw allow 8091/tcp` on the host (see docs/LOGIN_USERS.md).
+      - "8091:80"
     depends_on:
       - gateway
     networks:
