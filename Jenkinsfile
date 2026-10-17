@@ -18,6 +18,20 @@ pipeline {
             }
         }
 
+        stage('Frontend Build') {
+            steps {
+                // No Node toolchain on the Jenkins host itself — build inside a
+                // throwaway node container instead (Docker is available; see
+                // docs/architecture). Output lands in web/dist/web/browser, which the
+                // Deploy stage below copies out, same as the backend jars.
+                sh '''
+                    set -e
+                    docker run --rm -v "$WORKSPACE/web:/app" -w /app node:20-alpine \
+                        sh -c "npm ci && npm run build -- --configuration production"
+                '''
+            }
+        }
+
         stage('Deploy') {
             // Jenkins runs on the same Contabo host this deploys to, so this stage
             // is plain local shell — no SSH hop needed. The infra stack (Postgres,
@@ -29,14 +43,17 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    mkdir -p "$DEPLOY_ROOT/services/identity-access-service/target"
-                    mkdir -p "$DEPLOY_ROOT/services/gateway/target"
-                    mkdir -p "$DEPLOY_ROOT/infra"
+                    for svc in identity-access-service reference-data-service academic-structure-service gateway; do
+                        mkdir -p "$DEPLOY_ROOT/services/$svc/target"
+                        cp "services/$svc/Dockerfile" "$DEPLOY_ROOT/services/$svc/"
+                        cp services/$svc/target/$svc-*.jar "$DEPLOY_ROOT/services/$svc/target/"
+                    done
 
-                    cp services/identity-access-service/Dockerfile "$DEPLOY_ROOT/services/identity-access-service/"
-                    cp services/identity-access-service/target/identity-access-service-*.jar "$DEPLOY_ROOT/services/identity-access-service/target/"
-                    cp services/gateway/Dockerfile "$DEPLOY_ROOT/services/gateway/"
-                    cp services/gateway/target/gateway-*.jar "$DEPLOY_ROOT/services/gateway/target/"
+                    mkdir -p "$DEPLOY_ROOT/web/dist/web"
+                    cp -r web/dist/web/browser "$DEPLOY_ROOT/web/dist/web/"
+                    cp web/Dockerfile web/nginx.conf "$DEPLOY_ROOT/web/"
+
+                    mkdir -p "$DEPLOY_ROOT/infra"
                     cp infra/docker-compose.deploy.yml "$DEPLOY_ROOT/infra/"
 
                     cd "$DEPLOY_ROOT/infra"
