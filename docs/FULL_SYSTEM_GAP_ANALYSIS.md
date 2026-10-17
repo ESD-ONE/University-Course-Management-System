@@ -7,6 +7,28 @@ view-render functions, read in full, line by line, not sampled. Every row
 below reflects what the wireframe's actual JavaScript does, with file/line
 references, checked against the real implemented application.
 
+## Implementation Status Update (2026-10-17)
+
+Since this analysis was written, 3 of 7 services have shipped: Identity & Access,
+Academic Structure, and Reference Data — all with full CRUD, tested, and deployed.
+A number of gaps this document flagged have since closed: Reference Data
+(Faculties, Departments, Grading Scales, Course Categories) now has full
+create/read/update/delete UI, and `departments` is now a real child entity of
+`faculties` rather than a faked row. Academic Calendar, Degree Programs (with
+"Reference Degree Details" and "Program Management" views), and Courses (admin
+and lecturer "My Courses", with create flows for both) are also now real routed
+pages, not "Soon" badges. Identity & Access also gained a backend-complete,
+data-driven RBAC scope-assignment layer (role-at-scope with per-assignment
+permission overrides) — but it has no frontend screen yet, so it doesn't change
+any of the Roles & Permissions findings below. Enrollment, Assignment & Grading,
+Notification, and Analytics & Reporting remain planned-only, with no code, so the
+views depending on them are still accurate as "not implemented." Most other
+findings in this document — the specific line numbers, the exact view-by-view
+inventory — are unverified against current state; treat them as a historical
+record of the gap at the time, not a current audit. See
+`docs/architecture/README.md` for current per-service status and
+`docs/LOGIN_USERS.md` for live environment URLs.
+
 ## A. Method
 
 The wireframe (`App` object, `html-wireframes/index.html`) defines exactly

@@ -1,47 +1,73 @@
+---
+title: "High-Level Architecture — solid/filled = built and running today; dashed/hatched = planned or scaffolded-but-unused (infra container exists, zero application code references it)"
+---
 flowchart TB
     WEB["Angular SPA<br/>Admin · Lecturer · Student"]
 
-    WEB -->|HTTPS REST| GW["API Gateway<br/>routing · token check · rate limiting"]
-    WEB <-.->|WebSocket| WSG["WebSocket Gateway<br/>real-time push"]
+    WEB -->|HTTPS REST| GW["API Gateway<br/>Spring Cloud Gateway — path-prefix routing + CORS only.<br/>No rate limiting, no gateway-level token check<br/>(each downstream service validates its own JWT statelessly)"]
+    WEB -.->|WebSocket — planned, not implemented| WSG["WebSocket Gateway<br/>(design artifact only — no code exists)"]
 
-    subgraph SVCLAYER["Microservices Layer — 7 services"]
-        SVC["Identity & Access · Academic Structure<br/>Enrollment · Assignment & Grading<br/>Notification · Analytics & Reporting<br/>Reference Data"]
+    subgraph BUILT["Microservices Layer — Built (3 of 7) + Gateway"]
+        IAM["Identity & Access"]
+        ACAD["Academic Structure"]
+        REF["Reference Data"]
     end
 
-    GW --> SVCLAYER
+    subgraph PLANNED["Microservices Layer — Planned only (0 code exists)"]
+        ENR["Enrollment"]
+        GRADE["Assignment & Grading"]
+        NOTIF["Notification"]
+        ANALYTICS["Analytics & Reporting"]
+    end
+
+    GW --> IAM
+    GW --> ACAD
+    GW --> REF
 
     subgraph DATALAYER["Data Layer"]
-        PG[("PostgreSQL<br/>one instance, one schema per service")]
-        REDIS[("Redis<br/>cache + session store")]
+        PG[("PostgreSQL<br/>one instance, one shared database 'ucms',<br/>one schema per built service — actively used")]
+        REDIS[("Redis<br/>container runs — zero application code uses it.<br/>JWT validation is fully stateless, no cache lookup")]
     end
 
-    SVCLAYER --> PG
-    SVCLAYER <--> REDIS
+    IAM --> PG
+    ACAD --> PG
+    REF --> PG
+    IAM -.->|not wired in| REDIS
+    ACAD -.->|not wired in| REDIS
+    REF -.->|not wired in| REDIS
 
-    subgraph ASYNC["Asynchronous Backbone"]
-        MQ{{"Message Broker<br/>RabbitMQ"}}
+    subgraph ASYNC["Asynchronous Backbone — not wired in"]
+        MQ{{"RabbitMQ<br/>container runs — zero application code<br/>publishes or consumes any event today"}}
     end
 
-    SVCLAYER -->|publish domain events| MQ
-    MQ -->|consume events| SVCLAYER
-    MQ --> WSG
+    PLANNED -.->|would publish/consume events,<br/>once those services exist| MQ
+    MQ -.-> WSG
 
     subgraph PIPE["Delivery Pipeline"]
-        GIT["Git"] --> CI["Jenkins CI/CD"] --> DOCKER["Docker Images"] --> DEPLOY["Deployed Containers"]
+        GIT["Git"] --> CI["Jenkins CI/CD<br/>multibranch pipeline — builds + tests every branch,<br/>deploys only develop / release / main"]
+        CI --> DOCKER["Docker Images"]
+        DOCKER --> DEPLOY["Deployed containers on one Contabo VPS<br/>(same host also runs Jenkins itself)"]
     end
 
-    DEPLOY -.->|releases| SVCLAYER
+    DEPLOY -.->|releases| BUILT
+    DEPLOY -.->|nginx container serves the SPA and<br/>reverse-proxies /api/ to the Gateway,<br/>same-origin — no CORS needed in prod| WEB
+    DEPLOY -.->|shares the one Postgres instance,<br/>already running on that host| PG
 
     classDef client fill:#3450D6,color:#fff,stroke:none
     classDef gateway fill:#E4E8FC,color:#161B29,stroke:#3450D6
-    classDef svc fill:#FFFFFF,color:#161B29,stroke:#3450D6,stroke-width:2px
+    classDef svcBuilt fill:#FFFFFF,color:#161B29,stroke:#3450D6,stroke-width:2px
+    classDef svcPlanned fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray: 5 3
     classDef data fill:#FBEEDC,color:#161B29,stroke:#B4791F
-    classDef async fill:#EEE7FC,color:#161B29,stroke:#7A4FD6
+    classDef dataUnused fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-dasharray: 5 3
+    classDef async fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-dasharray: 5 3
     classDef pipe fill:#161B29,color:#fff,stroke:none
 
     class WEB client
-    class GW,WSG gateway
-    class SVC svc
-    class PG,REDIS data
+    class GW gateway
+    class WSG svcPlanned
+    class IAM,ACAD,REF svcBuilt
+    class ENR,GRADE,NOTIF,ANALYTICS svcPlanned
+    class PG data
+    class REDIS dataUnused
     class MQ async
     class GIT,CI,DOCKER,DEPLOY pipe

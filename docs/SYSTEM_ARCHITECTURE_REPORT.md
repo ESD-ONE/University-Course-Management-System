@@ -1,8 +1,35 @@
 # UCMS — System Architecture and Database Architecture Report
 
-**Status:** Analysis & proposed design only. No implementation has started from this report.
+**Status:** Largely implemented since this report was written. See the "Implementation Status Update" section below for what has shipped.
 **Scope:** Advanced RBAC (departments, lecturers, course modules), Courses/Degree Programs UI redesign, grading-scale re-homing, admin/lecturer UI separation, academic-year filtering.
 **Method:** Every claim about the *existing* system below was verified by reading the actual source, migrations, and `html-wireframes/index.html` — file paths and line numbers are given throughout. Claims about the *proposed* system are explicitly marked as design/recommendation, not fact.
+
+---
+
+## Implementation Status Update (2026-10-17)
+
+Since this report was written, most of what it proposed has been built. The RBAC
+scope-assignment design in section 5 below — `role_scope_assignments` +
+`assignment_permission_overrides`, letting a user hold a role at GLOBAL/DEPARTMENT/
+DEGREE_PROGRAM/COURSE/COURSE_MODULE scope with optional per-assignment permission
+overrides — was implemented essentially as proposed in identity-access-service
+(migrated, full service + controller + tests). It is **not yet wired into any
+frontend screen**: the Angular app has no "Roles & Permissions" UI, so every user
+still gets exactly one GLOBAL-scope assignment seeded from their legacy flat role.
+`departments` is also now real, as a child entity of `faculties` in
+reference-data-service (closing the "fake Department of Mathematics row" gap
+described above), and `DegreeProgram` now references `departmentId` instead of
+`facultyId` as recommended. `course_modules`, however, has **not** been
+implemented — the scope-assignment enum includes `COURSE_MODULE` as a valid value,
+but no CourseModule table/entity exists anywhere. Grading scales have **not** been
+moved out of Reference Data, since Assignment & Grading (the service that would
+consume them) still doesn't exist. Academic Structure, Reference Data, and Identity
+& Access remain the only 3 of 7 services built; Enrollment, Assignment & Grading,
+Notification, and Analytics & Reporting are still planned-only. A full Angular
+frontend and a Jenkins CI/CD pipeline (build+test every branch, deploy
+develop/release/main) now exist as well, neither of which is covered in the body
+below. See `docs/architecture/README.md` for current per-service status and
+`docs/LOGIN_USERS.md` for live environment URLs.
 
 ---
 
