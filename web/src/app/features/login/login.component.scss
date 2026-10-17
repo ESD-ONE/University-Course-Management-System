@@ -1,0 +1,60 @@
+.login-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background: var(--surface);
+}
+
+.login-left {
+  width: 44%;
+  min-width: 380px;
+  background: linear-gradient(135deg, #232840, #12141f);
+  color: #fff;
+  padding: 56px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+
+  .mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #4e68e8, var(--accent-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  h1 { font-size: 34px; line-height: 1.2; margin: auto 0 16px; max-width: 360px; }
+  p { color: #b7bfe0; font-size: 15px; line-height: 1.5; max-width: 360px; margin: 0 0 28px; }
+  .tagline { margin-top: auto; font-size: 11.5px; color: #7981a8; }
+}
+
+.login-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 420px;
+
+  h2 { font-size: 27px; margin: 0 0 6px; }
+  .sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 28px; }
+  .footnote { font-size: 11px; color: var(--ink-faint); margin-top: 18px; }
+}
+
+.login-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 9px;
+  margin-bottom: 16px;
+}

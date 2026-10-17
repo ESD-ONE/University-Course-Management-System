@@ -1,0 +1,73 @@
+<div class="modal-overlay" (click)="close()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    @if (!result()) {
+      <div class="modal-head">
+        <div>
+          <h3>New User</h3>
+          <p>Create an account and assign its role — the role decides what they can access from their first sign-in.</p>
+        </div>
+        <button class="modal-close" (click)="close()">✕</button>
+      </div>
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <div class="modal-body">
+          @if (errorMessage()) {
+            <div class="modal-error">{{ errorMessage() }}</div>
+          }
+          <div class="field">
+            <label for="nuName">Full Name</label>
+            <input id="nuName" type="text" formControlName="name" placeholder="e.g. S. Herath" />
+          </div>
+          <div class="field">
+            <label for="nuEmail">Email</label>
+            <input id="nuEmail" type="email" formControlName="email" placeholder="e.g. s.herath@university.edu" />
+          </div>
+          <div class="field">
+            <label for="nuRole">Role</label>
+            <select id="nuRole" formControlName="role">
+              <option value="STUDENT">Student</option>
+              <option value="LECTURER">Lecturer</option>
+              <option value="ADMIN">Administrator</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="nuStatus">Status</label>
+            <select id="nuStatus" formControlName="status">
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="close()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting()">
+            {{ submitting() ? 'Creating…' : 'Create User' }}
+          </button>
+        </div>
+      </form>
+    } @else {
+      <div class="modal-head">
+        <div>
+          <h3>User Created</h3>
+          <p>{{ result()!.name }} · {{ result()!.email }}</p>
+        </div>
+        <button class="modal-close" (click)="close()">✕</button>
+      </div>
+      <div class="modal-body">
+        @if (result()!.temporaryPassword) {
+          <div class="info-strip warn" style="background:var(--gold-soft);color:var(--gold);">
+            <b style="display:block;margin-bottom:6px;">One-time temporary password</b>
+            This is shown once and cannot be retrieved again — share it with the user out of band.
+          </div>
+          <div class="card" style="text-align:center;font-size:18px;font-weight:700;letter-spacing:.04em;font-family:monospace;padding:16px;">
+            {{ result()!.temporaryPassword }}
+          </div>
+        } @else {
+          <p style="font-size:13px;color:var(--ink-soft);">Account created with the password you supplied.</p>
+        }
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-primary" (click)="close()">Done</button>
+      </div>
+    }
+  </div>
+</div>
