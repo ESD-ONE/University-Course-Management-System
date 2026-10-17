@@ -3,6 +3,9 @@ pipeline {
 
     environment {
         DEPLOY_ROOT = '/opt/ucms-app'
+        // The Jenkins snap's process environment doesn't export HOME, which the
+        // Maven/npm wrapper scripts and tool caches (~/.m2, npm config) require.
+        HOME = '/root'
     }
 
     stages {
