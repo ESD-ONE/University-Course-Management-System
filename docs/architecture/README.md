@@ -13,8 +13,8 @@ the more reliable way to make each piece identifiable at a glance:
 
 | File | Shows |
 |---|---|
-| `high-level-architecture.mmd` / `.png` | Client → Gateway → services layer → data layer → async backbone → delivery pipeline (container view) |
-| `microservices-architecture.mmd` / `.png` | All 7 services, their schemas (one shared PostgreSQL instance and database — `ucms` — with a schema per service), and the actual calls between them — solid = synchronous REST, dotted = async event via the message broker (component view) |
+| `high-level-architecture.mmd` / `.png` | Client → Gateway → services layer → data layer → delivery pipeline (container view). Solid/filled = built and running today (Gateway, the 3 built services, PostgreSQL, the deploy pipeline); dashed/hatched = planned or scaffolded-but-unused — Redis and RabbitMQ containers run in infra but zero application code references either, and the WebSocket Gateway is a design artifact only, not implemented |
+| `microservices-architecture.mmd` / `.png` | All 7 services, their schemas (one shared PostgreSQL instance and database — `ucms` — with a schema per service), and the actual calls between them. Solid boxes/edges = built and verified in code today — only the Gateway's 3 routes and Academic Structure's periodic background sync call to Identity & Access (`GET /roles`, every 60s, for its local permission-catalog cache) actually run; dashed = planned only, including every Message Broker edge (nothing publishes or consumes an event anywhere in the codebase) and every call into or out of the 4 unbuilt services |
 
 ## 2. Service-level (what each service's schema actually contains)
 
@@ -46,19 +46,19 @@ assignment, seeded 1:1 from their legacy flat `role`.
 
 ## 3. Flow-level (how a request actually moves, step by step)
 
-Sequence diagrams — each service gets its own vertical lane, and the arrows show the real order of calls, including what happens when something fails (the `alt`/`else` blocks).
+Sequence diagrams — each service gets its own vertical lane, and the arrows show the real order of calls, including what happens when something fails (the `alt`/`else` blocks). Only one of these four is real today — `flow-04-login` is the only flow backed by running code; `flow-01` through `flow-03` all depend on services that don't exist yet (Enrollment, Assignment & Grading, Notification, Analytics, and the WebSocket Gateway) and are kept as the intended future design, each marked "PLANNED" at the top of its `.mmd`/`.png`.
 
-| File | Flow |
-|---|---|
-| `flow-01-student-enrollment.mmd/png` | Student enrolls in a course — sync capacity check, async confirmation email + live push; includes the "course full" failure path |
-| `flow-02-grading.mmd/png` | Lecturer grades a submission — sync enrollment check, then Notification and Analytics consume the same event independently |
-| `flow-03-admin-registration.mmd/png` | Admin registers a student into a program — the exact same Enrollment write path as self-service, just a different actor; this is the flow-level proof of the Section 6 "why Administration isn't a service" call in the architecture report |
-| `flow-04-login.mmd/png` | Login — three-way branch: valid credentials, wrong credentials, suspended account |
+| File | Flow | Status |
+|---|---|---|
+| `flow-01-student-enrollment.mmd/png` | Student enrolls in a course — sync capacity check, async confirmation email + live push; includes the "course full" failure path | **Planned** — depends on Enrollment, Notification, WebSocket Gateway (none exist) |
+| `flow-02-grading.mmd/png` | Lecturer grades a submission — sync enrollment check, then Notification and Analytics consume the same event independently | **Planned** — depends on Assignment & Grading, Enrollment, Notification, Analytics (none exist) |
+| `flow-03-admin-registration.mmd/png` | Admin registers a student into a program — the exact same Enrollment write path as self-service, just a different actor; this is the flow-level proof of the Section 6 "why Administration isn't a service" call in the architecture report | **Planned** — depends on Enrollment (doesn't exist) |
+| `flow-04-login.mmd/png` | Login — three-way branch: valid credentials, wrong credentials, inactive account; matches `AuthService.java` exactly, including the JWT's `assignments` claim and the `user_sessions` row persisted for audit/revocation (written but not read back by anything today) | **Built** — this is what actually runs |
 
 ## How to read them together
 
-1. **Start with `microservices-architecture.png`** to see which services talk to which, and whether that call is synchronous or event-driven, as a static map.
-2. **Open the matching `flow-0N-*.png`** to see that same relationship play out as an actual sequence of calls for a real scenario — this is where "synchronous" and "asynchronous" stop being a line style and become a concrete order of events.
+1. **Start with `microservices-architecture.png`** to see which services talk to which, and whether that call is synchronous or event-driven, as a static map — and which of those calls/services are solid (real, running) versus dashed (planned only).
+2. **Open the matching `flow-0N-*.png`** to see that same relationship play out as an actual sequence of calls for a real scenario — this is where "synchronous" and "asynchronous" stop being a line style and become a concrete order of events. Remember only `flow-04-login` describes code that actually runs; the other three are the aspirational design for services that haven't been built.
 3. **Open the matching `tables-0N-*.png`** to see exactly what each service in that flow stores — real primary keys, real foreign keys, and real relationships, but only *within* that service's own schema.
 4. **A field like `lecturer_id "ref Identity and Access, no FK"`** is not a mistake — it's the point. Schema-per-service (one shared database, `ucms`, but a dedicated schema and database role per service) means no table ever has a real foreign key into another service's schema. Cross-service references are IDs resolved through that other service's API, never a SQL join — which is exactly what you see happening, call by call, in the flow diagrams.
 
