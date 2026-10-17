@@ -8,6 +8,16 @@
 # connects with its own schema-scoped role (identity_access_svc), not the admin role.
 # See infra/init-schemas.sh and docs/architecture/DATA_GOVERNANCE.md.
 #
+# Every service below has a healthcheck against its own /actuator/health, and every
+# depends_on uses `condition: service_healthy` rather than the bare service-name form.
+# Docker Compose only waits for "container started" with the bare form — it does NOT
+# wait for the Java process inside to actually be ready, so on every redeploy the
+# gateway (and academic-structure-service's Role Catalog sync) came up 30-40s before
+# identity-access-service finished its Spring Boot boot, producing a window of
+# Connection-refused 500s/502s for anyone hitting the app right after a deploy. The
+# healthcheck + condition pair is what actually closes that window, instead of relying
+# on restart timing lining up.
+#
 # Usage on the server:
 #   cd /opt/ucms-app && docker compose --env-file .env up -d --build
 
@@ -25,6 +35,12 @@ services:
       DB_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_MINUTES: 60
+    healthcheck: &service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
     networks:
       - ucms_default
 
@@ -40,6 +56,9 @@ services:
       DB_USER: reference_data_svc
       DB_PASSWORD: ${REFERENCE_DATA_SVC_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
     networks:
       - ucms_default
 
@@ -58,8 +77,12 @@ services:
       # Periodic role/permission-catalog sync (docs/SYSTEM_ARCHITECTURE_REPORT.md
       # section 12.3) — container-name reachable on the shared internal network.
       IDENTITY_SERVICE_URI: http://ucms-identity-access-service:8081
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
     depends_on:
-      - identity-access-service
+      identity-access-service:
+        condition: service_healthy
     networks:
       - ucms_default
 
@@ -75,12 +98,18 @@ services:
       # Defaults to http://localhost:4200 otherwise, so the browser's request from the
       # directly-exposed frontend (see web service below) gets rejected with 403.
       CORS_ALLOWED_ORIGIN: http://169.58.12.239:8091
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
     ports:
       - "127.0.0.1:8090:8080"
     depends_on:
-      - identity-access-service
-      - reference-data-service
-      - academic-structure-service
+      identity-access-service:
+        condition: service_healthy
+      reference-data-service:
+        condition: service_healthy
+      academic-structure-service:
+        condition: service_healthy
     networks:
       - ucms_default
 
@@ -97,7 +126,10 @@ services:
       # Requires `ufw allow 8091/tcp` on the host (see docs/LOGIN_USERS.md).
       - "8091:80"
     depends_on:
-      - gateway
+      gateway:
+        # So the frontend never comes up (or restarts) fronting a gateway that's still
+        # 502-ing because a backend behind it hasn't finished starting yet.
+        condition: service_healthy
     networks:
       - ucms_default
 
