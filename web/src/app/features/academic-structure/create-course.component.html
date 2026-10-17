@@ -1,0 +1,89 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Course Management</div>
+    <h1 class="page-title">Create Course</h1>
+    <p class="page-sub">A course is a reusable template - assign it to academic years afterward from "Manage Years".</p>
+    <div class="breadcrumb">
+      <a [routerLink]="backLink()">{{ backLabel() }}</a>
+      <span>/</span>
+      <span class="current">Create Course</span>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="max-width:680px;">
+  @if (loadingOptions()) {
+    <span class="skeleton" style="width:100%;height:44px;margin-bottom:18px;"></span>
+    <span class="skeleton" style="width:100%;height:44px;margin-bottom:18px;"></span>
+    <span class="skeleton" style="width:60%;height:44px;"></span>
+  } @else {
+    <form [formGroup]="form">
+      @if (error()) { <div class="modal-error">{{ error() }}</div> }
+
+      <div class="field-row">
+        <div class="field" style="flex:1 1 150px;">
+          <label for="ccCode">Course Code</label>
+          <input id="ccCode" type="text" formControlName="courseCode" list="catalogCodes" placeholder="e.g. COSC5105"
+                 (input)="onCodeInput($any($event.target).value)" style="text-transform:uppercase;" />
+          <datalist id="catalogCodes">
+            @for (c of catalog(); track c.id) { <option [value]="c.code">{{ c.name }}</option> }
+          </datalist>
+        </div>
+        <div class="field" style="flex:2 1 220px;">
+          <label for="ccName">Course Name</label>
+          <input id="ccName" type="text" formControlName="courseName" placeholder="e.g. Introduction to Programming" [readOnly]="!!matchedCatalog()" />
+        </div>
+        <div class="field" style="flex:0 0 100px;">
+          <label for="ccCredits">Credits</label>
+          <input id="ccCredits" type="number" min="1" formControlName="defaultCredits" [readOnly]="!!matchedCatalog()" />
+        </div>
+      </div>
+      <div class="field">
+        <p class="hint" style="margin:0;">
+          @if (matchedCatalog()) {
+            Using the existing "{{ matchedCatalog()!.code }}" subject - name and credits come from it.
+          } @else {
+            New code - this subject will be added to the catalog when you save. Start typing to reuse an existing one instead.
+          }
+        </p>
+      </div>
+
+      <div class="field">
+        <label for="ccDegree">Degree Program</label>
+        <app-searchable-select
+          inputId="ccDegree"
+          formControlName="degreeProgramId"
+          placeholder="Search degree programs…"
+          [options]="degreeProgramOptions()"
+        ></app-searchable-select>
+        <div class="hint">Every course belongs to one reference degree program.</div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="ccBegin">Begin Date</label>
+          <input id="ccBegin" type="date" formControlName="beginDate" />
+        </div>
+        <div class="field">
+          <label for="ccYearOfStudy">Year of Study</label>
+          <input id="ccYearOfStudy" type="number" min="1" max="6" formControlName="yearOfStudy" />
+        </div>
+        <div class="field">
+          <label for="ccCapacity">Enrollment Capacity</label>
+          <input id="ccCapacity" type="number" min="1" formControlName="capacity" />
+        </div>
+      </div>
+
+      <div class="field">
+        <p class="hint" style="margin:0;">
+          No academic year is picked here - once created, assign this course to any academic year(s) it runs in from <b>{{ backLabel() }}</b> → Manage Years.
+        </p>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="save(false)">Save as Draft</button>
+        <button type="button" class="btn btn-primary" [disabled]="submitting()" (click)="save(true)">Publish Course</button>
+      </div>
+    </form>
+  }
+</div>

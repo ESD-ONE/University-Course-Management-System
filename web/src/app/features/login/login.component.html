@@ -22,14 +22,14 @@
       <div class="field">
         <label for="password">Password</label>
         <input id="password" type="password" formControlName="password" placeholder="••••••••••" autocomplete="current-password" />
-        <div class="hint">Your role is assigned to your account by an administrator — it isn't chosen at sign-in.</div>
+        <div class="hint">Your role is assigned to your account by an administrator - it isn't chosen at sign-in.</div>
       </div>
 
       <button class="btn btn-primary btn-block" type="submit" [disabled]="submitting()">
         {{ submitting() ? 'Signing in…' : 'Log In' }}
       </button>
 
-      <p class="footnote">No account? Ask your administrator to create one from <b>Users</b> — that's where roles are assigned.</p>
+      <p class="footnote">No account? Ask your administrator to create one from <b>Users</b> - that's where roles are assigned.</p>
     </form>
   </div>
 </div>

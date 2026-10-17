@@ -11,6 +11,8 @@
 
     <modules>
         <module>services/identity-access-service</module>
+        <module>services/reference-data-service</module>
+        <module>services/academic-structure-service</module>
         <module>services/gateway</module>
     </modules>
 

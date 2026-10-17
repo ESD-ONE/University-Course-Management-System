@@ -1,14 +1,23 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UserService } from '../../core/services/user.service';
-import { CreatedUserResponse } from '../../core/models/user.model';
+import { CreatedUserResponse, RoleKind } from '../../core/models/user.model';
+
+const ROLE_LABELS: Record<RoleKind, string> = {
+  ADMIN: 'Administrator',
+  LECTURER: 'Lecturer',
+  STUDENT: 'Student',
+};
 
 /**
- * Matches the designed "New User" modal exactly: name, email, role, status (Active/
- * Inactive only) — no password field. The backend generates a one-time temporary
- * password when none is supplied; this dialog shows it once on success, since there's
- * no email/notification service yet to deliver it any other way.
+ * Role is locked to whichever tab the admin had open when they clicked "+ New" —
+ * matches the role-based Users module (see docs/SYSTEM_GAP_ANALYSIS_AND_IMPLEMENTATION_PLAN.md
+ * section D) rather than the wireframe's single modal with a role dropdown. Name, email,
+ * status (Active/Inactive) — no password field. The backend generates a one-time temporary
+ * password when none is supplied, and a Student ID automatically for Student role; both are
+ * shown once on success, since there's no email/notification service yet to deliver them
+ * any other way.
  */
 @Component({
   selector: 'app-new-user-dialog',
@@ -20,13 +29,15 @@ export class NewUserDialogComponent {
   private fb = inject(FormBuilder);
   private userService = inject(UserService);
 
+  @Input({ required: true }) lockedRole!: RoleKind;
   @Output() closed = new EventEmitter<void>();
   @Output() created = new EventEmitter<CreatedUserResponse>();
+
+  readonly roleLabels = ROLE_LABELS;
 
   readonly form = this.fb.group({
     name: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
-    role: ['STUDENT' as const, Validators.required],
     status: ['ACTIVE' as const, Validators.required],
   });
 
@@ -42,8 +53,8 @@ export class NewUserDialogComponent {
     this.errorMessage.set(null);
     this.submitting.set(true);
 
-    const { name, email, role, status } = this.form.getRawValue();
-    this.userService.create({ name: name!, email: email!, role: role!, status: status! }).subscribe({
+    const { name, email, status } = this.form.getRawValue();
+    this.userService.create({ name: name!, email: email!, role: this.lockedRole, status: status! }).subscribe({
       next: (created) => {
         this.submitting.set(false);
         this.result.set(created);

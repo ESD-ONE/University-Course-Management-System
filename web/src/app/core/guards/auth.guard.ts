@@ -25,3 +25,11 @@ export const adminGuard: CanActivateFn = () => {
   }
   return inject(Router).createUrlTree(['/app']);
 };
+
+export const lecturerGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  if (auth.currentUser()?.role === 'LECTURER') {
+    return true;
+  }
+  return inject(Router).createUrlTree(['/app']);
+};

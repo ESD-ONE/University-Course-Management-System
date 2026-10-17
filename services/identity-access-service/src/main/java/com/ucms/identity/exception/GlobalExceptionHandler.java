@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(WrongPasswordException.class)
+    public ResponseEntity<Object> handleWrongPassword(WrongPasswordException ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLock(Exception ex) {
         return error(HttpStatus.CONFLICT, "This record was changed by someone else — refresh and try again.");

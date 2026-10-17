@@ -1,0 +1,191 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Course Management</div>
+    <h1 class="page-title">Courses</h1>
+    <p class="page-sub">University-wide course oversight. Each course belongs to one reference degree program and runs across whichever academic years it's assigned to.</p>
+  </div>
+  <a class="btn btn-primary" routerLink="/app/courses/create">+ Create Course</a>
+</div>
+
+<div class="card" style="margin-bottom:16px;padding:12px 16px;">
+  <div class="field" style="margin:0;max-width:360px;">
+    <label for="degreeFilter">Filter by Degree Program</label>
+    <app-searchable-select
+      inputId="degreeFilter"
+      placeholder="Search degree programs…"
+      [options]="degreeProgramFilterOptions()"
+      [ngModel]="degreeProgramFilter()"
+      (ngModelChange)="onDegreeProgramFilterChange($event)"
+    ></app-searchable-select>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card">
+    @for (i of [1,2,3,4,5]; track i) {
+      <div class="skeleton-row">
+        <span class="skeleton" style="width:70px;height:14px;"></span>
+        <span class="skeleton" style="width:160px;height:14px;"></span>
+        <span class="skeleton" style="width:180px;height:14px;"></span>
+        <span class="skeleton" style="width:90px;height:14px;"></span>
+        <span class="skeleton" style="width:70px;height:14px;"></span>
+        <span class="skeleton" style="width:80px;height:20px;border-radius:12px;"></span>
+      </div>
+    }
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="card">
+    <table>
+      <thead><tr><th>Code</th><th>Name</th><th>Degree Program</th><th>Begin Date</th><th>Year of Study</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (c of courses(); track c.id) {
+          <tr>
+            <td class="cell-code">{{ c.catalogCourseCode }}</td>
+            <td class="cell-name">{{ c.catalogCourseName }}</td>
+            <td class="cell-soft">{{ c.degreeProgramCode }} - {{ c.degreeProgramName }}</td>
+            <td class="cell-soft">{{ c.beginDate }}</td>
+            <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
+            <td><span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span></td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditCourse(c)">Edit</button>
+              <button class="btn btn-secondary btn-sm" (click)="openManageYears(c)">Manage Years</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteCourse(c)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">No courses have been created yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:12px;color:var(--ink-faint);margin-top:14px;">Showing {{ courses().length }} courses</p>
+}
+
+@if (editingCourse(); as course) {
+  <div class="modal-overlay" (click)="editingCourse.set(null)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>Edit Course</h3>
+          <p>{{ course.catalogCourseCode }} - {{ course.catalogCourseName }}</p>
+        </div>
+        <button class="modal-close" (click)="editingCourse.set(null)">✕</button>
+      </div>
+      <form [formGroup]="editCourseForm" (ngSubmit)="submitEditCourse()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field-row">
+            <div class="field">
+              <label for="ecBegin">Begin Date</label>
+              <input id="ecBegin" type="date" formControlName="beginDate" />
+            </div>
+            <div class="field">
+              <label for="ecYearOfStudy">Year of Study</label>
+              <input id="ecYearOfStudy" type="number" min="1" max="6" formControlName="yearOfStudy" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="ecCapacity">Capacity</label>
+              <input id="ecCapacity" type="number" min="1" formControlName="capacity" />
+            </div>
+            <div class="field">
+              <label for="ecStatus">Status</label>
+              <select id="ecStatus" formControlName="status">
+                <option value="DRAFT">Draft</option>
+                <option value="PUBLISHED">Published</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="editingCourse.set(null)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting()">{{ submitting() ? 'Saving…' : 'Save Changes' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (managingCourse(); as course) {
+  <div class="modal-overlay" (click)="closeManageYears()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>Manage Years - {{ course.catalogCourseCode }}</h3>
+          <p>{{ course.catalogCourseName }}</p>
+        </div>
+        <button class="modal-close" (click)="closeManageYears()">✕</button>
+      </div>
+      <div class="modal-body">
+        @if (yearAssignmentsLoading()) {
+          <p style="color:var(--ink-faint);font-size:13px;">Loading…</p>
+        } @else if (yearAssignments().length) {
+          <table style="margin-bottom:16px;">
+            <thead><tr><th>Academic Year</th><th>Semester</th><th>Capacity</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              @for (y of yearAssignments(); track y.id) {
+                <tr>
+                  <td class="cell-soft">{{ y.academicYearName }}</td>
+                  <td class="cell-soft">{{ y.semesterName ?? '-' }}</td>
+                  <td class="cell-soft">{{ y.capacity }}</td>
+                  <td><span class="badge" [class.b-success]="y.status === 'PUBLISHED'" [class.b-ink]="y.status === 'DRAFT' || y.status === 'CANCELLED'">{{ y.status }}</span></td>
+                  <td style="display:flex;gap:6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" (click)="openEditYearAssignment(y)">Edit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteYearAssignment(y)">Remove</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p style="color:var(--ink-faint);font-size:13px;margin-bottom:16px;">Not assigned to any academic year yet.</p>
+        }
+
+        <form [formGroup]="assignForm" (ngSubmit)="submitYearAssignment()">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          @if (editingAssignmentId()) { <p style="font-size:12px;color:var(--accent);font-weight:600;margin:0 0 10px;">Editing existing assignment - <button type="button" class="btn-link" (click)="cancelEditYearAssignment()">cancel</button></p> }
+          <div class="field-row">
+            <div class="field">
+              <label for="mayYear">Academic Year</label>
+              <select id="mayYear" formControlName="academicYearId" [disabled]="!!editingAssignmentId()">
+                @for (y of academicYears(); track y.id) { <option [value]="y.id">{{ y.name }}</option> }
+              </select>
+            </div>
+            <div class="field">
+              <label for="maySem">Semester (optional)</label>
+              <select id="maySem" formControlName="semesterId">
+                <option value="">-</option>
+                @for (s of semestersFor(assignForm.getRawValue().academicYearId ?? ''); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="mayCapacity">Capacity Override</label>
+              <input id="mayCapacity" type="number" min="1" formControlName="capacity" placeholder="use default" />
+            </div>
+            <div class="field">
+              <label for="mayStatus">Status</label>
+              <select id="mayStatus" formControlName="status">
+                <option value="DRAFT">Draft</option>
+                <option value="PUBLISHED">Published</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-foot" style="padding:12px 0 0;">
+            <button type="button" class="btn btn-secondary" (click)="closeManageYears()">Close</button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting()">{{ submitting() ? 'Saving…' : (editingAssignmentId() ? 'Save Changes' : 'Assign to Year') }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

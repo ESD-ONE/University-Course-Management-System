@@ -1,6 +1,7 @@
 <div class="app-shell">
   <div class="topbar">
     <div class="brand"><span class="mark">U</span> UCMS</div>
+
     <div class="spacer"></div>
 
     @if (auth.currentUser(); as user) {
@@ -26,22 +27,41 @@
       <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active">
         <span class="dot"></span> Dashboard
       </a>
-      <a class="navitem" routerLink="/app/profile" routerLinkActive="active">
-        <span class="dot"></span> My Profile
-      </a>
 
       @if (auth.currentUser()?.role === 'ADMIN') {
         <div class="group-label">Administration</div>
         <a class="navitem" routerLink="/app/users" routerLinkActive="active">
           <span class="dot"></span> Users
         </a>
+        <a class="navitem" routerLink="/app/academic-calendar" routerLinkActive="active">
+          <span class="dot"></span> Academic Calendar
+        </a>
+        <a class="navitem" routerLink="/app/program-management" routerLinkActive="active">
+          <span class="dot"></span> Program Management
+        </a>
+        <a class="navitem" routerLink="/app/courses" routerLinkActive="active">
+          <span class="dot"></span> Courses
+        </a>
+        <a class="navitem" routerLink="/app/reference-data" routerLinkActive="active">
+          <span class="dot"></span> Reference Data
+        </a>
+      }
+
+      @if (auth.currentUser()?.role === 'LECTURER') {
+        <div class="group-label">Workspace</div>
+        <a class="navitem" routerLink="/app/reference-degree-details" routerLinkActive="active">
+          <span class="dot"></span> Reference Degree Details
+        </a>
+        <a class="navitem" routerLink="/app/my-courses" routerLinkActive="active">
+          <span class="dot"></span> My Courses
+        </a>
       }
 
       <div class="group-label">Coming soon</div>
-      <span class="navitem placeholder">Academic Structure<span class="badge-soon">Soon</span></span>
       <span class="navitem placeholder">Enrollment<span class="badge-soon">Soon</span></span>
       <span class="navitem placeholder">Assignments &amp; Grading<span class="badge-soon">Soon</span></span>
       <span class="navitem placeholder">Analytics &amp; Reports<span class="badge-soon">Soon</span></span>
+      <span class="navitem placeholder">Roles &amp; Permissions<span class="badge-soon">Soon</span></span>
     </nav>
 
     <div class="content">

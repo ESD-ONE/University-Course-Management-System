@@ -1,34 +1,91 @@
 <div class="eyebrow">Account</div>
 <h1 class="page-title">My Profile</h1>
-<p class="page-sub">Your account details, as stored by Identity &amp; Access.</p>
+<p class="page-sub">View and update your personal account details, password, and notification preferences.</p>
 
 @if (auth.currentUser(); as user) {
-  <div class="card" style="max-width:480px;">
-    <div class="field">
-      <label>Full Name</label>
-      <div style="font-size:14px;font-weight:600;">{{ user.name }}</div>
-    </div>
-    <div class="field">
-      <label>Email</label>
-      <div style="font-size:14px;">{{ user.email }}</div>
-    </div>
-    <div class="field">
-      <label>Role</label>
-      <span class="role-pill">{{ user.role }}</span>
-    </div>
-    <div class="field" style="margin-bottom:0;">
-      <label>Status</label>
-      <span class="badge" [class.b-success]="user.status === 'ACTIVE'"
-                           [class.b-gold]="user.status === 'INACTIVE'"
-                           [class.b-danger]="user.status === 'SUSPENDED'">
-        {{ user.status }}
-      </span>
-    </div>
-  </div>
+  <div class="grid g2">
+    <div>
+      <div class="card" style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+          <div class="avatar" style="width:56px;height:56px;font-size:20px;">
+            {{ initialsOf(user.name) }}
+          </div>
+          <div>
+            <div style="font-size:17px;font-weight:700;">{{ user.name }}</div>
+            <span class="role-pill">{{ user.role }}</span>
+          </div>
+        </div>
+        <form [formGroup]="nameForm" (ngSubmit)="saveName()">
+          <div class="field">
+            <label for="pfName">Full Name</label>
+            <input id="pfName" type="text" formControlName="name" />
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="pfEmail">Email</label>
+            <input id="pfEmail" type="email" [value]="user.email" disabled
+                   style="background:var(--surface2);color:var(--ink-faint);" />
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top:18px;" [disabled]="nameForm.invalid || nameSaving()">
+            {{ nameSaving() ? 'Saving…' : 'Save Changes' }}
+          </button>
+          @if (nameSaved()) { <span style="margin-left:10px;font-size:12.5px;color:var(--success);font-weight:600;">Saved</span> }
+        </form>
+      </div>
 
-  <div class="note-box warn" style="margin-top:20px;max-width:480px;">
-    <b>Not implemented yet</b>
-    Password changes and notification preferences are part of the designed Profile screen
-    but have no backend endpoint yet — only read access to your own profile exists so far.
+      <div class="card">
+        <h3 style="margin:0 0 16px;font-size:14px;">Change Password</h3>
+        <form [formGroup]="passwordForm" (ngSubmit)="savePassword()">
+          @if (passwordError()) {
+            <div class="modal-error">{{ passwordError() }}</div>
+          }
+          <div class="field">
+            <label for="pfCurPwd">Current Password</label>
+            <input id="pfCurPwd" type="password" formControlName="currentPassword" />
+          </div>
+          <div class="field">
+            <label for="pfNewPwd">New Password</label>
+            <input id="pfNewPwd" type="password" formControlName="newPassword" />
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="pfConfPwd">Confirm New Password</label>
+            <input id="pfConfPwd" type="password" formControlName="confirmPassword" />
+          </div>
+          <button type="submit" class="btn btn-secondary" style="margin-top:18px;" [disabled]="passwordSaving()">
+            {{ passwordSaving() ? 'Updating…' : 'Update Password' }}
+          </button>
+          @if (passwordSaved()) { <span style="margin-left:10px;font-size:12.5px;color:var(--success);font-weight:600;">Password updated</span> }
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 6px;font-size:14px;">Notification Preferences</h3>
+      <p style="font-size:12px;color:var(--ink-faint);margin:0 0 10px;">Choose what you get notified about, in-app and by email.</p>
+      <div class="note-box warn" style="margin-bottom:18px;">
+        <b>Not sent yet</b>
+        These preferences are saved to your account, but no Notification service exists yet to act on
+        them - nothing will actually email or alert you based on these settings today.
+      </div>
+      <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" [checked]="prefs().email" (change)="togglePref('email')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        Email notifications
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" [checked]="prefs().assignments" (change)="togglePref('assignments')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        New assignment &amp; deadline reminders
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" [checked]="prefs().grades" (change)="togglePref('grades')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        Grade release alerts
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:20px;cursor:pointer;">
+        <input type="checkbox" [checked]="prefs().registrations" (change)="togglePref('registrations')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        Registration confirmations
+      </label>
+      <button class="btn btn-primary" [disabled]="prefsSaving()" (click)="savePrefs()">
+        {{ prefsSaving() ? 'Saving…' : 'Save Preferences' }}
+      </button>
+      @if (prefsSaved()) { <span style="margin-left:10px;font-size:12.5px;color:var(--success);font-weight:600;">Saved</span> }
+    </div>
   </div>
 }

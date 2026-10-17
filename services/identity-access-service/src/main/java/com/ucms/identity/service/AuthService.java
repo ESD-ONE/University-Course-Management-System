@@ -30,15 +30,18 @@ public class AuthService {
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AssignmentService assignmentService;
 
     public AuthService(UserRepository userRepository,
                         UserSessionRepository sessionRepository,
                         PasswordEncoder passwordEncoder,
-                        JwtService jwtService) {
+                        JwtService jwtService,
+                        AssignmentService assignmentService) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.assignmentService = assignmentService;
     }
 
     @Transactional
@@ -54,7 +57,8 @@ public class AuthService {
             throw new AccountNotActiveException("This account is inactive — contact an administrator");
         }
 
-        String token = jwtService.issueToken(user.getId(), user.getEmail(), user.getRole().getKind().name());
+        String token = jwtService.issueToken(user.getId(), user.getEmail(), user.getRole().getKind().name(),
+                assignmentService.resolveClaimsForUser(user.getId()));
 
         UserSession session = new UserSession();
         session.setUser(user);
