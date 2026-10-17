@@ -31,6 +31,18 @@ public class User extends Auditable {
     @Column(name = "student_id", unique = true)
     private String studentId;
 
+    @Column(name = "notify_email", nullable = false)
+    private boolean notifyEmail = true;
+
+    @Column(name = "notify_assignments", nullable = false)
+    private boolean notifyAssignments = true;
+
+    @Column(name = "notify_grades", nullable = false)
+    private boolean notifyGrades = true;
+
+    @Column(name = "notify_registrations", nullable = false)
+    private boolean notifyRegistrations = true;
+
     public UUID getId() { return id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -44,4 +56,12 @@ public class User extends Auditable {
     public void setStatus(UserStatus status) { this.status = status; }
     public String getStudentId() { return studentId; }
     public void setStudentId(String studentId) { this.studentId = studentId; }
+    public boolean isNotifyEmail() { return notifyEmail; }
+    public void setNotifyEmail(boolean notifyEmail) { this.notifyEmail = notifyEmail; }
+    public boolean isNotifyAssignments() { return notifyAssignments; }
+    public void setNotifyAssignments(boolean notifyAssignments) { this.notifyAssignments = notifyAssignments; }
+    public boolean isNotifyGrades() { return notifyGrades; }
+    public void setNotifyGrades(boolean notifyGrades) { this.notifyGrades = notifyGrades; }
+    public boolean isNotifyRegistrations() { return notifyRegistrations; }
+    public void setNotifyRegistrations(boolean notifyRegistrations) { this.notifyRegistrations = notifyRegistrations; }
 }

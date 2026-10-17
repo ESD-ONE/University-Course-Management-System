@@ -5,11 +5,14 @@ import com.ucms.identity.domain.RoleKind;
 import com.ucms.identity.domain.User;
 import com.ucms.identity.domain.UserStatus;
 import com.ucms.identity.exception.EmailAlreadyInUseException;
+import com.ucms.identity.exception.WrongPasswordException;
 import com.ucms.identity.repository.RoleRepository;
 import com.ucms.identity.repository.UserRepository;
 import com.ucms.identity.repository.UserSpecifications;
 import com.ucms.identity.web.dto.CreateUserRequest;
 import com.ucms.identity.web.dto.CreatedUserResponse;
+import com.ucms.identity.web.dto.ProfileResponse;
+import com.ucms.identity.web.dto.UpdateNotificationPreferencesRequest;
 import com.ucms.identity.web.dto.UserResponse;
 import com.ucms.identity.web.dto.UserSummaryResponse;
 import jakarta.persistence.EntityNotFoundException;
@@ -104,8 +107,38 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public UserResponse getById(UUID id) {
-        return UserResponse.from(findActiveOrThrow(id));
+    public ProfileResponse getProfile(UUID id) {
+        return ProfileResponse.from(findActiveOrThrow(id));
+    }
+
+    @Transactional
+    public ProfileResponse updateOwnName(UUID id, String name) {
+        User user = findActiveOrThrow(id);
+        user.setName(name);
+        user.setUpdatedBy(id);
+        return ProfileResponse.from(userRepository.save(user));
+    }
+
+    @Transactional
+    public ProfileResponse updateOwnPassword(UUID id, String currentPassword, String newPassword) {
+        User user = findActiveOrThrow(id);
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new WrongPasswordException("Current password is incorrect");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setUpdatedBy(id);
+        return ProfileResponse.from(userRepository.save(user));
+    }
+
+    @Transactional
+    public ProfileResponse updateNotificationPreferences(UUID id, UpdateNotificationPreferencesRequest prefs) {
+        User user = findActiveOrThrow(id);
+        user.setNotifyEmail(prefs.email());
+        user.setNotifyAssignments(prefs.assignments());
+        user.setNotifyGrades(prefs.grades());
+        user.setNotifyRegistrations(prefs.registrations());
+        user.setUpdatedBy(id);
+        return ProfileResponse.from(userRepository.save(user));
     }
 
     @Transactional

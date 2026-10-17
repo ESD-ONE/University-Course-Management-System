@@ -5,6 +5,10 @@ import com.ucms.identity.domain.UserStatus;
 import com.ucms.identity.service.UserService;
 import com.ucms.identity.web.dto.CreateUserRequest;
 import com.ucms.identity.web.dto.CreatedUserResponse;
+import com.ucms.identity.web.dto.ProfileResponse;
+import com.ucms.identity.web.dto.UpdateNameRequest;
+import com.ucms.identity.web.dto.UpdateNotificationPreferencesRequest;
+import com.ucms.identity.web.dto.UpdatePasswordRequest;
 import com.ucms.identity.web.dto.UpdateUserRoleRequest;
 import com.ucms.identity.web.dto.UpdateUserStatusRequest;
 import com.ucms.identity.web.dto.UserResponse;
@@ -61,8 +65,26 @@ public class UserController {
     }
 
     @GetMapping("/users/me")
-    public UserResponse me(@AuthenticationPrincipal UUID currentUserId) {
-        return userService.getById(currentUserId);
+    public ProfileResponse me(@AuthenticationPrincipal UUID currentUserId) {
+        return userService.getProfile(currentUserId);
+    }
+
+    @PatchMapping("/users/me")
+    public ProfileResponse updateOwnName(@Valid @RequestBody UpdateNameRequest request,
+                                          @AuthenticationPrincipal UUID currentUserId) {
+        return userService.updateOwnName(currentUserId, request.name());
+    }
+
+    @PatchMapping("/users/me/password")
+    public ProfileResponse updateOwnPassword(@Valid @RequestBody UpdatePasswordRequest request,
+                                              @AuthenticationPrincipal UUID currentUserId) {
+        return userService.updateOwnPassword(currentUserId, request.currentPassword(), request.newPassword());
+    }
+
+    @PatchMapping("/users/me/notification-preferences")
+    public ProfileResponse updateOwnNotificationPreferences(@RequestBody UpdateNotificationPreferencesRequest request,
+                                                              @AuthenticationPrincipal UUID currentUserId) {
+        return userService.updateNotificationPreferences(currentUserId, request);
     }
 
     @PatchMapping("/users/{id}/status")

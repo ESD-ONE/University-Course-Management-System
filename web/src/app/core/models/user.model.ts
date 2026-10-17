@@ -28,6 +28,21 @@ export interface CreateUserRequest {
   status?: 'ACTIVE' | 'INACTIVE';
 }
 
+/** Mirrors ProfileResponse — only GET /users/me returns this (own account, including prefs). */
+export interface ProfileResponse extends UserResponse {
+  notifyEmail: boolean;
+  notifyAssignments: boolean;
+  notifyGrades: boolean;
+  notifyRegistrations: boolean;
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  email: boolean;
+  assignments: boolean;
+  grades: boolean;
+  registrations: boolean;
+}
+
 /** Mirrors Spring Data's Page<T> JSON shape, as returned by GET /users. */
 export interface PagedResponse<T> {
   content: T[];
