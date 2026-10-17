@@ -3,14 +3,17 @@
  * two path segments (StripPrefix=2 on /api/identity/**), so everything after this
  * base maps 1:1 to identity-access-service's own controller paths (/auth/login, /users, ...).
  *
- * Hardcoded to the local dev Gateway for now — this app has no build-time environment
- * swap configured yet (Angular 19 dropped the environments schematic by default).
- * Revisit when there's a real deployed Gateway URL to point at.
+ * Relative, not hardcoded to a host: in production this app is served by the same
+ * nginx container that reverse-proxies /api/** straight through to the Gateway (see
+ * web/nginx.conf), so the browser never needs to know the Gateway's host/port — no
+ * CORS, works the same whether reached by IP, a future domain, or an SSH tunnel. In
+ * local dev, ng serve's proxy.conf.json forwards /api the same way, to the local
+ * Gateway on :8082.
  */
-export const API_BASE_URL = 'http://localhost:8082/api/identity';
+export const API_BASE_URL = '/api/identity';
 
 /** Same Gateway, routed to reference-data-service instead (StripPrefix=2 on /api/reference/**). */
-export const REFERENCE_API_BASE_URL = 'http://localhost:8082/api/reference';
+export const REFERENCE_API_BASE_URL = '/api/reference';
 
 /** Same Gateway, routed to academic-structure-service instead (StripPrefix=2 on /api/academic/**). */
-export const ACADEMIC_API_BASE_URL = 'http://localhost:8082/api/academic';
+export const ACADEMIC_API_BASE_URL = '/api/academic';
