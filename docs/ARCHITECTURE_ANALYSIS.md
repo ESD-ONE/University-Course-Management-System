@@ -4,6 +4,25 @@ This document bridges the design artifacts in [`docs/architecture/`](architectur
 (7-service decomposition, ER diagrams, sequence flows, data governance standard) to the
 actual implementation choices made in this repository, and records why each one was made.
 
+## Implementation Status Update (2026-10-17)
+
+Since this document was written, the "one vertical slice" framed below has grown:
+2 more services have since been added on top of Gateway + Identity & Access.
+Academic Structure (Academic Years/Semesters, Degree Programs, Course Catalog,
+Curriculum, Course Offerings) and Reference Data (Faculties, Departments,
+Grading Scales, Course Categories) are now both built — full CRUD, migrated,
+tested, and deployed — following the same template this document describes for
+Identity & Access. That's 3 of 7 services now implemented; Enrollment, Assignment
+& Grading, Notification, and Analytics & Reporting remain planned-only, with no
+code. A full Angular frontend and a Jenkins multibranch CI/CD pipeline (building
+and testing every branch, deploying develop/release/main) also now exist, serving
+all 3 services plus the gateway and frontend as Docker containers on shared
+infrastructure. The landmine and conventions this document records for Identity &
+Access (test naming, data governance standard, deployment verification) carried
+over to the two newer services as described. See `docs/architecture/README.md`
+for current per-service status and `docs/LOGIN_USERS.md` for live environment
+URLs.
+
 ## 1. Scope of this phase
 
 Building all 7 services in one pass isn't a sound way to prove an architecture — any

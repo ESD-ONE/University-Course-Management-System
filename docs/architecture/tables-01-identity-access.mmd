@@ -1,5 +1,5 @@
 ---
-title: 1. Identity and Access Service — ucms.identity_access schema
+title: "1. Identity and Access Service — ucms.identity_access schema (ROLE_SCOPE_ASSIGNMENTS and ASSIGNMENT_PERMISSION_OVERRIDES are built and API-complete, but no frontend screen manages them yet — every user still has exactly one GLOBAL-scope assignment, seeded 1:1 from their legacy role)"
 ---
 erDiagram
     USERS {
@@ -9,6 +9,11 @@ erDiagram
         string password_hash
         uuid role_id FK
         string status
+        string student_id UK "nullable, STUDENT-role only, server-generated"
+        boolean notify_email
+        boolean notify_assignments
+        boolean notify_grades
+        boolean notify_registrations
         int version "optimistic lock"
         timestamptz created_at
         uuid created_by FK "self-ref users.id, null for seed user"
@@ -56,8 +61,36 @@ erDiagram
         timestamptz expires_at
         timestamptz created_at
     }
+    ROLE_SCOPE_ASSIGNMENTS {
+        uuid id PK
+        uuid user_id FK
+        uuid role_id FK
+        string scope_type "GLOBAL | DEPARTMENT | DEGREE_PROGRAM | COURSE | COURSE_MODULE"
+        uuid scope_id "ref Reference Data or Academic Structure, no FK; null iff GLOBAL"
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by FK "ref users.id"
+        timestamptz updated_at
+        uuid updated_by FK "ref users.id"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by FK "ref users.id, nullable"
+    }
+    ASSIGNMENT_PERMISSION_OVERRIDES {
+        uuid assignment_id FK
+        uuid permission_id FK
+        boolean granted
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by FK "ref users.id"
+        timestamptz updated_at
+        uuid updated_by FK "ref users.id"
+    }
 
     ROLES ||--o{ USERS : "assigned to"
     ROLES ||--o{ ROLE_PERMISSIONS : "grants"
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : "included in"
     USERS ||--o{ USER_SESSIONS : "signs in via"
+    USERS ||--o{ ROLE_SCOPE_ASSIGNMENTS : "holds a role at a scope via"
+    ROLES ||--o{ ROLE_SCOPE_ASSIGNMENTS : "granted at a scope via"
+    ROLE_SCOPE_ASSIGNMENTS ||--o{ ASSIGNMENT_PERMISSION_OVERRIDES : "fine-tuned by"
+    PERMISSIONS ||--o{ ASSIGNMENT_PERMISSION_OVERRIDES : "overridden in"

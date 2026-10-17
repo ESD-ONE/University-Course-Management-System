@@ -1,33 +1,34 @@
 ---
-title: Flow 4 — Login and Authentication
+title: "Flow 4 — Login (matches AuthService.java — no Redis, no WebSocket; JwtAuthFilter is stateless, never reads user_sessions back)"
 ---
 sequenceDiagram
     actor User
     participant Client as Angular SPA
     participant GW as API Gateway
     participant IAM as Identity and Access
-    participant CACHE as Redis
 
     User->>Client: Enter email + password, click "Log In"
-    Client->>GW: POST /auth/login {email, password}
-    GW->>IAM: forward credentials
+    Client->>GW: POST /api/identity/auth/login {email, password}
+    GW->>IAM: forward (StripPrefix=2 — IAM sees POST /auth/login)
 
-    IAM->>IAM: look up user by email, verify password hash
+    IAM->>IAM: look up user by email (soft-delete aware)
+    IAM->>IAM: verify password hash (BCrypt via PasswordEncoder)
 
-    alt valid credentials and account active
-        IAM->>IAM: issue JWT, create session record
-        IAM->>CACHE: cache session (fast lookup on future requests)
+    alt wrong credentials
+        IAM-->>GW: 401 InvalidCredentialsException
+        GW-->>Client: login failed
+        Client-->>User: "Incorrect email or password"
+    else credentials valid, but account not ACTIVE
+        IAM-->>GW: 403 AccountNotActiveException
+        GW-->>Client: account disabled
+        Client-->>User: "This account is inactive — contact an administrator"
+    else credentials valid and account ACTIVE
+        IAM->>IAM: resolve the user's role-scope-assignment claims<br/>(AssignmentService.resolveClaimsForUser)
+        IAM->>IAM: JwtService issues JWT — sub, email, role (flat legacy kind),<br/>assignments, iat, exp
+        IAM->>IAM: persist UserSession — user_id, token_hash<br/>(SHA-256 of the JWT, base64), expires_at, created_at<br/>(audit/revocation bookkeeping — written but not read back by anything today)
         IAM-->>GW: 200 {token, role, name}
         GW-->>Client: store token
         Client-->>User: redirected to role dashboard
-    else invalid credentials
-        IAM-->>GW: 401 Unauthorized
-        GW-->>Client: login failed
-        Client-->>User: "Incorrect email or password"
-    else account inactive or suspended
-        IAM-->>GW: 403 Forbidden
-        GW-->>Client: account disabled
-        Client-->>User: "This account is inactive — contact an administrator"
     end
 
-    Note over GW,CACHE: Every later request re-validates the token against this cache,<br/>not against Identity and Access directly — keeps the Gateway fast.
+    Note over GW,IAM: No Redis, no WebSocket anywhere in this real flow.<br/>Every later request's auth check (JwtAuthFilter) validates the JWT<br/>signature and expiry purely statelessly — it does not look up<br/>user_sessions or any cache on each request.
