@@ -267,6 +267,33 @@ plus a Student ID column on the Students tab and a locked role on each tab's
 
 ## Status
 
-This report was written before implementation began. Progress against §F is
-tracked here as each phase completes — see the end of this document for the
-current state once implementation starts.
+| Phase | Item | Status |
+|---|---|---|
+| 1 | Backend pagination + role/status filter + search + summary | **Done** — `GET /users?role=&status=&q=&page=&size=`, `GET /users/summary`; 17/17 backend tests pass |
+| 2 | Backend student ID generation | **Done** — `STU-<year>-<4 digits>`, unique, auto-generated for STUDENT role only |
+| 3 | Frontend role-based tabs | **Done** — Administrators/Lecturers/Students, independent per-tab filter state |
+| 4 | Frontend search, status filter, pagination, summary tiles | **Done** |
+| 5 | Frontend role-locked New User flow + Student ID display | **Done** — role dropdown removed from the modal, shown in the post-create confirmation with the temp password |
+| 6 | Wireframe sync | **Done** — `html-wireframes/index.html`'s `adminUsers()` rebuilt with the same 3 tabs, Student ID column, role-locked "+ New" button, and the two-step create/confirm modal; the Change Role modal now offers only the 3 system roles |
+| 7 | Tests + verification | **Done for backend** (automated); **manual** for frontend/wireframe (verified live against the running local stack — see commit message for the exact checks run); **no automated frontend tests exist in this project yet** — pre-existing gap, not newly introduced |
+| 8 | Deferred | Roles & Permissions screen (§C.7), bulk import/export (§C.8), Degree Program field (§C.5) remain explicitly out of scope, for the reasons given inline |
+
+**Verified live**, against the local dev stack (Angular on :4200, Gateway on
+:8082, Identity & Access on :8081, Postgres over the SSH tunnel):
+- Creating a Student with no password returns a one-time temp password and a
+  `STU-YYYY-NNNN`-formatted student ID; a Lecturer created the same way gets
+  no student ID.
+- `GET /users?role=STUDENT` returns only students; `GET /users?role=ADMIN`
+  does not leak the student into the admin tab.
+- `GET /users?q=<name>` matches by name, case-insensitively.
+- `GET /users/summary` counts update correctly after each creation
+  (verified: 1 → 3 total, 0 → 1 students, 1 → 2 staff across 2 creates).
+- Angular dev server hot-reloaded through every frontend change without
+  restart, confirming the rebuilt `users-list` component compiles and
+  mounts cleanly end to end.
+
+**Not re-verified in a real browser** (no browser automation tool was used
+in this pass) — the above was checked via the API directly and via the
+Angular CLI's own build/compile success, not by clicking through the
+rendered UI. Recommended next step: a manual click-through pass, which this
+report calls out rather than silently claiming as done.
