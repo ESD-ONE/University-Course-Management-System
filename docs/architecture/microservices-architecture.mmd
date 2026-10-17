@@ -1,10 +1,10 @@
 ---
-title: All schemas below live in one shared PostgreSQL instance and database — "ucms" — isolated from each other by per-service database roles, not separate databases
+title: "All schemas below live in one shared PostgreSQL instance and database — \"ucms\" — isolated from each other by per-service database roles, not separate databases. Solid boxes/edges = built and running today; dashed boxes/edges = planned only — 4 of these services have zero code, and no event ever flows through the Message Broker today because nothing publishes or consumes one yet."
 ---
 flowchart TB
-    GW["API Gateway"]
+    GW["API Gateway<br/>routing (path-prefix) + CORS only —<br/>no auth, no rate limiting"]
 
-    IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions, Profile"]
+    IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions,<br/>RBAC scope assignments, Profile"]
     IAMSCHEMA[("ucms.identity_access")]
     IAM --- IAMSCHEMA
 
@@ -12,39 +12,42 @@ flowchart TB
     ACADSCHEMA[("ucms.academic")]
     ACAD --- ACADSCHEMA
 
-    ENR["3. Enrollment Service<br/>Program and Course Registration, Capacity, Waitlist"]
-    ENRSCHEMA[("ucms.enrollment")]
-    ENR --- ENRSCHEMA
-
-    GRADE["4. Assignment and Grading Service<br/>Assignments, Submissions, Grading"]
-    GRADESCHEMA[("ucms.assignment_grading")]
-    GRADE --- GRADESCHEMA
-
-    NOTIF["5. Notification Service<br/>Email and In-App Notifications"]
-    NOTIFSCHEMA[("ucms.notification")]
-    NOTIF --- NOTIFSCHEMA
-
-    ANALYTICS["6. Analytics and Reporting Service<br/>Dashboards, Reports"]
-    ANALYTICSSCHEMA[("ucms.analytics")]
-    ANALYTICS --- ANALYTICSSCHEMA
-
-    REF["7. Reference Data Service<br/>Faculties, Grading Scales, Categories"]
+    REF["7. Reference Data Service<br/>Faculties, Departments, Grading Scales, Categories"]
     REFSCHEMA[("ucms.reference_data")]
     REF --- REFSCHEMA
 
+    ENR["3. Enrollment Service<br/>(planned — no code exists)"]
+    ENRSCHEMA[("ucms.enrollment<br/>schema reserved, no tables")]
+    ENR -.- ENRSCHEMA
+
+    GRADE["4. Assignment and Grading Service<br/>(planned — no code exists)"]
+    GRADESCHEMA[("ucms.assignment_grading<br/>schema reserved, no tables")]
+    GRADE -.- GRADESCHEMA
+
+    NOTIF["5. Notification Service<br/>(planned — no code exists)"]
+    NOTIFSCHEMA[("ucms.notification<br/>schema reserved, no tables")]
+    NOTIF -.- NOTIFSCHEMA
+
+    ANALYTICS["6. Analytics and Reporting Service<br/>(planned — no code exists)"]
+    ANALYTICSSCHEMA[("ucms.analytics<br/>schema reserved, no tables")]
+    ANALYTICS -.- ANALYTICSSCHEMA
+
     GW --> IAM
     GW --> ACAD
-    GW --> ENR
-    GW --> GRADE
-    GW --> ANALYTICS
     GW --> REF
+    GW -.->|planned| ENR
+    GW -.->|planned| GRADE
+    GW -.->|planned| NOTIF
+    GW -.->|planned| ANALYTICS
 
-    ENR -->|validates| ACAD
-    ACAD -->|resolves| REF
-    GRADE -->|validates| ENR
-    GRADE -->|resolves| REF
+    ACAD -->|"periodic background sync (every 60s)<br/>of role/permission catalog — RestClient<br/>GET /roles, not a per-request call"| IAM
 
-    MQ{{Message Broker}}
+    ENR -.->|planned: validates| ACAD
+    ACAD -.->|planned: resolves| REF
+    GRADE -.->|planned: validates| ENR
+    GRADE -.->|planned: resolves| REF
+
+    MQ{{"Message Broker — RabbitMQ<br/>container runs, but zero application<br/>code publishes or consumes any event today"}}
     ENR -.-> MQ
     GRADE -.-> MQ
     ACAD -.-> MQ
@@ -52,10 +55,21 @@ flowchart TB
     MQ -.-> NOTIF
     MQ -.-> ANALYTICS
 
-    ANALYTICS -->|reads| IAM
-    ANALYTICS -->|reads| ACAD
-    ANALYTICS -->|reads| ENR
-    ANALYTICS -->|reads| GRADE
+    ANALYTICS -.->|planned: reads| IAM
+    ANALYTICS -.->|planned: reads| ACAD
+    ANALYTICS -.->|planned: reads| ENR
+    ANALYTICS -.->|planned: reads| GRADE
 
     classDef schema fill:#FBEEDC,stroke:#B4791F,color:#161B29
-    class IAMSCHEMA,ACADSCHEMA,ENRSCHEMA,GRADESCHEMA,NOTIFSCHEMA,ANALYTICSSCHEMA,REFSCHEMA schema
+    classDef schemaPlanned fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-dasharray: 5 3
+    classDef svcBuilt fill:#FFFFFF,stroke:#3450D6,stroke-width:2px,color:#161B29
+    classDef svcPlanned fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-width:1.5px,stroke-dasharray: 5 3
+    classDef gateway fill:#E4E8FC,color:#161B29,stroke:#3450D6
+    classDef async fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-dasharray: 5 3
+
+    class IAMSCHEMA,ACADSCHEMA,REFSCHEMA schema
+    class ENRSCHEMA,GRADESCHEMA,NOTIFSCHEMA,ANALYTICSSCHEMA schemaPlanned
+    class IAM,ACAD,REF svcBuilt
+    class ENR,GRADE,NOTIF,ANALYTICS svcPlanned
+    class GW gateway
+    class MQ async

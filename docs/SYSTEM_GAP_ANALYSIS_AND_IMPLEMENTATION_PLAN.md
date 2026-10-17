@@ -8,6 +8,27 @@ all) against the real, implemented application (Angular `web/` + Spring Boot
 
 ---
 
+## Implementation Status Update (2026-10-17)
+
+Since this plan was written, the statement below that "of the 7 designed services,
+only Identity & Access is implemented" is out of date: 3 of 7 have now shipped —
+Identity & Access, Academic Structure, and Reference Data — all with full CRUD,
+tested, and deployed, fronted by the same Spring Cloud Gateway. The user-role
+model is unchanged (still the 3 real roles: ADMIN/LECTURER/STUDENT), but Identity
+& Access has since gained a backend-complete, data-driven RBAC scope-assignment
+layer (`role_scope_assignments` + `assignment_permission_overrides`) letting a
+role be held at GLOBAL/DEPARTMENT/DEGREE_PROGRAM/COURSE/COURSE_MODULE scope with
+optional per-assignment overrides — this is closer to the wireframe's
+custom-role/permission-matrix idea than this plan anticipated, but it still has
+**no frontend UI**, so the "Roles & Permissions" row's finding (wireframe-only,
+no backend concept of a custom role) is now only half true: the backend concept
+exists, the screen still doesn't. Enrollment, Assignment & Grading, Notification,
+and Analytics & Reporting remain planned-only, with no code. The rest of this
+plan's specifics (file paths, line numbers, the Users-module feature inventory)
+are unverified against current state and should be read as a historical record,
+not a current audit. See `docs/architecture/README.md` for current per-service
+status and `docs/LOGIN_USERS.md` for live environment URLs.
+
 ## A. System Overview
 
 **Architecture.** Microservices, one shared PostgreSQL database (`ucms`) with

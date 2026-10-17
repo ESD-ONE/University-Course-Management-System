@@ -20,15 +20,29 @@ the more reliable way to make each piece identifiable at a glance:
 
 One ER diagram per service — small enough that Mermaid lays each one out cleanly, and focused enough that "which table belongs to which service" is never in question. Each service's tables live in their own PostgreSQL **schema** inside the one shared `ucms` database (not a separate database per service — see the note below and `DATA_GOVERNANCE.md`), with isolation enforced by giving each service its own database role scoped to its own schema. Every mutable table carries a standard audit block (`version`, `created_at`/`by`, `updated_at`/`by`, `deleted_at`/`by`) — see **`DATA_GOVERNANCE.md`** for the full standard, the optimistic-locking mechanics, and the deliberate exceptions (append-only logs and session data don't get versioned or soft-deleted, and the doc explains why).
 
-| File | Service | Tables |
-|---|---|---|
-| `tables-01-identity-access.mmd/png` | Identity & Access | users, roles, permissions, role_permissions, user_sessions |
-| `tables-02-academic-structure.mmd/png` | Academic Structure | academic_years, semesters, degree_programs, course_catalog, program_courses, courses |
-| `tables-03-enrollment.mmd/png` | Enrollment | student_program_enrollments, course_enrollments, registration_log |
-| `tables-04-assignment-grading.mmd/png` | Assignment & Grading | assignments, submissions, grades |
-| `tables-05-notification.mmd/png` | Notification | notifications, notification_preferences |
-| `tables-06-analytics-reporting.mmd/png` | Analytics & Reporting | dashboard_snapshots, reports, scheduled_reports |
-| `tables-07-reference-data.mmd/png` | Reference Data | faculties, departments, grading_scales, course_categories |
+| File | Service | Status | Tables |
+|---|---|---|---|
+| `tables-01-identity-access.mmd/png` | Identity & Access | **Built** | users, roles, permissions, role_permissions, user_sessions, role_scope_assignments, assignment_permission_overrides |
+| `tables-02-academic-structure.mmd/png` | Academic Structure | **Built** | academic_years, semesters, degree_programs, degree_program_academic_years, course_catalog, program_courses, courses, course_academic_years |
+| `tables-03-enrollment.mmd/png` | Enrollment | Planned only | student_program_enrollments, course_enrollments, registration_log |
+| `tables-04-assignment-grading.mmd/png` | Assignment & Grading | Planned only | assignments, submissions, grades |
+| `tables-05-notification.mmd/png` | Notification | Planned only | notifications, notification_preferences |
+| `tables-06-analytics-reporting.mmd/png` | Analytics & Reporting | Planned only | dashboard_snapshots, reports, scheduled_reports |
+| `tables-07-reference-data.mmd/png` | Reference Data | **Built** | faculties, departments, grading_scales, course_categories |
+
+Of the 7 services, **3 are built** (Identity & Access, Academic Structure, Reference Data —
+all with full CRUD, tested, and deployed) and **4 remain planned-only** (Enrollment,
+Assignment & Grading, Notification, Analytics & Reporting) — their `tables-0N` diagrams below
+are still the original design, not yet backed by any code. `degree_program_academic_years` and
+`course_academic_years` are new since the services were first built: `degree_programs` and
+`courses` are stable reference templates, and their actual per-academic-year behaviour
+(status, capacity/lecturer overrides, which years they run in at all) lives in these two
+junction tables — which is also why more than one `academic_years` row can be `ACTIVE`
+simultaneously (a 3-4 year program spans several active years at once). `role_scope_assignments`
+and `assignment_permission_overrides` are the real, data-driven RBAC layer described in
+`docs/SYSTEM_ARCHITECTURE_REPORT.md` section 5 — fully implemented and API-complete, but with
+no frontend screen managing them yet; every user today still has exactly one `GLOBAL`-scope
+assignment, seeded 1:1 from their legacy flat `role`.
 
 ## 3. Flow-level (how a request actually moves, step by step)
 
@@ -52,10 +66,14 @@ Sequence diagrams — each service gets its own vertical lane, and the arrows sh
 
 ## Regenerating
 
-- `python3 render_mermaid.py` — the 2 system-level diagrams
-- `python3 render_tables.py` — the 7 per-service ER diagrams
-- `python3 render_flows.py` — the 4 sequence/flow diagrams
+```bash
+npx -y @mermaid-js/mermaid-cli -i tables-01-identity-access.mmd -o tables-01-identity-access.png -w 1600 -H 1400 -b white
+```
 
-All three re-render from the `.mmd` source via headless Chrome + Mermaid.js. Edit the `.mmd` files directly — they're the source of truth; the `.png` files are a build artifact.
+Same pattern for every other `.mmd` file — adjust `-w`/`-H` to the diagram's size (a diagram
+taller or wider than the given viewport gets clipped, not scaled, so when in doubt go bigger
+and crop later). Edit the `.mmd` files directly — they're the source of truth; the `.png`
+files are a build artifact, committed so they render inline on GitHub without a Mermaid
+plugin.
 
 **If a diagram ever looks cut off at the bottom:** the render script takes a viewport screenshot, not a full-page one, so a diagram taller than the configured window height gets silently clipped rather than erroring. This actually happened to `tables-04-assignment-grading` once the audit columns were added (its 3-table chain grew past 1700px) — the GRADES table was clipped off, and it looked fine until checked against the `.mmd` source. The render scripts now use a generously tall fixed viewport (`6500px`) specifically to avoid this; if a diagram grows even taller than that in future, bump the height in the relevant `render_*.py` rather than trusting the output size alone.

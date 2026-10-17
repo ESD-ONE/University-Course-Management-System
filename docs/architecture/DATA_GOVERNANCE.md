@@ -46,7 +46,7 @@ it was always implicitly assuming.
 
 Two places in this schema call it out explicitly because the business risk
 is concrete, not hypothetical:
-- `courses.version` — guards two concurrent admin edits to capacity from clobbering each other, which matters directly for the seat-capacity invariant discussed in the microservices architecture report (Section 5.3).
+- `courses.version` / `course_academic_years.version` — guards two concurrent admin edits to capacity from clobbering each other, which matters directly for the seat-capacity invariant discussed in the microservices architecture report (Section 5.3). `courses` is now a stable reference template (its `capacity` is just the default); the capacity that actually governs a given offering is the per-academic-year override on `course_academic_years`, which carries its own `version` for exactly this reason — see `tables-02-academic-structure.mmd`.
 - `role_permissions.version` — guards two admins toggling the same permission checkbox at the same moment.
 
 ## Soft delete
@@ -98,12 +98,20 @@ each with a reason:
 | `user_sessions` (Identity & Access) | `created_at` only | Ephemeral — expires or is hard-deleted on logout. Versioning a session row or asking "who deleted this session" has no business meaning. |
 | `notifications` (Notification) | `created_at` + `updated_at` only, no `version`/`created_by`/soft-delete | System-generated, not user-authored, so `created_by` is meaningless; `read_at` changing is the only mutation, with no realistic multi-actor contention to guard against. |
 
-Every other table — all 23 remaining — carries the full standard block.
+Every other table across the 7 services' ER diagrams carries the full standard block, with
+the exception of a handful of join/grant/preference tables (e.g. `role_permissions`,
+`program_courses`, `submissions`, `grades`) whose only mutation is an in-place field or
+boolean toggle rather than a row lifecycle, so they omit `deleted_at`/`deleted_by` — see
+each service's own `tables-0N-*.mmd` for the exact column list per table rather than a
+single count here, which drifts every time a table is added (two junction tables,
+`degree_program_academic_years` and `course_academic_years`, and the RBAC scope-assignment
+tables were added after this document was first written).
 
 ## What this changes in the diagrams
 
 All 7 `tables-0N-*.mmd` / `.png` files were regenerated with this standard
-applied. Re-render with `python3 render_tables.py` after any further schema
-edit — and note the render scripts now use a tall fixed viewport
-(`2200x6500`) specifically because the denser tables briefly exceeded the
-old viewport height and were silently clipped before this fix.
+applied. Re-render with the `npx @mermaid-js/mermaid-cli` command in this
+directory's `README.md` ("Regenerating") after any further schema edit —
+and use a generously tall viewport (the README's own note mentions up to
+`6500px`) since the denser tables briefly exceeded a shorter viewport
+height and were silently clipped before that fix.
