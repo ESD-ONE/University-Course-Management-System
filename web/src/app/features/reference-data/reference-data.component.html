@@ -1,0 +1,246 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System Administration</div>
+    <h1 class="page-title">Reference Data</h1>
+    <p class="page-sub">Manage shared lookup data used across UCMS services.</p>
+  </div>
+  <button class="btn btn-primary" (click)="openAddDialog()">+ Add Entry</button>
+</div>
+
+<div class="user-tabs" role="tablist" aria-label="Reference data category">
+  @for (tab of tabs; track tab) {
+    <button class="user-tab" role="tab" [class.active]="activeTab() === tab" (click)="selectTab(tab)">
+      {{ tabLabels[tab] }}
+    </button>
+  }
+</div>
+
+@if (!loading() && !loadError()) {
+  <div class="grid g3" style="margin-bottom:16px;">
+    <div class="chip-stat"><div class="l">Total {{ tabLabels[activeTab()] }}</div><div class="v">{{ activeTabCounts().total }}</div></div>
+    <div class="chip-stat"><div class="l">Active</div><div class="v" style="color:var(--success);">{{ activeTabCounts().active }}</div></div>
+    <div class="chip-stat"><div class="l">Inactive</div><div class="v" style="color:var(--gold);">{{ activeTabCounts().inactive }}</div></div>
+  </div>
+}
+
+<div class="card" style="padding:0;overflow:hidden;">
+  @if (loading()) {
+    <div style="padding:8px 20px;">
+      @for (i of [1,2,3,4,5]; track i) {
+        <div class="skeleton-row">
+          <span class="skeleton" style="width:220px;height:14px;"></span>
+          <span class="skeleton" style="width:70px;height:14px;"></span>
+          <span class="skeleton" style="width:80px;height:20px;border-radius:12px;"></span>
+        </div>
+      }
+    </div>
+  } @else if (loadError()) {
+    <p style="padding:24px;color:var(--danger);">{{ loadError() }}</p>
+  } @else if (activeTab() === 'faculties') {
+    <table>
+      <thead><tr><th>Faculty</th><th>Code</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (f of faculties(); track f.id) {
+          <tr>
+            <td class="cell-name">{{ f.name }}</td>
+            <td><span class="badge b-ink">{{ f.code }}</span></td>
+            <td><span class="badge" [class.b-success]="f.status === 'ACTIVE'" [class.b-gold]="f.status === 'INACTIVE'">{{ f.status }}</span></td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('faculties', f)">Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('faculties', f)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No faculties yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  } @else if (activeTab() === 'departments') {
+    <table>
+      <thead><tr><th>Department</th><th>Code</th><th>Faculty</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (d of departments(); track d.id) {
+          <tr>
+            <td class="cell-name">{{ d.name }}</td>
+            <td><span class="badge b-ink">{{ d.code }}</span></td>
+            <td class="cell-soft">{{ d.facultyName }}</td>
+            <td><span class="badge" [class.b-success]="d.status === 'ACTIVE'" [class.b-gold]="d.status === 'INACTIVE'">{{ d.status }}</span></td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('departments', d)">Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('departments', d)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">No departments yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  } @else if (activeTab() === 'grading') {
+    <table>
+      <thead><tr><th>Scale</th><th>Bands</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (g of gradingScales(); track g.id) {
+          <tr>
+            <td class="cell-name">{{ g.name }}</td>
+            <td class="cell-faint">{{ g.bands }}</td>
+            <td><span class="badge" [class.b-success]="g.status === 'ACTIVE'" [class.b-gold]="g.status === 'INACTIVE'">{{ g.status }}</span></td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('grading', g)">Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('grading', g)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No grading scales yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <table>
+      <thead><tr><th>Category</th><th>Description</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (c of courseCategories(); track c.id) {
+          <tr>
+            <td class="cell-name">{{ c.name }}</td>
+            <td class="cell-faint">{{ c.description }}</td>
+            <td><span class="badge" [class.b-success]="c.status === 'ACTIVE'" [class.b-gold]="c.status === 'INACTIVE'">{{ c.status }}</span></td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('categories', c)">Edit</button>
+              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('categories', c)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No course categories yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+@if (showEntryDialog()) {
+  <div class="modal-overlay" (click)="showEntryDialog.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>{{ editingId() ? 'Edit' : 'Add' }} {{ tabLabels[activeTab()] }} Entry</h3>
+          <p>Shared across every service that references this data.</p>
+        </div>
+        <button class="modal-close" (click)="showEntryDialog.set(false)">✕</button>
+      </div>
+
+      @if (activeTab() === 'faculties') {
+        <form [formGroup]="facultyForm" (ngSubmit)="submitAdd()">
+          <div class="modal-body">
+            @if (addError()) { <div class="modal-error">{{ addError() }}</div> }
+            <div class="field">
+              <label for="refFacName">Name</label>
+              <input id="refFacName" type="text" formControlName="name" placeholder="e.g. Faculty of Science" />
+            </div>
+            <div class="field">
+              <label for="refFacCode">Short Code</label>
+              <input id="refFacCode" type="text" formControlName="code" placeholder="e.g. FOS" />
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label for="refFacStatus">Status</label>
+              <select id="refFacStatus" formControlName="status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-secondary" (click)="showEntryDialog.set(false)">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="addSubmitting()">{{ addSubmitting() ? 'Saving…' : (editingId() ? 'Save Changes' : 'Add Entry') }}</button>
+          </div>
+        </form>
+      } @else if (activeTab() === 'departments') {
+        <form [formGroup]="departmentForm" (ngSubmit)="submitAdd()">
+          <div class="modal-body">
+            @if (addError()) { <div class="modal-error">{{ addError() }}</div> }
+            <div class="field">
+              <label for="refDeptName">Name</label>
+              <input id="refDeptName" type="text" formControlName="name" placeholder="e.g. Department of Mathematics" />
+            </div>
+            <div class="field">
+              <label for="refDeptCode">Short Code</label>
+              <input id="refDeptCode" type="text" formControlName="code" placeholder="e.g. DOM" />
+            </div>
+            <div class="field">
+              <label for="refDeptFaculty">Faculty</label>
+              <app-searchable-select
+                inputId="refDeptFaculty"
+                placeholder="Search faculties…"
+                [options]="facultyOptions()"
+                formControlName="facultyId"
+              ></app-searchable-select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label for="refDeptStatus">Status</label>
+              <select id="refDeptStatus" formControlName="status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-secondary" (click)="showEntryDialog.set(false)">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="addSubmitting()">{{ addSubmitting() ? 'Saving…' : (editingId() ? 'Save Changes' : 'Add Entry') }}</button>
+          </div>
+        </form>
+      } @else if (activeTab() === 'grading') {
+        <form [formGroup]="gradingForm" (ngSubmit)="submitAdd()">
+          <div class="modal-body">
+            @if (addError()) { <div class="modal-error">{{ addError() }}</div> }
+            <div class="field">
+              <label for="refGradeName">Scale Name</label>
+              <input id="refGradeName" type="text" formControlName="name" placeholder="e.g. 4.0 GPA Scale" />
+            </div>
+            <div class="field">
+              <label for="refGradeBands">Bands</label>
+              <textarea id="refGradeBands" formControlName="bands" placeholder="e.g. A: 70-100, B: 60-69, F: 0-39"></textarea>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label for="refGradeStatus">Status</label>
+              <select id="refGradeStatus" formControlName="status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-secondary" (click)="showEntryDialog.set(false)">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="addSubmitting()">{{ addSubmitting() ? 'Saving…' : (editingId() ? 'Save Changes' : 'Add Entry') }}</button>
+          </div>
+        </form>
+      } @else {
+        <form [formGroup]="categoryForm" (ngSubmit)="submitAdd()">
+          <div class="modal-body">
+            @if (addError()) { <div class="modal-error">{{ addError() }}</div> }
+            <div class="field">
+              <label for="refCatName">Name</label>
+              <input id="refCatName" type="text" formControlName="name" placeholder="e.g. Capstone" />
+            </div>
+            <div class="field">
+              <label for="refCatDesc">Description</label>
+              <input id="refCatDesc" type="text" formControlName="description" placeholder="e.g. Final-year project course" />
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label for="refCatStatus">Status</label>
+              <select id="refCatStatus" formControlName="status">
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-secondary" (click)="showEntryDialog.set(false)">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="addSubmitting()">{{ addSubmitting() ? 'Saving…' : (editingId() ? 'Save Changes' : 'Add Entry') }}</button>
+          </div>
+        </form>
+      }
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

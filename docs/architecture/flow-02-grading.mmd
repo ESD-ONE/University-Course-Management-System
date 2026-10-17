@@ -1,0 +1,35 @@
+---
+title: Flow 2 — Lecturer Grades a Submission
+---
+sequenceDiagram
+    actor Lecturer
+    participant Client as Angular SPA
+    participant GW as API Gateway
+    participant IAM as Identity and Access
+    participant GRADE as Assignment and Grading
+    participant ENR as Enrollment
+    participant MQ as Message Broker
+    participant NOTIF as Notification
+    participant ANALYTICS as Analytics and Reporting
+
+    Lecturer->>Client: Enter marks, click "Save Grade"
+    Client->>GW: PUT /submissions/{id}/grade {marks, feedback} (JWT)
+    GW->>IAM: validate token
+    IAM-->>GW: valid, role = Lecturer
+    GW->>GRADE: forward grade request
+
+    GRADE->>ENR: confirm student is enrolled in this course
+    ENR-->>GRADE: enrollment confirmed
+
+    GRADE->>GRADE: save Grade record, mark submission Graded
+    GRADE-->>GW: 200 OK
+    GW-->>Client: Grade saved
+    Client-->>Lecturer: "Grade saved"
+
+    GRADE-)MQ: publish GradePosted (async)
+    MQ-)NOTIF: consume GradePosted
+    NOTIF->>NOTIF: notify student their grade is ready
+    MQ-)ANALYTICS: consume GradePosted
+    ANALYTICS->>ANALYTICS: recompute class average, update dashboard snapshot
+
+    Note over GRADE,ANALYTICS: Grading itself never waits on Notification or Analytics —<br/>both consume the same event independently and in parallel

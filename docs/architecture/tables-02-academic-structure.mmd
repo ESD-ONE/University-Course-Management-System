@@ -1,0 +1,100 @@
+---
+title: 2. Academic Structure Service — ucms.academic schema
+---
+erDiagram
+    ACADEMIC_YEARS {
+        uuid id PK
+        string name
+        date start_date
+        date end_date
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    SEMESTERS {
+        uuid id PK
+        uuid academic_year_id FK
+        string name
+        int sequence
+        timestamptz enrollment_open_at
+        timestamptz enrollment_close_at
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    DEGREE_PROGRAMS {
+        uuid id PK
+        string code UK
+        string name
+        uuid faculty_id "ref Reference Data, no FK"
+        int duration_years
+        int total_credits
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    COURSE_CATALOG {
+        uuid id PK
+        string code UK
+        string name
+        int default_credits
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    PROGRAM_COURSES {
+        uuid id PK
+        uuid degree_program_id FK
+        uuid catalog_course_id FK
+        string requirement_type
+        int recommended_year
+        int recommended_semester
+        int credit_value
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+    }
+    COURSES {
+        uuid id PK
+        uuid catalog_course_id FK
+        uuid academic_year_id FK
+        uuid semester_id FK
+        uuid lecturer_id "ref Identity and Access, no FK"
+        int capacity
+        string status
+        int version "optimistic lock — guards concurrent capacity edits"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+
+    ACADEMIC_YEARS ||--o{ SEMESTERS : "contains"
+    ACADEMIC_YEARS ||--o{ COURSES : "scheduled in"
+    SEMESTERS ||--o{ COURSES : "scheduled in"
+    DEGREE_PROGRAMS ||--o{ PROGRAM_COURSES : "requires"
+    COURSE_CATALOG ||--o{ PROGRAM_COURSES : "referenced by"
+    COURSE_CATALOG ||--o{ COURSES : "offered as"

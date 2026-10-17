@@ -1,0 +1,175 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System Administration</div>
+    <h1 class="page-title">Academic Calendar</h1>
+    <p class="page-sub">Manage academic years and semesters that courses are scheduled against.</p>
+  </div>
+  <button class="btn btn-primary" (click)="openYearDialog()">+ New Academic Year</button>
+</div>
+
+@if (loading()) {
+  <div class="grid g2">
+    <div>
+      @for (i of [1,2,3]; track i) {
+        <div class="skeleton-list-card">
+          <span class="skeleton" style="width:55%;height:15px;margin-bottom:8px;"></span>
+          <span class="skeleton" style="width:65%;height:11px;margin-bottom:6px;"></span>
+          <span class="skeleton" style="width:35%;height:11px;"></span>
+        </div>
+      }
+    </div>
+    <div class="card">
+      <span class="skeleton" style="width:50%;height:16px;margin-bottom:16px;"></span>
+      @for (i of [1,2,3]; track i) {
+        <div class="skeleton-row">
+          <span class="skeleton" style="width:100px;height:13px;"></span>
+          <span class="skeleton" style="width:160px;height:13px;"></span>
+          <span class="skeleton" style="width:60px;height:13px;"></span>
+        </div>
+      }
+    </div>
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="grid g2">
+    <div>
+      @for (ay of years(); track ay.id) {
+        <div class="list-card" [class.selected]="ay.id === selectedYear()?.id" (click)="selectYear(ay.id)">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <b style="font-size:15px;">{{ ay.name }}</b>
+            <span class="badge" [class.b-success]="ay.status === 'ACTIVE'" [class.b-accent]="ay.status === 'UPCOMING'" [class.b-ink]="ay.status === 'ARCHIVED'">{{ ay.status }}</span>
+          </div>
+          <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">{{ ay.startDate || '-' }} – {{ ay.endDate || '-' }}</div>
+          <div style="font-size:11.5px;color:var(--ink-faint);margin-top:2px;">{{ ay.semesters.length }} semesters</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+            <button class="btn btn-secondary btn-sm" (click)="$event.stopPropagation(); openEditYearDialog(ay)">Edit</button>
+            <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="$event.stopPropagation(); deleteYear(ay)">Delete</button>
+          </div>
+        </div>
+      } @empty {
+        <p style="color:var(--ink-faint);font-size:13px;">No academic years yet.</p>
+      }
+    </div>
+
+    @if (selectedYear(); as y) {
+      <div class="card">
+        <div class="page-head" style="margin-bottom:14px;">
+          <h3 style="margin:0;font-size:15px;">{{ y.name }} - Semesters</h3>
+          <button class="btn btn-secondary btn-sm" (click)="openSemesterDialog()">+ Add Semester</button>
+        </div>
+        @if (y.semesters.length) {
+          <table>
+            <thead><tr><th>Semester</th><th>Enrollment Window</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              @for (s of y.semesters; track s.id) {
+                <tr>
+                  <td class="cell-name">{{ s.name }}</td>
+                  <td class="cell-soft">
+                    @if (s.enrollmentOpenAt) { {{ s.enrollmentOpenAt | date:'mediumDate' }} – {{ s.enrollmentCloseAt | date:'mediumDate' }} }
+                    @else { Not yet configured }
+                  </td>
+                  <td><span class="badge" [class.b-success]="s.status === 'ACTIVE'" [class.b-accent]="s.status === 'UPCOMING'" [class.b-ink]="s.status === 'ARCHIVED'">{{ s.status }}</span></td>
+                  <td style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary btn-sm" (click)="openEditSemesterDialog(s)">Edit</button>
+                    <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteSemester(s)">Delete</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p style="color:var(--ink-faint);font-size:13px;">No semesters configured yet for this year.</p>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (showYearDialog()) {
+  <div class="modal-overlay" (click)="showYearDialog.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>{{ editingYearId() ? 'Edit Academic Year' : 'New Academic Year' }}</h3>
+          <p>Define the year courses and semesters will be scheduled against.</p>
+        </div>
+        <button class="modal-close" (click)="showYearDialog.set(false)">✕</button>
+      </div>
+      <form [formGroup]="yearForm" (ngSubmit)="submitYear()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field">
+            <label for="ayName">Year Name</label>
+            <input id="ayName" type="text" formControlName="name" placeholder="e.g. 2027/2028" />
+          </div>
+          <div class="field-row">
+            <div class="field"><label for="ayStart">Start Date</label><input id="ayStart" type="date" formControlName="startDate" /></div>
+            <div class="field"><label for="ayEnd">End Date</label><input id="ayEnd" type="date" formControlName="endDate" /></div>
+          </div>
+          <div class="field">
+            <label for="ayStatus">Status</label>
+            <select id="ayStatus" formControlName="status">
+              <option value="UPCOMING">Upcoming</option>
+              <option value="ACTIVE">Active</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+          @if (!editingYearId()) {
+            <label style="display:flex;gap:9px;align-items:center;font-size:12.5px;color:var(--ink-soft);cursor:pointer;">
+              <input type="checkbox" formControlName="createDefaultSemesters" style="accent-color:var(--accent);width:15px;height:15px;" />
+              Create default Semester 1 &amp; Semester 2 structure
+            </label>
+          }
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="showYearDialog.set(false)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting()">{{ submitting() ? 'Saving…' : (editingYearId() ? 'Save Changes' : 'Create Year') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (showSemesterDialog() && selectedYear(); as y) {
+  <div class="modal-overlay" (click)="showSemesterDialog.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>{{ editingSemesterId() ? 'Edit Semester' : 'Add Semester' }}</h3>
+          <p>For {{ y.name }}</p>
+        </div>
+        <button class="modal-close" (click)="showSemesterDialog.set(false)">✕</button>
+      </div>
+      <form [formGroup]="semesterForm" (ngSubmit)="submitSemester()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field">
+            <label for="semName">Semester Name</label>
+            <input id="semName" type="text" formControlName="name" placeholder="e.g. Semester 3 / Summer" />
+          </div>
+          <div class="field">
+            <label for="semSeq">Sequence</label>
+            <input id="semSeq" type="number" min="1" formControlName="sequence" />
+          </div>
+          <div class="field">
+            <label for="semStatus">Status</label>
+            <select id="semStatus" formControlName="status">
+              <option value="UPCOMING">Upcoming</option>
+              <option value="ACTIVE">Active</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="showSemesterDialog.set(false)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="submitting()">{{ submitting() ? 'Saving…' : (editingSemesterId() ? 'Save Changes' : 'Add Semester') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

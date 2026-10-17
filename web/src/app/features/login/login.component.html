@@ -1,0 +1,35 @@
+<div class="login-screen">
+  <div class="login-left">
+    <div class="brand"><span class="mark">U</span> UCMS</div>
+    <h1>University Course Management System</h1>
+    <p>One platform to run degree programs, courses, enrollment, assignments, and grading.</p>
+    <div class="tagline">© University Course Management System</div>
+  </div>
+
+  <div class="login-right">
+    <form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+      <h2>Welcome back</h2>
+      <p class="sub">Sign in to continue to your dashboard.</p>
+
+      @if (errorMessage()) {
+        <div class="login-error">{{ errorMessage() }}</div>
+      }
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" formControlName="email" placeholder="admin@ucms.local" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" formControlName="password" placeholder="••••••••••" autocomplete="current-password" />
+        <div class="hint">Your role is assigned to your account by an administrator - it isn't chosen at sign-in.</div>
+      </div>
+
+      <button class="btn btn-primary btn-block" type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Signing in…' : 'Log In' }}
+      </button>
+
+      <p class="footnote">No account? Ask your administrator to create one from <b>Users</b> - that's where roles are assigned.</p>
+    </form>
+  </div>
+</div>

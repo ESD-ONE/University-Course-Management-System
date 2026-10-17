@@ -1,0 +1,59 @@
+---
+title: 7. Reference Data Service — ucms.reference_data schema
+---
+erDiagram
+    FACULTIES {
+        uuid id PK
+        string name
+        string code UK
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    DEPARTMENTS {
+        uuid id PK
+        uuid faculty_id FK
+        string name
+        string code UK
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    GRADING_SCALES {
+        uuid id PK
+        string name
+        json bands
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+    COURSE_CATEGORIES {
+        uuid id PK
+        string name
+        string description
+        string status
+        int version "optimistic lock"
+        timestamptz created_at
+        uuid created_by "ref Identity and Access, no FK"
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+        timestamptz deleted_at "nullable, soft delete"
+        uuid deleted_by "ref Identity and Access, no FK, nullable"
+    }
+
+    FACULTIES ||--o{ DEPARTMENTS : "has"

@@ -1,0 +1,26 @@
+---
+title: 5. Notification Service — ucms.notification schema
+---
+erDiagram
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id "ref Identity and Access, no FK"
+        string type
+        string title
+        text body
+        timestamptz read_at "nullable"
+        timestamptz created_at
+        timestamptz updated_at "set when read_at changes"
+    }
+    NOTIFICATION_PREFERENCES {
+        uuid id PK
+        uuid user_id "ref Identity and Access, no FK"
+        boolean email_enabled
+        boolean assignment_alerts
+        boolean grade_alerts
+        boolean registration_alerts
+        int version "optimistic lock"
+        timestamptz created_at
+        timestamptz updated_at
+        uuid updated_by "ref Identity and Access, no FK"
+    }

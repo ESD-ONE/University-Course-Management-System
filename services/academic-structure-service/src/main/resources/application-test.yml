@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    # INIT creates the academic schema before Hibernate's create-drop DDL runs,
+    # mirroring main/application.yml's hibernate.default_schema — see
+    # identity-access-service's application-test.yml for the full explanation of why.
+    url: jdbc:h2:mem:academicdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS academic
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+ucms:
+  jwt:
+    secret: test-secret-key-used-only-for-automated-tests-not-real

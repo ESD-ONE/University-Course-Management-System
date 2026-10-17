@@ -1,0 +1,23 @@
+<div style="display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px;">
+  <button
+    type="button"
+    (click)="selectTab('reference')"
+    [style.color]="tab() === 'reference' ? 'var(--accent)' : 'var(--ink-soft)'"
+    [style.border-bottom]="tab() === 'reference' ? '2px solid var(--accent)' : '2px solid transparent'"
+    style="background:none;border-top:none;border-left:none;border-right:none;padding:10px 16px;font-size:13.5px;font-weight:600;cursor:pointer;"
+  >Reference Degree Details</button>
+  <button
+    type="button"
+    (click)="selectTab('years')"
+    [style.color]="tab() === 'years' ? 'var(--accent)' : 'var(--ink-soft)'"
+    [style.border-bottom]="tab() === 'years' ? '2px solid var(--accent)' : '2px solid transparent'"
+    style="background:none;border-top:none;border-left:none;border-right:none;padding:10px 16px;font-size:13.5px;font-weight:600;cursor:pointer;"
+  >Degree Programs</button>
+</div>
+
+<div [hidden]="tab() !== 'reference'">
+  <app-reference-degree-details></app-reference-degree-details>
+</div>
+<div [hidden]="tab() !== 'years'">
+  <app-degree-programs></app-degree-programs>
+</div>

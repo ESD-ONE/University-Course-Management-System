@@ -1,0 +1,213 @@
+<div class="eyebrow">Overview</div>
+<h1 class="page-title">
+  @if (auth.currentUser(); as user) {
+    Welcome back, {{ user.name }}
+  }
+</h1>
+<p class="page-sub">
+  @if (isAdmin()) {
+    Institution-wide snapshot of degree programs, courses, users and reference data.
+  } @else {
+    Your teaching load at a glance.
+  }
+</p>
+
+@if (loading()) {
+  <div class="grid g4" style="margin-bottom:20px;">
+    @for (i of [1,2,3,4]; track i) {
+      <div class="card stat-tile">
+        <span class="skeleton" style="width:70px;height:10px;margin-bottom:10px;"></span>
+        <span class="skeleton" style="width:50px;height:24px;"></span>
+      </div>
+    }
+  </div>
+  <div class="grid g2" style="margin-bottom:20px;">
+    @for (i of [1,2]; track i) {
+      <div class="card">
+        <span class="skeleton" style="width:140px;height:12px;margin-bottom:18px;"></span>
+        <div style="display:flex;gap:20px;align-items:center;">
+          <span class="skeleton" style="width:120px;height:120px;border-radius:50%;"></span>
+          <div style="flex:1;">
+            <span class="skeleton" style="width:100%;height:12px;margin-bottom:10px;"></span>
+            <span class="skeleton" style="width:80%;height:12px;"></span>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="grid g4" style="margin-bottom:20px;">
+    @if (isAdmin()) {
+      <div class="card stat-tile">
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value">{{ userSummary()?.total ?? 0 }}</div>
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Active Academic Years</div>
+        <div class="stat-value">{{ activeYears().length }}</div>
+        @if (activeYears().length) {
+          <div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">{{ activeYearNames() }}</div>
+        }
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Degree Programs</div>
+        <div class="stat-value">{{ degreePrograms().length }}</div>
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Total Courses</div>
+        <div class="stat-value">{{ courses().length }}</div>
+      </div>
+    } @else {
+      <div class="card stat-tile">
+        <div class="stat-label">My Courses</div>
+        <div class="stat-value">{{ courses().length }}</div>
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Published</div>
+        <div class="stat-value">{{ publishedCount() }}</div>
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Draft</div>
+        <div class="stat-value">{{ draftCount() }}</div>
+      </div>
+      <div class="card stat-tile">
+        <div class="stat-label">Active Academic Years</div>
+        <div class="stat-value">{{ activeYears().length }}</div>
+      </div>
+    }
+  </div>
+
+  <div class="grid g2" style="margin-bottom:20px;">
+    <div class="card">
+      <b style="display:block;font-size:14px;margin-bottom:18px;">Course Status</b>
+      @if (courses().length) {
+        <div class="donut-chart-wrap">
+          <div class="donut-chart" [style.background]="donutGradient(courseStatusSegments())">
+            <div class="donut-chart-center">
+              <div class="v">{{ courses().length }}</div>
+              <div class="l">Courses</div>
+            </div>
+          </div>
+          <div class="donut-legend">
+            @for (s of courseStatusSegments(); track s.label) {
+              <div class="donut-legend-item">
+                <span class="donut-legend-dot" [style.background]="s.color"></span>
+                <b>{{ s.value }}</b> {{ s.label }}
+              </div>
+            }
+          </div>
+        </div>
+      } @else {
+        <p style="color:var(--ink-faint);font-size:13px;">No courses yet.</p>
+      }
+    </div>
+
+    @if (isAdmin()) {
+      <div class="card">
+        <b style="display:block;font-size:14px;margin-bottom:18px;">Users by Type</b>
+        @if (userSummary(); as s) {
+          <div class="donut-chart-wrap">
+            <div class="donut-chart" [style.background]="donutGradient(userRoleSegments())">
+              <div class="donut-chart-center">
+                <div class="v">{{ s.total }}</div>
+                <div class="l">Users</div>
+              </div>
+            </div>
+            <div class="donut-legend">
+              @for (seg of userRoleSegments(); track seg.label) {
+                <div class="donut-legend-item">
+                  <span class="donut-legend-dot" [style.background]="seg.color"></span>
+                  <b>{{ seg.value }}</b> {{ seg.label }}
+                </div>
+              }
+              <div class="donut-legend-item"><b>{{ s.active }}</b> Active</div>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="card">
+        <b style="display:block;font-size:14px;margin-bottom:18px;">Courses by Degree Program</b>
+        @if (coursesPerProgram().length) {
+          @for (d of coursesPerProgram(); track d.label) {
+            <div class="bar-chart-row">
+              <div class="bar-chart-label">{{ d.label }}</div>
+              <div class="bar-chart-track"><div class="bar-chart-fill" [style.width]="barWidth(d.value)"></div></div>
+              <div class="bar-chart-value">{{ d.value }}</div>
+            </div>
+          }
+        } @else {
+          <p style="color:var(--ink-faint);font-size:13px;">No courses yet.</p>
+        }
+      </div>
+    }
+  </div>
+
+  @if (isAdmin() && coursesPerProgram().length) {
+    <div class="card" style="margin-bottom:20px;">
+      <b style="display:block;font-size:14px;margin-bottom:18px;">Courses by Degree Program</b>
+      @for (d of coursesPerProgram(); track d.label) {
+        <div class="bar-chart-row">
+          <div class="bar-chart-label">{{ d.label }}</div>
+          <div class="bar-chart-track"><div class="bar-chart-fill" [style.width]="barWidth(d.value)"></div></div>
+          <div class="bar-chart-value">{{ d.value }}</div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (isAdmin()) {
+    <div class="card" style="margin-bottom:20px;">
+      <b style="display:block;font-size:14px;margin-bottom:14px;">Reference Data</b>
+      <div class="grid g4">
+        @for (r of referenceDataSummaries(); track r.label) {
+          <div class="chip-stat">
+            <div class="l">{{ r.label }}</div>
+            <div class="v">{{ r.total }}</div>
+            <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;">
+              <span style="color:var(--success);">{{ r.active }} active</span>
+              <span style="color:var(--gold);">{{ r.inactive }} inactive</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <div class="card">
+    <b style="display:block;font-size:14px;margin-bottom:14px;">Quick Links</b>
+    <div class="grid g3">
+      @if (isAdmin()) {
+        <a class="list-card" routerLink="/app/users" style="display:block;">
+          <b style="font-size:13.5px;">Users</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Create accounts, assign roles</div>
+        </a>
+        <a class="list-card" routerLink="/app/academic-calendar" style="display:block;">
+          <b style="font-size:13.5px;">Academic Calendar</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Manage years and semesters</div>
+        </a>
+        <a class="list-card" routerLink="/app/program-management" style="display:block;">
+          <b style="font-size:13.5px;">Program Management</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Reference degrees and year assignments</div>
+        </a>
+        <a class="list-card" routerLink="/app/courses" style="display:block;">
+          <b style="font-size:13.5px;">Courses</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">University-wide course oversight</div>
+        </a>
+        <a class="list-card" routerLink="/app/reference-data" style="display:block;">
+          <b style="font-size:13.5px;">Reference Data</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Faculties, departments, catalog</div>
+        </a>
+      } @else {
+        <a class="list-card" routerLink="/app/my-courses" style="display:block;">
+          <b style="font-size:13.5px;">My Courses</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Manage your courses and academic-year assignments</div>
+        </a>
+        <a class="list-card" routerLink="/app/reference-degree-details" style="display:block;">
+          <b style="font-size:13.5px;">Reference Degree Details</b>
+          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">Degrees in your department</div>
+        </a>
+      }
+    </div>
+  </div>
+}

@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      routes:
+        - id: identity-access-service
+          uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/identity/**
+          filters:
+            - StripPrefix=2
+        - id: reference-data-service
+          uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/reference/**
+          filters:
+            - StripPrefix=2
+        - id: academic-structure-service
+          uri: ${ACADEMIC_STRUCTURE_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/api/academic/**
+          filters:
+            - StripPrefix=2
+      # The Gateway is the only thing a browser talks to — CORS is handled here once,
+      # not per-service. Angular dev server runs on 4200; a real deployed FE origin
+      # replaces this once one exists.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:4200}"
+            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowedHeaders: "*"
+            allowCredentials: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized

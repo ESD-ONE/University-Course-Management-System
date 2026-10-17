@@ -1,0 +1,33 @@
+---
+title: Flow 4 — Login and Authentication
+---
+sequenceDiagram
+    actor User
+    participant Client as Angular SPA
+    participant GW as API Gateway
+    participant IAM as Identity and Access
+    participant CACHE as Redis
+
+    User->>Client: Enter email + password, click "Log In"
+    Client->>GW: POST /auth/login {email, password}
+    GW->>IAM: forward credentials
+
+    IAM->>IAM: look up user by email, verify password hash
+
+    alt valid credentials and account active
+        IAM->>IAM: issue JWT, create session record
+        IAM->>CACHE: cache session (fast lookup on future requests)
+        IAM-->>GW: 200 {token, role, name}
+        GW-->>Client: store token
+        Client-->>User: redirected to role dashboard
+    else invalid credentials
+        IAM-->>GW: 401 Unauthorized
+        GW-->>Client: login failed
+        Client-->>User: "Incorrect email or password"
+    else account inactive or suspended
+        IAM-->>GW: 403 Forbidden
+        GW-->>Client: account disabled
+        Client-->>User: "This account is inactive — contact an administrator"
+    end
+
+    Note over GW,CACHE: Every later request re-validates the token against this cache,<br/>not against Identity and Access directly — keeps the Gateway fast.
