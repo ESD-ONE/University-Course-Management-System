@@ -2,7 +2,7 @@
 title: "All schemas below live in one shared PostgreSQL instance and database — \"ucms\" — isolated from each other by per-service database roles, not separate databases. Solid boxes/edges = built and running today; dashed boxes/edges = planned only — 4 of these services have zero code, and no event ever flows through the Message Broker today because nothing publishes or consumes one yet."
 ---
 flowchart TB
-    GW["API Gateway<br/>routing (path-prefix) + CORS only —<br/>no auth, no rate limiting"]
+    GW["API Gateway<br/>routing (path-prefix) + CORS only —<br/>no rate limiting, no auth check of its own<br/>(each service below validates its own JWT)"]
 
     IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions,<br/>RBAC scope assignments, Profile"]
     IAMSCHEMA[("ucms.identity_access")]

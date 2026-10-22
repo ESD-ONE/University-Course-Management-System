@@ -49,11 +49,11 @@ public class UserController {
      * removed deliberately: see docs/SYSTEM_GAP_ANALYSIS_AND_IMPLEMENTATION_PLAN.md C.1.
      */
     @GetMapping("/users")
-    public Page<UserResponse> listUsers(@RequestParam(required = false) RoleKind role,
-                                         @RequestParam(required = false) UserStatus status,
-                                         @RequestParam(required = false) String q,
-                                         @RequestParam(defaultValue = "0") int page,
-                                         @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
+    public Page<UserResponse> listUsers(@RequestParam(name = "role", required = false) RoleKind role,
+                                         @RequestParam(name = "status", required = false) UserStatus status,
+                                         @RequestParam(name = "q", required = false) String q,
+                                         @RequestParam(name = "page", defaultValue = "0") int page,
+                                         @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by("name").ascending());
         return userService.search(role, status, q, pageable);
