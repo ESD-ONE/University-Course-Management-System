@@ -29,8 +29,8 @@ public class CourseController {
     /** mine=true scopes to the caller's own courses (lecturer's "My Courses").
      * degreeProgramId narrows by program — the Courses page's admin filter. */
     @GetMapping
-    public List<CourseResponse> list(@RequestParam(required = false, defaultValue = "false") boolean mine,
-                                      @RequestParam(required = false) UUID degreeProgramId,
+    public List<CourseResponse> list(@RequestParam(name = "mine", required = false, defaultValue = "false") boolean mine,
+                                      @RequestParam(name = "degreeProgramId", required = false) UUID degreeProgramId,
                                       @AuthenticationPrincipal UUID currentUserId) {
         return mine ? courseOfferingService.listForLecturer(currentUserId, degreeProgramId)
                     : courseOfferingService.list(degreeProgramId);

@@ -35,13 +35,13 @@ public class GradingScaleController {
     }
 
     @PutMapping("/{id}")
-    public GradingScaleResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateGradingScaleRequest request,
+    public GradingScaleResponse update(@PathVariable("id") UUID id, @Valid @RequestBody UpdateGradingScaleRequest request,
                                         @AuthenticationPrincipal UUID currentUserId) {
         return referenceDataService.updateGradingScale(id, request, currentUserId);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal UUID currentUserId) {
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id, @AuthenticationPrincipal UUID currentUserId) {
         referenceDataService.deleteGradingScale(id, currentUserId);
         return ResponseEntity.noContent().build();
     }

@@ -12,9 +12,7 @@
 
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; flex: none; }
   .mark {
-    width: 30px; height: 30px; border-radius: 9px;
-    background: linear-gradient(135deg, #4e68e8, var(--accent-dark));
-    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px;
+    width: 30px; height: 30px; border-radius: 50%; object-fit: contain; display: block;
   }
   .spacer { flex: 1; }
 }

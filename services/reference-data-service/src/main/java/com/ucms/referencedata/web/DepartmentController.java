@@ -35,13 +35,13 @@ public class DepartmentController {
     }
 
     @PutMapping("/{id}")
-    public DepartmentResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateDepartmentRequest request,
+    public DepartmentResponse update(@PathVariable("id") UUID id, @Valid @RequestBody UpdateDepartmentRequest request,
                                       @AuthenticationPrincipal UUID currentUserId) {
         return referenceDataService.updateDepartment(id, request, currentUserId);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal UUID currentUserId) {
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id, @AuthenticationPrincipal UUID currentUserId) {
         referenceDataService.deleteDepartment(id, currentUserId);
         return ResponseEntity.noContent().build();
     }

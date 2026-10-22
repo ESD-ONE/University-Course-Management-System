@@ -35,13 +35,13 @@ public class CourseCategoryController {
     }
 
     @PutMapping("/{id}")
-    public CourseCategoryResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateCourseCategoryRequest request,
+    public CourseCategoryResponse update(@PathVariable("id") UUID id, @Valid @RequestBody UpdateCourseCategoryRequest request,
                                           @AuthenticationPrincipal UUID currentUserId) {
         return referenceDataService.updateCourseCategory(id, request, currentUserId);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal UUID currentUserId) {
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id, @AuthenticationPrincipal UUID currentUserId) {
         referenceDataService.deleteCourseCategory(id, currentUserId);
         return ResponseEntity.noContent().build();
     }

@@ -167,3 +167,39 @@ One practical consequence worth flagging: extensions (e.g. `pgcrypto`, used for
 schema-scoped role deliberately doesn't have `CREATE EXTENSION` privilege. Extensions
 are created once, up front, by the admin role in `init-schemas.sh` — a service's own
 Flyway migrations never attempt it.
+
+### Messaging (RabbitMQ) — provisioned, not wired in
+
+`ucms-rabbitmq` runs as part of the infra stack (`infra/docker-compose.infra.yml`) and
+is reachable from local dev over the SSH tunnel above (ports 5673 / 15673, the latter
+being the management UI). That is the extent of what exists today: **no service has
+`spring-boot-starter-amqp` on its classpath, no `RabbitTemplate` publishes anything, and
+no `@RabbitListener` consumes anything** — verified by grepping every `pom.xml` and
+every `.java` file under `services/` for `amqp`/`rabbit`, case-insensitive, with zero
+hits. The container is running and empty; it was provisioned ahead of the services that
+will actually use it, not left over from something that was removed.
+
+**What it's for, once Enrollment, Assignment & Grading, Notification, and Analytics &
+Reporting exist:** the design's asynchronous backbone, for exactly the cases where a
+request shouldn't block on a side effect. The pattern (drawn as dotted edges through a
+"Message Broker" node in `docs/architecture/high-level-architecture.mmd` and
+`microservices-architecture.mmd`, and spelled out step-by-step in
+`docs/architecture/flow-01-student-enrollment.mmd` / `flow-02-grading.mmd`, both
+explicitly marked PLANNED):
+
+1. A service finishes a significant write — e.g. Enrollment registers a student in a
+   course.
+2. It **publishes** a domain event (e.g. `StudentEnrolled`) to a RabbitMQ exchange via
+   `RabbitTemplate.convertAndSend(...)`, carrying just the IDs involved, and returns its
+   HTTP response immediately — publishing doesn't wait for anyone to receive it.
+3. RabbitMQ routes that message to every queue bound to the exchange. Notification has
+   a queue bound for `StudentEnrolled`; so does Analytics, for a different reason (both
+   consume the same event independently, per `flow-02-grading.mmd`'s note on this).
+4. Each consumer handles it on its own schedule via a `@RabbitListener`-annotated
+   method — a slow or briefly-down Notification service never delays Enrollment's
+   response to the student, and never blocks Analytics either.
+
+This is why `docs/architecture/README.md` and the two system-level diagrams draw
+Message-Broker edges as dashed/planned rather than solid: the broker and the pattern are
+real and designed, but until a producer and a consumer both exist on opposite ends of at
+least one queue, nothing actually flows through it.
