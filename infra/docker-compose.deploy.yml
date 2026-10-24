@@ -97,7 +97,11 @@ services:
       ACADEMIC_STRUCTURE_SERVICE_URI: http://ucms-academic-structure-service:8084
       # Defaults to http://localhost:4200 otherwise, so the browser's request from the
       # directly-exposed frontend (see web service below) gets rejected with 403.
-      CORS_ALLOWED_ORIGIN: http://169.58.12.239:8091
+      # Comma-separated — Spring's Binder splits a single CSV string into the List<String>
+      # allowedOrigins expects. esd.azhosting.fun is the real domain (HTTPS, via the
+      # proj001-nginx-proxy-1 container reverse-proxying to ucms-web); the bare IP:port
+      # is kept so direct access still works too.
+      CORS_ALLOWED_ORIGIN: https://esd.azhosting.fun,http://169.58.12.239:8091
     healthcheck:
       <<: *service-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
@@ -119,11 +123,13 @@ services:
     container_name: ucms-web
     restart: unless-stopped
     ports:
-      # Exposed directly on the host's public IP, not loopback-only — this host has
-      # no DNS/TLS set up for UCMS yet, and ports 80/443 already belong to another
-      # project's nginx-proxy, so this is plain HTTP on a non-standard port:
-      #   http://<host>:8091
-      # Requires `ufw allow 8091/tcp` on the host (see docs/LOGIN_USERS.md).
+      # Exposed directly on the host's public IP, not loopback-only, on a
+      # non-standard port because 80/443 already belong to another project's
+      # nginx-proxy: http://<host>:8091 (requires `ufw allow 8091/tcp`).
+      # The real, HTTPS entry point is https://esd.azhosting.fun — that
+      # project's proxy container is attached to this stack's ucms_default
+      # network (`docker network connect ucms_default proj001-nginx-proxy-1`)
+      # and reverse-proxies to this container by name. See docs/LOGIN_USERS.md.
       - "8091:80"
     depends_on:
       gateway:

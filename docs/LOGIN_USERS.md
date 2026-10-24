@@ -6,14 +6,27 @@
 
 | | URL | Notes |
 |---|---|---|
-| Frontend | `http://169.58.12.239:8091` | `ucms-web` container, exposed directly (plain HTTP, no domain/TLS yet) — no SSH tunnel needed |
+| **Frontend (real domain, HTTPS)** | **`https://esd.azhosting.fun`** | the proper way to reach it — see below |
+| Frontend (direct, plain HTTP) | `http://169.58.12.239:8091` | `ucms-web` container, exposed directly — still works, no SSH tunnel needed |
 | Backend (Gateway) | `http://localhost:8090` (via tunnel) | still loopback-only — see below |
 | Jenkins | `http://localhost:8080` (via tunnel) | still loopback-only — multibranch pipeline job at `/job/UCMS/` |
 
-The frontend's container port was moved from `127.0.0.1:8091` to `8091` (all interfaces) and
-`ufw allow 8091/tcp` was opened on the host, so it no longer needs a tunnel. The Gateway and
-Jenkins are still loopback-only — ports 80/443 are already owned by an unrelated project's
-nginx, so nothing else has a public port yet. Reach those two through an SSH tunnel:
+**`https://esd.azhosting.fun` is served by the *other* project's shared nginx-proxy container
+(`proj001-nginx-proxy-1`)**, not by anything UCMS owns — ports 80/443 belong to that project.
+It was made to work without touching that project at all: the proxy container was additionally
+connected to this stack's `ucms_default` Docker network
+(`docker network connect ucms_default proj001-nginx-proxy-1` — live, no restart, the container
+keeps its original network too), and one new `server {}` block was appended to that project's
+`/root/travelSriLankaNow/nginx/default.conf` (backed up first; config tested with `nginx -t`
+before every reload) that reverse-proxies to `ucms-web` by container name. TLS is a normal
+Let's Encrypt cert, issued via the same `certbot/certbot` image that project already uses, kept
+in its own `/etc/letsencrypt/live/esd.azhosting.fun/` directory — separate from that project's
+own cert. **No auto-renewal is configured for either certificate** (this one or that project's
+`ruklaktravels.com`) — both will need manual renewal before they expire (this one: 2027-01-22).
+
+The frontend's container port was also moved from `127.0.0.1:8091` to `8091` (all interfaces)
+and `ufw allow 8091/tcp` was opened, so the plain-HTTP fallback above needs no tunnel either.
+The Gateway and Jenkins are still loopback-only. Reach those two through an SSH tunnel:
 
 ```bash
 ssh -L 8090:127.0.0.1:8090 -L 8080:127.0.0.1:8080 root@169.58.12.239
