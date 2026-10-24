@@ -72,7 +72,7 @@ public class UserService {
                     "A new user can only be created as ACTIVE or INACTIVE — suspend it afterwards if needed");
         }
 
-        Role role = roleRepository.findByKindAndDeletedAtIsNull(request.role())
+        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(request.role())
                 .orElseThrow(() -> new IllegalStateException("Role not seeded: " + request.role()));
 
         String rawPassword = request.password();
@@ -172,7 +172,7 @@ public class UserService {
     @Transactional
     public UserResponse updateRole(UUID id, RoleKind roleKind, UUID updatedBy) {
         User user = findActiveOrThrow(id);
-        Role role = roleRepository.findByKindAndDeletedAtIsNull(roleKind)
+        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(roleKind)
                 .orElseThrow(() -> new IllegalStateException("Role not seeded: " + roleKind));
         user.setRole(role);
         user.setUpdatedBy(updatedBy);
