@@ -8,5 +8,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface RoleRepository extends JpaRepository<Role, UUID> {
-    Optional<Role> findByKindAndDeletedAtIsNull(RoleKind kind);
+
+    boolean existsByNameAndDeletedAtIsNull(String name);
+
+    /**
+     * {@code name} is unique (see {@link #existsByNameAndDeletedAtIsNull}), but
+     * {@code kind} deliberately is not — a real production incident saw a custom
+     * "Department Head" role created with {@code kind=LECTURER}, the same kind as the
+     * seeded "Lecturer" role. A plain {@code findByKindAndDeletedAtIsNull} throws
+     * {@code NonUniqueResultException} the moment more than one non-deleted role shares
+     * a kind. This method resolves deterministically instead: the earliest-created role
+     * of that kind wins, so lookups keep working no matter how many later roles share it.
+     */
+    Optional<Role> findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(RoleKind kind);
 }

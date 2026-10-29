@@ -1,0 +1,121 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Analytics</div>
+    <h1 class="page-title">Reports</h1>
+    <p class="page-sub">On-demand and scheduled reports, built on the same data as the dashboards.</p>
+  </div>
+  <button class="btn btn-secondary" [disabled]="!reports().length" (click)="openSchedule()">+ Schedule Report</button>
+</div>
+
+@if (loading()) {
+  <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:200px;height:14px;"></span></div> }</div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="card" style="margin-bottom:20px;">
+    <h3 style="margin:0 0 16px;font-size:15px;">Report Library</h3>
+    <table>
+      <thead><tr><th>Report</th><th>Description</th><th>Last Generated</th><th>Format</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody>
+        @for (r of reports(); track r.id) {
+          <tr>
+            <td class="cell-name">{{ r.name }}</td>
+            <td class="cell-soft">{{ r.description }}</td>
+            <td class="cell-faint">{{ r.lastGeneratedAt ? (r.lastGeneratedAt | date: 'dd MMM y, HH:mm') : '—' }}</td>
+            <td><span class="badge b-ink">{{ r.format }}</span></td>
+            <td style="text-align:right;white-space:nowrap;">
+              <button class="btn btn-secondary btn-sm" [disabled]="busyId() === r.id" (click)="generate(r)">{{ busyId() === r.id ? 'Generating…' : 'Generate' }}</button>
+              <button class="btn btn-primary btn-sm" style="margin-left:6px;" [disabled]="!r.available" (click)="download(r)">Download</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 16px;font-size:15px;">Scheduled Reports</h3>
+    <table>
+      <thead><tr><th>Report</th><th>Frequency</th><th>Recipients</th><th>Next Run</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody>
+        @for (s of schedules(); track s.id) {
+          <tr>
+            <td class="cell-name">{{ s.reportName }}</td>
+            <td class="cell-soft">{{ s.frequencyLabel }}</td>
+            <td class="cell-soft">{{ s.recipients }}</td>
+            <td class="cell-faint">{{ s.status === 'ACTIVE' && s.nextRunAt ? (s.nextRunAt | date: 'dd MMM, HH:mm') : '—' }}</td>
+            <td><span class="badge" [class.b-success]="s.status === 'ACTIVE'" [class.b-ink]="s.status === 'PAUSED'">{{ s.status | titlecase }}</span></td>
+            <td style="text-align:right;white-space:nowrap;">
+              <button class="btn btn-secondary btn-sm" (click)="toggle(s)">{{ s.status === 'ACTIVE' ? '⏸ Pause' : '▶ Resume' }}</button>
+              <button class="btn btn-secondary btn-sm" style="margin-left:6px;color:var(--danger);" (click)="remove(s)">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" style="padding:20px;color:var(--ink-faint);">No scheduled reports yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (scheduling()) {
+  <div class="modal-overlay" (click)="scheduling.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div><h3>Schedule Report</h3><p>The report is generated on schedule and emailed to the recipients.</p></div>
+        <button class="modal-close" (click)="scheduling.set(false)">✕</button>
+      </div>
+      <form [formGroup]="form" (ngSubmit)="saveSchedule()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field">
+            <label for="srReport">Report</label>
+            <select id="srReport" formControlName="reportId">
+              @for (r of reports(); track r.id) { <option [value]="r.id">{{ r.name }} ({{ r.format }})</option> }
+            </select>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="srFreq">Frequency</label>
+              <select id="srFreq" formControlName="frequency">
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+            </div>
+            @if (form.value.frequency === 'WEEKLY') {
+              <div class="field">
+                <label for="srDow">Day</label>
+                <select id="srDow" formControlName="dayOfWeek">
+                  @for (d of days; track d) { <option [value]="d">{{ d | titlecase }}</option> }
+                </select>
+              </div>
+            }
+            @if (form.value.frequency === 'MONTHLY') {
+              <div class="field">
+                <label for="srDom">Day of month</label>
+                <input id="srDom" type="number" min="1" max="28" formControlName="dayOfMonth" />
+              </div>
+            }
+            <div class="field">
+              <label for="srTime">Time</label>
+              <input id="srTime" type="time" formControlName="time" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="srTo">Recipients</label>
+            <input id="srTo" type="text" formControlName="recipients" placeholder="name@university.edu, other@university.edu" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="scheduling.set(false)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="form.invalid || submitting()">{{ submitting() ? 'Saving…' : 'Schedule' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

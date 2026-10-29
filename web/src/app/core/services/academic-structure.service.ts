@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ACADEMIC_API_BASE_URL } from '../config/api.config';
@@ -25,6 +25,7 @@ import {
   UpdateDegreeProgramAcademicYearRequest,
   UpdateDegreeProgramRequest,
   UpdateSemesterRequest,
+  CourseOfferingResponse,
 } from '../models/academic-structure.model';
 
 @Injectable({ providedIn: 'root' })
@@ -57,10 +58,6 @@ export class AcademicStructureService {
 
   deleteSemester(yearId: string, semesterId: string): Observable<void> {
     return this.http.delete<void>(`${ACADEMIC_API_BASE_URL}/academic-years/${yearId}/semesters/${semesterId}`);
-  }
-
-  activateAcademicYear(yearId: string): Observable<AcademicYearResponse> {
-    return this.http.patch<AcademicYearResponse>(`${ACADEMIC_API_BASE_URL}/academic-years/${yearId}/activate`, {});
   }
 
   /** departmentId: the "Reference Degree Details" page's admin department filter. */
@@ -132,6 +129,19 @@ export class AcademicStructureService {
     return this.http.get<CourseAcademicYearResponse[]>(
       `${ACADEMIC_API_BASE_URL}/degree-programs/${programId}/academic-years/${assignmentId}/courses`,
     );
+  }
+
+  /** mine=true: offerings the caller teaches. */
+  listCourseOfferings(filter: { mine?: boolean; status?: string; academicYearId?: string } = {}): Observable<CourseOfferingResponse[]> {
+    let params = new HttpParams();
+    if (filter.mine) params = params.set('mine', true);
+    if (filter.status) params = params.set('status', filter.status);
+    if (filter.academicYearId) params = params.set('academicYearId', filter.academicYearId);
+    return this.http.get<CourseOfferingResponse[]>(`${ACADEMIC_API_BASE_URL}/course-offerings`, { params });
+  }
+
+  getDegreeProgram(programId: string): Observable<DegreeProgramResponse> {
+    return this.http.get<DegreeProgramResponse>(`${ACADEMIC_API_BASE_URL}/degree-programs/${programId}`);
   }
 
   listCourseCatalog(): Observable<CourseCatalogResponse[]> {

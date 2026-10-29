@@ -1,0 +1,42 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Academic Progress</div>
+    <h1 class="page-title">Grades</h1>
+    <p class="page-sub">Your grades across every course with graded work.</p>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card"><span class="skeleton" style="width:50%;height:14px;"></span></div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  @if (history(); as h) {
+  <div class="grid g3" style="margin-bottom:20px;">
+    <div class="card stat-tile"><div class="stat-label">Cumulative GPA</div><div class="stat-value">{{ h.gpa === null ? '—' : (h.gpa | number: '1.2-2') }}</div></div>
+    <div class="card stat-tile"><div class="stat-label">Credits Graded</div><div class="stat-value">{{ h.creditsGraded }}</div></div>
+    <div class="card stat-tile"><div class="stat-label">Semesters on Record</div><div class="stat-value">{{ bySemester().length }}</div></div>
+  </div>
+  @for (s of bySemester(); track s.label) {
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin:0 0 14px;font-size:14px;">{{ s.label }}</h3>
+      <table>
+        <thead><tr><th>Code</th><th>Course Name</th><th>Credits</th><th>Graded Work</th><th>Grade</th></tr></thead>
+        <tbody>
+          @for (c of s.rows; track c.offeringId) {
+            <tr>
+              <td class="cell-code">{{ c.courseCode }}</td>
+              <td class="cell-name">{{ c.courseName }}</td>
+              <td class="cell-soft">{{ c.credits }}</td>
+              <td class="cell-soft">{{ c.gradedAssignments }} assignment{{ c.gradedAssignments === 1 ? '' : 's' }}</td>
+              <td style="font-weight:700;" [style.color]="c.letter === 'F' ? 'var(--danger)' : 'var(--success)'">{{ c.percentage }}% ({{ c.letter }})</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @empty {
+    <div class="card"><p style="color:var(--ink-faint);font-size:13px;margin:0;">No graded work yet.</p></div>
+  }
+  }
+}

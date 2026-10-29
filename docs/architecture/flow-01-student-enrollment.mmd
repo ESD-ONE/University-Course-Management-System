@@ -1,5 +1,5 @@
 ---
-title: "Flow 1 — Student Enrollment — PLANNED: Enrollment, Notification, and WebSocket Gateway don't exist yet (zero code) — aspirational design, not current behavior"
+title: "Flow 1 — Student Enrollment (implemented: enrollment-service, notification-service; live push is Server-Sent Events from notification-service)"
 ---
 sequenceDiagram
     actor Student
@@ -10,7 +10,7 @@ sequenceDiagram
     participant ENR as Enrollment
     participant MQ as Message Broker
     participant NOTIF as Notification
-    participant WS as WebSocket Gateway
+    participant WS as Live push (SSE, notification-service)
 
     Student->>Client: Click "Enroll" on COSC5105
     Client->>GW: POST /courses/COSC5105/enrollments (JWT)

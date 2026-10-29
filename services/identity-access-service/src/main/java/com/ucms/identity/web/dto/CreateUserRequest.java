@@ -5,6 +5,7 @@ import com.ucms.identity.domain.RoleKind;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * password is optional, matching the wireframe's "New User" modal (name, email, role,
@@ -16,7 +17,8 @@ import jakarta.validation.constraints.NotNull;
 public record CreateUserRequest(
         @NotBlank String name,
         @NotBlank @Email String email,
-        String password,
+        // Optional (blank → a generated temporary password); Keycloak's policy is 12+.
+        @Pattern(regexp = "^$|^.{12,128}$", message = "Password must be 12 to 128 characters") String password,
         @NotNull RoleKind role,
         UserStatus status
 ) {}

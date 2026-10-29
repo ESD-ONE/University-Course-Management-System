@@ -37,6 +37,11 @@ public class SecurityConfig {
                 // admins/department heads can also create courses on another lecturer's
                 // behalf, which CourseOfferingService enforces explicitly. Everything
                 // else (academic years, course catalog) stays coarse ADMIN-only for now.
+                // G-19: the gate-level rules in this file are intentionally coarser than
+                // actual enforcement for Degree Programs/Courses — anyone auditing
+                // security from this file alone should also read PermissionResolver and
+                // DegreeProgramService/CourseOfferingService for the real per-endpoint
+                // decision (department scoping, self-service lecturer checks, etc.).
                 .requestMatchers(HttpMethod.POST, "/courses", "/courses/*/academic-years",
                         "/degree-programs", "/degree-programs/*/curriculum", "/degree-programs/*/academic-years").authenticated()
                 // Course/Degree-Program edit & delete are likewise service-layer scope-checked

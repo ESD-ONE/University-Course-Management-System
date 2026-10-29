@@ -7,29 +7,19 @@
   </div>
 
   <div class="login-right">
-    <form class="login-form" [formGroup]="form" (ngSubmit)="submit()">
+    <div class="login-form">
       <h2>Welcome back</h2>
-      <p class="sub">Sign in to continue to your dashboard.</p>
+      <p class="sub">Sign in with your UCMS account to continue to your dashboard.</p>
 
-      @if (errorMessage()) {
-        <div class="login-error">{{ errorMessage() }}</div>
+      @if (notice()) {
+        <div class="login-error">{{ notice() }}</div>
       }
 
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" formControlName="email" placeholder="admin@ucms.local" autocomplete="username" />
-      </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" formControlName="password" placeholder="••••••••••" autocomplete="current-password" />
-        <div class="hint">Your role is assigned to your account by an administrator - it isn't chosen at sign-in.</div>
-      </div>
-
-      <button class="btn btn-primary btn-block" type="submit" [disabled]="submitting()">
-        {{ submitting() ? 'Signing in…' : 'Log In' }}
+      <button class="btn btn-primary btn-block" type="button" (click)="signIn()" [disabled]="redirecting()">
+        {{ redirecting() ? 'Opening sign-in…' : 'Sign in' }}
       </button>
 
-      <p class="footnote">No account? Ask your administrator to create one from <b>Users</b> - that's where roles are assigned.</p>
-    </form>
+      <p class="footnote">You'll enter your email and password on the UCMS sign-in page. No account? Ask your administrator to create one from <b>Users</b> - that's where roles are assigned.</p>
+    </div>
   </div>
 </div>

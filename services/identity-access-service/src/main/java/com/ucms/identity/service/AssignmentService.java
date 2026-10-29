@@ -2,6 +2,7 @@ package com.ucms.identity.service;
 
 import com.ucms.identity.domain.*;
 import com.ucms.identity.repository.*;
+import com.ucms.identity.security.AssignmentCacheInvalidator;
 import com.ucms.identity.web.dto.AssignmentClaim;
 import com.ucms.identity.web.dto.AssignmentResponse;
 import com.ucms.identity.web.dto.CreateAssignmentRequest;
@@ -30,16 +31,19 @@ public class AssignmentService {
     private final RoleScopeAssignmentRepository assignmentRepository;
     private final AssignmentPermissionOverrideRepository overrideRepository;
     private final PermissionRepository permissionRepository;
+    private final AssignmentCacheInvalidator cacheInvalidator;
 
     public AssignmentService(UserRepository userRepository, RoleRepository roleRepository,
                               RoleScopeAssignmentRepository assignmentRepository,
                               AssignmentPermissionOverrideRepository overrideRepository,
-                              PermissionRepository permissionRepository) {
+                              PermissionRepository permissionRepository,
+                              AssignmentCacheInvalidator cacheInvalidator) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.assignmentRepository = assignmentRepository;
         this.overrideRepository = overrideRepository;
         this.permissionRepository = permissionRepository;
+        this.cacheInvalidator = cacheInvalidator;
     }
 
     @Transactional(readOnly = true)
@@ -69,6 +73,7 @@ public class AssignmentService {
         a.setCreatedBy(createdBy);
         a.setUpdatedBy(createdBy);
         a = assignmentRepository.save(a);
+        cacheInvalidator.evict(userId);
         return AssignmentResponse.from(a, List.of());
     }
 
@@ -88,6 +93,7 @@ public class AssignmentService {
         if (override.getCreatedBy() == null) override.setCreatedBy(updatedBy);
         override.setUpdatedBy(updatedBy);
         overrideRepository.save(override);
+        cacheInvalidator.evict(assignment.getUser().getId());
 
         return AssignmentResponse.from(assignment, overridesFor(assignmentId));
     }
@@ -100,9 +106,11 @@ public class AssignmentService {
         assignment.setDeletedBy(revokedBy);
         assignment.setUpdatedBy(revokedBy);
         assignmentRepository.save(assignment);
+        cacheInvalidator.evict(assignment.getUser().getId());
     }
 
-    /** Embedded in the JWT at login — see docs/SYSTEM_ARCHITECTURE_REPORT.md section 12.3. */
+    /** Served to academic-structure-service by GET /internal/assignments/{userId} (it used
+     *  to be embedded in the JWT at login) — see AssignmentCacheInvalidator. */
     @Transactional(readOnly = true)
     public List<AssignmentClaim> resolveClaimsForUser(UUID userId) {
         return assignmentRepository.findByUserIdAndDeletedAtIsNull(userId).stream()

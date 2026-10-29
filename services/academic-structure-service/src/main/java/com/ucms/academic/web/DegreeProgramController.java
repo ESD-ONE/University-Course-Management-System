@@ -33,6 +33,11 @@ public class DegreeProgramController {
         return degreeProgramService.list(departmentId);
     }
 
+    @GetMapping("/degree-programs/{programId}")
+    public DegreeProgramResponse get(@PathVariable("programId") UUID programId) {
+        return degreeProgramService.get(programId);
+    }
+
     @PostMapping("/degree-programs")
     public ResponseEntity<DegreeProgramResponse> create(@Valid @RequestBody CreateDegreeProgramRequest request,
                                                           @AuthenticationPrincipal UUID currentUserId) {

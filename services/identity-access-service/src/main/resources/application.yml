@@ -1,15 +1,22 @@
 server:
   port: 8081
+  # Finish in-flight requests on shutdown, so a rolling redeploy drops nothing.
+  shutdown: graceful
 
 spring:
   application:
     name: identity-access-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ucms}
     username: ${DB_USER:identity_access_svc}
     password: ${DB_PASSWORD:}
+    # Several replicas share one Postgres (max_connections 200): keep each pool small.
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -29,11 +36,35 @@ spring:
     # The schema is created by infra/init-schemas.sh as the admin role, not by
     # this service's own (deliberately schema-scoped, non-superuser) role.
     create-schemas: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5673}
+    username: ${RABBITMQ_USER:ucms_admin}
+    password: ${RABBITMQ_PASSWORD:}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
 
 ucms:
-  jwt:
-    secret: ${JWT_SECRET:}
-    expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+  # Keycloak issues every token (docs/keycloak-integration.md). url is how this service
+  # reaches it; issuer is the public URL browsers use, which tokens carry as "iss" (they
+  # differ inside Docker). A sign-in lasts at most 24 hours — the realm's SSO session cap.
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8180/auth}
+    realm: ${KEYCLOAK_REALM:ucms}
+    issuer: ${KEYCLOAK_ISSUER:}
+    client-id: svc-identity-access
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+    service-role: svc:identity
+  assignment-cache:
+    enabled: ${UCMS_ASSIGNMENT_CACHE_ENABLED:true}
+  events:
+    enabled: ${UCMS_EVENTS_ENABLED:true}
+  revocation:
+    enabled: ${UCMS_REVOCATION_ENABLED:true}
 
 management:
   endpoints:
@@ -43,3 +74,17 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  # Events and revocation are deliberately best-effort side channels (a broker or
+  # Redis outage must not take login down), so they don't gate this service's own
+  # health — otherwise a Redis blip would fail the container healthcheck and block
+  # the gateway from starting.
+  health:
+    rabbit:
+      enabled: false
+    redis:
+      enabled: false
+
+logging:
+  pattern:
+    # Every line carries the X-Request-Id of the request it belongs to.
+    level: "%5p [%X{requestId:-}]"

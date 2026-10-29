@@ -10,5 +10,6 @@ import java.util.UUID;
 public interface CourseCatalogRepository extends JpaRepository<CourseCatalog, UUID> {
     boolean existsByCodeAndDeletedAtIsNull(String code);
     List<CourseCatalog> findByDeletedAtIsNullOrderByCodeAsc();
+    List<CourseCatalog> findByOwningDepartmentIdAndDeletedAtIsNullOrderByCodeAsc(UUID owningDepartmentId);
     Optional<CourseCatalog> findByIdAndDeletedAtIsNull(UUID id);
 }

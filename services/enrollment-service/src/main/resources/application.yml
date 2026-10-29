@@ -1,0 +1,89 @@
+server:
+  port: 8085
+  # Finish in-flight requests on shutdown, so a rolling redeploy drops nothing.
+  shutdown: graceful
+
+spring:
+  application:
+    name: enrollment-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: false
+      retry:
+        # Reads only (the default): a failed GET is tried once more on another replica.
+        max-retries-on-next-service-instance: 1
+    discovery:
+      client:
+        health-indicator:
+          enabled: false
+        composite-indicator:
+          enabled: false
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ucms}
+    username: ${DB_USER:enrollment_svc}
+    password: ${DB_PASSWORD:}
+    # Several replicas share one Postgres (max_connections 200): keep each pool small.
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        default_schema: enrollment
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: enrollment
+    default-schema: enrollment
+    create-schemas: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5673}
+    username: ${RABBITMQ_USER:ucms_admin}
+    password: ${RABBITMQ_PASSWORD:}
+
+ucms:
+  # Keycloak issues every token (docs/keycloak-integration.md). url is how this service
+  # reaches it; issuer is the public URL browsers use, which tokens carry as "iss".
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8180/auth}
+    realm: ${KEYCLOAK_REALM:ucms}
+    issuer: ${KEYCLOAK_ISSUER:}
+    client-id: svc-enrollment
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+    service-role: svc:enrollment
+  events:
+    enabled: ${UCMS_EVENTS_ENABLED:true}
+  identity-service-uri: http://identity-access-service
+  academic-service-uri: http://academic-structure-service
+  # The *-uri values above are load-balanced service names, resolved here; a Docker
+  # service name resolves to every replica (see config/DnsDiscoveryClient).
+  discovery:
+    services:
+      identity-access-service: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+      academic-structure-service: ${ACADEMIC_STRUCTURE_SERVICE_URI:http://localhost:8084}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    rabbit:
+      enabled: false
+
+logging:
+  pattern:
+    # Every line carries the X-Request-Id of the request it belongs to.
+    level: "%5p [%X{requestId:-}]"

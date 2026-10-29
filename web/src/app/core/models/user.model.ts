@@ -28,12 +28,27 @@ export interface CreateUserRequest {
   status?: 'ACTIVE' | 'INACTIVE';
 }
 
+/** Mirrors the scope of a `role_scope_assignment` row — how broad the assignment's authority is. */
+export type AssignmentScopeType = 'GLOBAL' | 'DEPARTMENT' | 'DEGREE_PROGRAM' | 'COURSE' | 'COURSE_MODULE';
+
+/** Mirrors AssignmentResponse as embedded on ProfileResponse — one role-scope grant held by this user. */
+export interface AssignmentResponse {
+  id: string;
+  roleId: string;
+  roleName: string;
+  scopeType: AssignmentScopeType;
+  scopeId: string | null;
+}
+
 /** Mirrors ProfileResponse — only GET /users/me returns this (own account, including prefs). */
 export interface ProfileResponse extends UserResponse {
   notifyEmail: boolean;
   notifyAssignments: boolean;
   notifyGrades: boolean;
   notifyRegistrations: boolean;
+  /** This user's role-scope grants (e.g. a DEPARTMENT-scoped "Department Head" assignment).
+   * Added by identity-access-service alongside G-01's frontend authorization work. */
+  assignments: AssignmentResponse[];
 }
 
 export interface UpdateNotificationPreferencesRequest {

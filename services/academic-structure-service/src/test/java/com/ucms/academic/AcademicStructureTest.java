@@ -2,10 +2,10 @@ package com.ucms.academic;
 
 import com.ucms.academic.domain.*;
 import com.ucms.academic.repository.*;
-import com.ucms.academic.security.JwtProperties;
+import com.ucms.academic.security.AssignmentCache;
+import com.ucms.academic.security.AssignmentClaim;
+import com.ucms.academic.security.AssignmentsUnavailableException;
 import com.ucms.academic.security.RoleCatalog;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +16,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +26,6 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -40,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Matches html-wireframes/index.html's Academic Calendar / Degree Programs / Course
  * Catalog / Courses screens. Seeds its own fixtures rather than relying on Flyway, which
- * is disabled for the H2 test profile — same pattern as reference-data-service's tests.
+ * is disabled for the H2 test profile — same pattern as base-service's tests.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,7 +45,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AcademicStructureTest {
 
     @Autowired MockMvc mockMvc;
-    @Autowired JwtProperties jwtProperties;
     @Autowired AcademicYearRepository academicYearRepository;
     @Autowired SemesterRepository semesterRepository;
     @Autowired DegreeProgramRepository degreeProgramRepository;
@@ -57,6 +52,7 @@ class AcademicStructureTest {
     @Autowired ProgramCourseRepository programCourseRepository;
     @Autowired CourseRepository courseRepository;
     @MockBean RoleCatalog roleCatalogClient;
+    @MockBean AssignmentCache assignmentCache;
 
     private AcademicYear activeYear;
     private AcademicYear archivedYear;
@@ -65,7 +61,8 @@ class AcademicStructureTest {
     private CourseCatalog catalogCourse;
     private UUID lecturerId;
 
-    private static final UUID ADMIN_ROLE_ID = UUID.randomUUID();
+    /** The seeded Administrator role — what a trusted service token resolves to here. */
+    private static final UUID ADMIN_ROLE_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID LECTURER_ROLE_ID = UUID.randomUUID();
     private static final UUID STUDENT_ROLE_ID = UUID.randomUUID();
     private static final UUID DEPT_HEAD_ROLE_ID = UUID.randomUUID();
@@ -144,23 +141,29 @@ class AcademicStructureTest {
     }
 
     private String tokenWithAssignment(String role, UUID subject, UUID roleId, String scopeType, UUID scopeId) {
-        SecretKey key = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
-        Instant now = Instant.now();
+        return tokenWithAssignment(role, subject, roleId, scopeType, scopeId, Map.of());
+    }
+
+    /** G-09: like tokenWithAssignment, but lets a test embed a per-assignment
+     * permission override (keyed by permission id, same shape identity-access-service's
+     * PATCH /assignments/{id}/overrides would persist) so PermissionResolver's override
+     * handling can be exercised end-to-end. */
+    private String tokenWithAssignment(String role, UUID subject, UUID roleId, String scopeType, UUID scopeId,
+                                        Map<UUID, Boolean> overrides) {
+        Map<String, Object> rawOverrides = new java.util.HashMap<>();
+        overrides.forEach((permissionId, granted) -> rawOverrides.put(permissionId.toString(), granted));
         Map<String, Object> assignment = Map.of(
                 "id", UUID.randomUUID().toString(),
                 "roleId", roleId.toString(),
                 "scopeType", scopeType,
                 "scopeId", scopeId == null ? "" : scopeId.toString(),
-                "overrides", Map.of());
-        return Jwts.builder()
-                .subject(subject.toString())
-                .claim("email", "test@ucms.local")
-                .claim("role", role)
-                .claim("assignments", List.of(assignment))
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(60, ChronoUnit.MINUTES)))
-                .signWith(key)
-                .compact();
+                "overrides", rawOverrides);
+        return KeycloakTestTokens.sign(Map.of(
+                        "azp", "ucms-web",
+                        "uid", subject.toString(),
+                        "realm_access", Map.of("roles", List.of(role)),
+                        "assignments", List.of(assignment)),
+                Instant.now().plus(60, ChronoUnit.MINUTES));
     }
 
     // ---- Academic Calendar ----
@@ -390,6 +393,47 @@ class AcademicStructureTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    // ---- Keycloak tokens carry no assignments: they're loaded from AssignmentCache ----
+
+    @Test
+    void assignmentsMissingFromTheToken_areLoadedFromTheCache() throws Exception {
+        UUID deptHead = UUID.randomUUID();
+        when(assignmentCache.forUser(deptHead)).thenReturn(List.of(new AssignmentClaim(
+                UUID.randomUUID(), DEPT_HEAD_ROLE_ID, "DEPARTMENT", program.getDepartmentId(), Map.of())));
+
+        mockMvc.perform(get("/degree-programs")
+                        .header("Authorization", "Bearer " + KeycloakTestTokens.user(deptHead, "LECTURER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].code").value("BSc-CS"));
+    }
+
+    @Test
+    void assignmentsUnavailable_isA503_notASignOut() throws Exception {
+        UUID user = UUID.randomUUID();
+        when(assignmentCache.forUser(user)).thenThrow(new AssignmentsUnavailableException(new RuntimeException("down")));
+
+        mockMvc.perform(get("/degree-programs")
+                        .header("Authorization", "Bearer " + KeycloakTestTokens.user(user, "LECTURER")))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void trustedService_seesEveryDepartment_likeTheOldServiceToken() throws Exception {
+        // base-service's department-dependents check (G-05) relies on this.
+        mockMvc.perform(get("/degree-programs").param("departmentId", program.getDepartmentId().toString())
+                        .header("Authorization", "Bearer " + KeycloakTestTokens.service("svc:academic")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void serviceNotGrantedThisService_isRejected() throws Exception {
+        mockMvc.perform(get("/degree-programs")
+                        .header("Authorization", "Bearer " + KeycloakTestTokens.service("svc:identity")))
+                .andExpect(status().is4xxClientError());
+    }
+
     @Test
     void createDegreeProgram_asDeptHeadForOwnDepartment_succeeds() throws Exception {
         String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, program.getDepartmentId());
@@ -517,6 +561,34 @@ class AcademicStructureTest {
                 .andExpect(status().isConflict());
     }
 
+    // ---- G-07: listCurriculum was previously unguarded ----
+
+    @Test
+    void listCurriculum_asDeptHeadForDifferentDepartment_isRejected() throws Exception {
+        String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, UUID.randomUUID());
+        mockMvc.perform(get("/degree-programs/" + program.getId() + "/curriculum")
+                        .header("Authorization", "Bearer " + deptHeadToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listCurriculum_asDeptHeadForOwnDepartment_succeeds() throws Exception {
+        ProgramCourse pc = new ProgramCourse();
+        pc.setDegreeProgram(program);
+        pc.setCatalogCourse(catalogCourse);
+        pc.setRequirementType(RequirementType.CORE);
+        pc.setRecommendedYear(1);
+        pc.setRecommendedSemester(1);
+        pc.setCreditValue(3);
+        programCourseRepository.save(pc);
+
+        String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, program.getDepartmentId());
+        mockMvc.perform(get("/degree-programs/" + program.getId() + "/curriculum")
+                        .header("Authorization", "Bearer " + deptHeadToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
     // ---- Degree Program <-> Academic Year assignment ----
 
     @Test
@@ -606,6 +678,70 @@ class AcademicStructureTest {
                         .content("{\"code\":\"COSC5105\",\"name\":\"Duplicate\",\"defaultCredits\":3," +
                                 "\"owningDepartmentId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    // ---- G-08: Course Catalog PUT/DELETE + departmentId filter ----
+
+    @Test
+    void listCourseCatalog_withDepartmentFilter_narrowsResults() throws Exception {
+        CourseCatalog otherDeptSubject = new CourseCatalog();
+        otherDeptSubject.setCode("PHYS1010");
+        otherDeptSubject.setName("Physics I");
+        otherDeptSubject.setDefaultCredits(3);
+        otherDeptSubject.setOwningDepartmentId(UUID.randomUUID());
+        courseCatalogRepository.save(otherDeptSubject);
+
+        mockMvc.perform(get("/course-catalog").param("departmentId", catalogCourse.getOwningDepartmentId().toString())
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].code").value("COSC5105"));
+    }
+
+    @Test
+    void updateCourseCatalogEntry_asAdmin_succeeds() throws Exception {
+        mockMvc.perform(put("/course-catalog/" + catalogCourse.getId())
+                        .header("Authorization", "Bearer " + tokenFor("ADMIN"))
+                        .contentType("application/json")
+                        .content("{\"name\":\"Introduction to Programming (Revised)\",\"defaultCredits\":4}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Introduction to Programming (Revised)"))
+                .andExpect(jsonPath("$.defaultCredits").value(4))
+                .andExpect(jsonPath("$.code").value("COSC5105"));
+    }
+
+    @Test
+    void deleteCourseCatalogEntry_blockedByDependentCourse_isRejected() throws Exception {
+        newCourse(CourseStatus.PUBLISHED);
+        mockMvc.perform(delete("/course-catalog/" + catalogCourse.getId())
+                        .header("Authorization", "Bearer " + tokenFor("ADMIN")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void deleteCourseCatalogEntry_blockedByDependentProgramCourse_isRejected() throws Exception {
+        ProgramCourse pc = new ProgramCourse();
+        pc.setDegreeProgram(program);
+        pc.setCatalogCourse(catalogCourse);
+        pc.setRequirementType(RequirementType.CORE);
+        pc.setRecommendedYear(1);
+        pc.setRecommendedSemester(1);
+        pc.setCreditValue(3);
+        programCourseRepository.save(pc);
+
+        mockMvc.perform(delete("/course-catalog/" + catalogCourse.getId())
+                        .header("Authorization", "Bearer " + tokenFor("ADMIN")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void deleteCourseCatalogEntry_withNoDependents_succeeds() throws Exception {
+        mockMvc.perform(delete("/course-catalog/" + catalogCourse.getId())
+                        .header("Authorization", "Bearer " + tokenFor("ADMIN")))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/course-catalog").header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     // ---- Course Offerings ----
@@ -745,6 +881,34 @@ class AcademicStructureTest {
                         .contentType("application/json")
                         .content("{\"academicYearId\":\"" + activeYear.getId() + "\",\"status\":\"DRAFT\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    // ---- G-07: listAcademicYearAssignments was previously unguarded ----
+
+    @Test
+    void listAcademicYearAssignments_asDeptHeadForDifferentDepartment_isRejected() throws Exception {
+        Course course = newCourse(CourseStatus.PUBLISHED);
+        String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, UUID.randomUUID());
+        mockMvc.perform(get("/courses/" + course.getId() + "/academic-years")
+                        .header("Authorization", "Bearer " + deptHeadToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listAcademicYearAssignments_asDeptHeadForOwnDepartment_succeeds() throws Exception {
+        String token = tokenFor("LECTURER", lecturerId);
+        Course course = newCourse(CourseStatus.PUBLISHED);
+        mockMvc.perform(post("/courses/" + course.getId() + "/academic-years")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"academicYearId\":\"" + activeYear.getId() + "\",\"status\":\"PUBLISHED\"}"))
+                .andExpect(status().isCreated());
+
+        String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, program.getDepartmentId());
+        mockMvc.perform(get("/courses/" + course.getId() + "/academic-years")
+                        .header("Authorization", "Bearer " + deptHeadToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     // ---- Academic Calendar: update/delete (years & semesters) ----
@@ -1214,6 +1378,45 @@ class AcademicStructureTest {
         String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, UUID.randomUUID());
         mockMvc.perform(get("/degree-programs/" + program.getId() + "/academic-years/" + assignmentId + "/courses")
                         .header("Authorization", "Bearer " + deptHeadToken))
+                .andExpect(status().isForbidden());
+    }
+
+    // ---- G-09: per-assignment permission overrides are now consulted ----
+
+    @Test
+    void permissionOverride_grantsEditDeniedByBaselineRole_allowsAction() throws Exception {
+        // LECTURER_ROLE_ID's baseline only grants "Degree Programs":"View" (see seed()) —
+        // "Edit" is an unstubbed baseline denial. A per-assignment override granting the
+        // resolved permission id should now take precedence over that baseline.
+        UUID permissionId = UUID.randomUUID();
+        when(roleCatalogClient.permissionIdOf(eq("Degree Programs"), eq("Edit"))).thenReturn(permissionId);
+
+        String token = tokenWithAssignment("LECTURER", UUID.randomUUID(), LECTURER_ROLE_ID, "DEPARTMENT",
+                program.getDepartmentId(), Map.of(permissionId, true));
+
+        mockMvc.perform(put("/degree-programs/" + program.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Overridden Name\",\"durationYears\":4,\"totalCredits\":120,\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Overridden Name"));
+    }
+
+    @Test
+    void permissionOverride_revokesEditGrantedByBaselineRole_rejectsAction() throws Exception {
+        // DEPT_HEAD_ROLE_ID's baseline grants every "Degree Programs" action (see seed()).
+        // A per-assignment override revoking the resolved permission id should now take
+        // precedence over that baseline grant.
+        UUID permissionId = UUID.randomUUID();
+        when(roleCatalogClient.permissionIdOf(eq("Degree Programs"), eq("Edit"))).thenReturn(permissionId);
+
+        String token = tokenWithAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, "DEPARTMENT",
+                program.getDepartmentId(), Map.of(permissionId, false));
+
+        mockMvc.perform(put("/degree-programs/" + program.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Should Not Apply\",\"durationYears\":4,\"totalCredits\":120,\"status\":\"ACTIVE\"}"))
                 .andExpect(status().isForbidden());
     }
 

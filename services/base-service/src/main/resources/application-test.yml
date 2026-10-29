@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    # INIT creates the base schema before Hibernate's create-drop DDL runs,
+    # mirroring main/application.yml's hibernate.default_schema — see
+    # identity-access-service's application-test.yml for the full explanation of why.
+    url: jdbc:h2:mem:basedb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;INIT=CREATE SCHEMA IF NOT EXISTS base
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+ucms:
+  # Tokens in tests are signed with src/test/resources/keycloak-test-private.pem (see
+  # KeycloakTestTokens); this is its public half, used instead of Keycloak's JWKS.
+  keycloak:
+    url: http://keycloak.test/auth
+    issuer: http://keycloak.test/auth/realms/ucms
+    client-id: svc-base
+    client-secret: test
+    service-role: svc:base
+    public-key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArNteaUwiuIk8Ts8I40sz
+      EvivOy9QpYxIWh483RrZPUHtVqLpoPn9lZiA3YCR01KRuMuCj+41JG6hhqkaNWEn
+      dCokNjrTtGRs+VP0+ig9LKDEsVif9g9S3owHBoI6stl/+YHh6R24Rs6T5c0YQPZJ
+      o50GBmvwdb/q5T8x3SbBKljtJgho8s3voCn9JSUXFdtxiElK2gdpObrHUnqW5GLR
+      qdwOSpY6DCqlAKx/K3ucKoqJIh5dvp1Iwf97WSrK6ROZT9vYIaqxXOqFDEROBbhA
+      /fh4gnWZZ0UEoVquzHaS1/pjt56r2Zm42Io+kUsxvWG0PwE42EFReNNqlP9z3b2g
+      WQIDAQAB
+      -----END PUBLIC KEY-----

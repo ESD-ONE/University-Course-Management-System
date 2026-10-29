@@ -12,18 +12,31 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<Object> handleInvalidCredentials(InvalidCredentialsException ex) {
-        return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    /** Account changes are mirrored to Keycloak in the same transaction; if it can't be
+     *  reached the change is rolled back and the caller can retry. */
+    @ExceptionHandler(com.ucms.identity.keycloak.KeycloakUnavailableException.class)
+    public ResponseEntity<Object> handleKeycloakUnavailable(RuntimeException ex) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE,
+                "The sign-in service is unavailable, so this change was not saved — try again shortly.");
     }
 
-    @ExceptionHandler(AccountNotActiveException.class)
-    public ResponseEntity<Object> handleAccountNotActive(AccountNotActiveException ex) {
-        return error(HttpStatus.FORBIDDEN, ex.getMessage());
+    @ExceptionHandler(com.ucms.identity.keycloak.KeycloakRejectedException.class)
+    public ResponseEntity<Object> handleKeycloakRejected(RuntimeException ex) {
+        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
     @ExceptionHandler(EmailAlreadyInUseException.class)
     public ResponseEntity<Object> handleEmailInUse(EmailAlreadyInUseException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateRoleNameException.class)
+    public ResponseEntity<Object> handleDuplicateRoleName(DuplicateRoleNameException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(StaleRoleVersionException.class)
+    public ResponseEntity<Object> handleStaleRoleVersion(StaleRoleVersionException ex) {
         return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
@@ -39,7 +52,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Object> handleValidation(MethodArgumentNotValidException ex) {
-        return error(HttpStatus.BAD_REQUEST, "Validation failed: " + ex.getMessage());
+        // The field's own message only: ex.getMessage() spells out internal class and
+        // method signatures, which neither belong in front of users nor on the wire.
+        String detail = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getDefaultMessage() != null ? f.getDefaultMessage() : f.getField() + " is invalid")
+                .findFirst().orElse("invalid request");
+        return error(HttpStatus.BAD_REQUEST, "Validation failed: " + detail);
     }
 
     @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)

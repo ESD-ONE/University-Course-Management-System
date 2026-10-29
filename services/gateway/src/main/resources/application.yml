@@ -1,30 +1,116 @@
 server:
   port: 8080
+  # Finish in-flight requests on shutdown, so a rolling redeploy drops nothing.
+  shutdown: graceful
 
 spring:
   application:
     name: gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
   cloud:
+    loadbalancer:
+      # Only send traffic to replicas whose /actuator/health answers UP; re-read DNS
+      # regularly so new replicas join without a restart.
+      configurations: health-check
+      health-check:
+        interval: 5s
+        initial-delay: 0
+        refetch-instances: true
+        refetch-instances-interval: 15s
     gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 60s
+      # Every route: circuit breaker (fast 503 while a service is down), then — for reads
+      # only — up to two retries on another replica when one can't be reached. Writes are
+      # never retried: a retried POST could enroll a student twice.
       routes:
+        # The live notification stream is one long request: no timeout, no retry, no breaker.
+        - id: notification-stream
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notification/notifications/stream
+          filters:
+            - StripPrefix=2
+          metadata:
+            response-timeout: -1
         - id: identity-access-service
-          uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+          uri: lb://identity-access-service
           predicates:
             - Path=/api/identity/**
           filters:
             - StripPrefix=2
-        - id: reference-data-service
-          uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8083}
+            - name: CircuitBreaker
+              args: { name: identity-access-service, fallbackUri: "forward:/fallback/identity-access-service" }
+            - &read-retry
+              name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                exceptions: java.io.IOException
+                backoff: { firstBackoff: 50ms, maxBackoff: 500ms, factor: 2, basedOnPreviousValue: false }
+        - id: base-service
+          uri: lb://base-service
           predicates:
-            - Path=/api/reference/**
+            - Path=/api/base/**
           filters:
             - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: base-service, fallbackUri: "forward:/fallback/base-service" }
+            - *read-retry
         - id: academic-structure-service
-          uri: ${ACADEMIC_STRUCTURE_SERVICE_URI:http://localhost:8084}
+          uri: lb://academic-structure-service
           predicates:
             - Path=/api/academic/**
           filters:
             - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: academic-structure-service, fallbackUri: "forward:/fallback/academic-structure-service" }
+            - *read-retry
+        - id: enrollment-service
+          uri: lb://enrollment-service
+          predicates:
+            - Path=/api/enrollment/**
+          filters:
+            - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: enrollment-service, fallbackUri: "forward:/fallback/enrollment-service" }
+            - *read-retry
+        - id: assignment-grading-service
+          uri: lb://assignment-grading-service
+          predicates:
+            - Path=/api/grading/**
+          filters:
+            - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: assignment-grading-service, fallbackUri: "forward:/fallback/assignment-grading-service" }
+            - *read-retry
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notification/**
+          filters:
+            - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: notification-service, fallbackUri: "forward:/fallback/notification-service" }
+            - *read-retry
+        - id: analytics-reporting-service
+          uri: lb://analytics-reporting-service
+          predicates:
+            - Path=/api/analytics/**
+          filters:
+            - StripPrefix=2
+            - name: CircuitBreaker
+              args: { name: analytics-reporting-service, fallbackUri: "forward:/fallback/analytics-reporting-service" }
+            - *read-retry
       # The Gateway is the only thing a browser talks to — CORS is handled here once,
       # not per-service. Angular dev server runs on 4200; a real deployed FE origin
       # replaces this once one exists.
@@ -34,7 +120,70 @@ spring:
             allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:4200}"
             allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
             allowedHeaders: "*"
+            exposedHeaders: [Retry-After, X-RateLimit-Remaining, X-Request-Id]
             allowCredentials: true
+
+ucms:
+  # Keycloak's signing keys are fetched from url; tokens must carry issuer (the public URL
+  # browsers use, which differs from url inside Docker). See docs/keycloak-integration.md.
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8180/auth}
+    realm: ${KEYCLOAK_REALM:ucms}
+    issuer: ${KEYCLOAK_ISSUER:}
+  revocation:
+    enabled: ${UCMS_REVOCATION_ENABLED:true}
+  # Where each lb:// service lives. A Docker service name resolves to every replica.
+  discovery:
+    services:
+      identity-access-service: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+      base-service: ${BASE_SERVICE_URI:http://localhost:8083}
+      academic-structure-service: ${ACADEMIC_STRUCTURE_SERVICE_URI:http://localhost:8084}
+      enrollment-service: ${ENROLLMENT_SERVICE_URI:http://localhost:8085}
+      assignment-grading-service: ${ASSIGNMENT_GRADING_SERVICE_URI:http://localhost:8086}
+      notification-service: ${NOTIFICATION_SERVICE_URI:http://localhost:8087}
+      analytics-reporting-service: ${ANALYTICS_REPORTING_SERVICE_URI:http://localhost:8088}
+  # Per-user quotas (per client IP when there's no verified user); first matching tier
+  # wins. See docs/security-loadbalancing-ratelimit-plan.md §4.4.
+  rate-limit:
+    enabled: ${UCMS_RATE_LIMIT_ENABLED:true}
+    tiers:
+      - name: live-stream
+        paths: [/api/notification/notifications/stream]
+        exempt: true
+      # Up to 20 MB each.
+      - name: uploads
+        methods: [POST]
+        paths: [/api/grading/assignments/*/submissions, /api/grading/assignments/*/brief]
+        limit: 10
+        period: 1m
+        burst: 10
+      # Report generation is the most expensive query path.
+      - name: analytics-writes
+        methods: [POST, PUT, PATCH, DELETE]
+        paths: [/api/analytics/**]
+        limit: 6
+        period: 1m
+        burst: 6
+      # The real traffic spike is an enrollment window opening; this stops scripted
+      # retry-hammering without getting in a real student's way.
+      - name: enrollment-writes
+        methods: [POST, PUT, PATCH, DELETE]
+        paths: [/api/enrollment/**]
+        limit: 2
+        period: 1s
+        burst: 10
+      # Each also calls Keycloak's admin API.
+      - name: user-writes
+        methods: [POST, PUT, PATCH, DELETE]
+        paths: [/api/identity/users, /api/identity/users/**]
+        limit: 2
+        period: 1s
+        burst: 10
+      - name: default
+        paths: [/api/**]
+        limit: 20
+        period: 1s
+        burst: 40
 
 management:
   endpoints:
@@ -44,3 +193,6 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    redis:
+      enabled: false

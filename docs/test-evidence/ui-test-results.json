@@ -1,0 +1,169 @@
+{
+  "run": "6f92be",
+  "passed": 27,
+  "total": 27,
+  "results": [
+    {
+      "id": "UI-SETUP",
+      "desc": "Test lecturer, student and an open course offering created",
+      "pass": true,
+      "actual": "COSC6210"
+    },
+    {
+      "id": "UI-admin-dashboard",
+      "desc": "/app/dashboard renders with \"Total Students\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-admin-registrations",
+      "desc": "/app/registrations renders with \"Recent Registrations\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-admin-roles",
+      "desc": "/app/roles renders with \"Scope Assignments\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-admin-reports",
+      "desc": "/app/reports renders with \"Report Library\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-ADMIN-GENERATE",
+      "desc": "Admin generates a report from the Reports screen",
+      "pass": true,
+      "actual": "Enrollment Summary generated."
+    },
+    {
+      "id": "UI-ADMIN-NAV",
+      "desc": "Admin nav has Registrations/Roles/Reports, no \"Coming soon\"",
+      "pass": true,
+      "actual": "Workspace | Dashboard | Users | Academic Calendar | Program Management | Courses | Registrations | System | Roles & Permissions | Reference Data | Reports | Account | Profile"
+    },
+    {
+      "id": "UI-ADMIN-REGISTER",
+      "desc": "Admin registers a student into a program via the Registrations form",
+      "pass": true,
+      "actual": "UI Student 6f92be registered in BSc in Computer Science."
+    },
+    {
+      "id": "UI-LECT-NAV",
+      "desc": "Lecturer nav has Assignments/Grading/Students/Registrations",
+      "pass": true,
+      "actual": "Workspace | Dashboard | My Courses | Assignments | Grading | Students | Reference Degree Details | Admin Tools | Registrations | Account | Profile"
+    },
+    {
+      "id": "UI-lecturer-dashboard",
+      "desc": "/app/dashboard renders with \"Submissions to Grade\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-LECT-ASSIGN",
+      "desc": "Lecturer creates and publishes an assignment through the modal",
+      "pass": true,
+      "actual": "UI Exercise 6f92be COSC6210 · Database Systems 02 Nov 2026, 23:59 100 — Open Close Edit Brief Submissions › Delete"
+    },
+    {
+      "id": "UI-STU-NAV",
+      "desc": "Student nav per wireframe",
+      "pass": true,
+      "actual": "Workspace | Dashboard | Browse Courses | My Enrollments | My Program | Assignments | Grades | Account | Profile"
+    },
+    {
+      "id": "UI-student-browse",
+      "desc": "/app/browse renders with \"COSC6210\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-STU-ENROLL",
+      "desc": "Student enrolls from Browse Courses",
+      "pass": true,
+      "actual": "Enrolled in COSC6210."
+    },
+    {
+      "id": "UI-student-enrollments",
+      "desc": "/app/my-enrollments renders with \"COSC6210\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-student-program",
+      "desc": "/app/my-program renders with \"BSc in Computer Science\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-student-assignments",
+      "desc": "/app/my-assignments renders with \"UI Exercise 6f92be\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-STU-SUBMIT",
+      "desc": "Student uploads a submission (file input → MinIO)",
+      "pass": true,
+      "actual": "Submitted \"calc.zip\" for UI Exercise 6f92be."
+    },
+    {
+      "id": "UI-LECT-GRADE",
+      "desc": "Lecturer enters marks and Save All Grades",
+      "pass": true,
+      "actual": "1 grade saved — students notified."
+    },
+    {
+      "id": "UI-lecturer-roster",
+      "desc": "/app/students?offering=586c45ad-2190-47f2-9a61-4a0ab66911db renders with \"UI Student 6f92be\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-STU-GRADES",
+      "desc": "Grade appears on the student Grades screen",
+      "pass": true,
+      "actual": "82% (A)"
+    },
+    {
+      "id": "UI-STU-BELL",
+      "desc": "Notification bell shows unread count and the grade notification",
+      "pass": true,
+      "actual": "count 4"
+    },
+    {
+      "id": "UI-student-dashboard",
+      "desc": "/app/dashboard renders with \"Current GPA\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-student-profile",
+      "desc": "/app/profile renders with \"Notification Preferences\"",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-STU-PROFILE",
+      "desc": "Profile no longer shows the \"Not sent yet\" disclaimer",
+      "pass": true,
+      "actual": "ok"
+    },
+    {
+      "id": "UI-LOGOUT",
+      "desc": "Log Out from the UI revokes the old token at the Gateway",
+      "pass": true,
+      "actual": 401
+    },
+    {
+      "id": "UI-CONSOLE",
+      "desc": "No browser console errors across all screens",
+      "pass": true,
+      "actual": "none"
+    }
+  ]
+}

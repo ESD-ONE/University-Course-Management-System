@@ -1,0 +1,165 @@
+{
+  "at": "2026-10-29T16:23:48.284604",
+  "passed": 13,
+  "total": 13,
+  "results": [
+    {
+      "id": "C-01",
+      "description": "App pages carry the security headers and a strict CSP; nginx hides its version",
+      "expected": "all headers, script-src 'self', Server: nginx",
+      "actual": {
+        "missing": [],
+        "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://...",
+        "server": "nginx"
+      },
+      "pass": true
+    },
+    {
+      "id": "C-02",
+      "description": "Silent-SSO page works under the CSP: external script, no inline code",
+      "expected": "200, <script src=...>",
+      "actual": {
+        "status": 200,
+        "csp": true
+      },
+      "pass": true
+    },
+    {
+      "id": "C-03",
+      "description": "Production build has no inline event handlers (would be blocked by the CSP)",
+      "expected": "no onload=",
+      "actual": {
+        "status": 200,
+        "inlineHandlers": 0
+      },
+      "pass": true
+    },
+    {
+      "id": "C-04",
+      "description": "Keycloak admin console, master realm, health and metrics are not reachable from the site",
+      "expected": "all 404; ucms realm 200",
+      "actual": {
+        "/auth/admin/": 404,
+        "/auth/admin/master/console/": 404,
+        "/auth/realms/master/protocol/openid-connect/certs": 404,
+        "/auth/health/ready": 404,
+        "/auth/metrics": 404,
+        "ucms": 200
+      },
+      "pass": true
+    },
+    {
+      "id": "C-05",
+      "description": "Keycloak's sign-in page keeps its own CSP and headers \u2014 the app's aren't stacked on top",
+      "expected": "1 Keycloak CSP, no duplicated headers, + Permissions-Policy",
+      "actual": {
+        "status": 200,
+        "csp": [
+          "frame-src 'self'; frame-ancestors 'self'; object-src 'none';"
+        ],
+        "duplicated": [],
+        "referrer": [
+          "no-referrer"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "C-06",
+      "description": "Reads are spread over both base-service replicas, through both gateway replicas",
+      "expected": "24 x 200; each base replica > 0; 2 gateway upstreams",
+      "actual": {
+        "codes": [
+          200
+        ],
+        "perBaseReplica": {
+          "6f12b82d7e4f": 12,
+          "ee41eea0e537": 12
+        },
+        "gatewayUpstreams": [
+          "172.22.0.4:8080",
+          "172.22.0.5:8080"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "C-07",
+      "description": "Killing a base-service replica mid-traffic: requests keep succeeding on the other one",
+      "expected": "40 x 200 (retried on the healthy replica)",
+      "actual": {
+        "failures": [],
+        "requests": 40,
+        "slowest_s": 2.32,
+        "killed": "6f12b82d7e4f"
+      },
+      "pass": true
+    },
+    {
+      "id": "C-08",
+      "description": "A service with no running replica answers with the gateway's 503 fallback, quickly",
+      "expected": "503 SERVICE_UNAVAILABLE in < 5 s",
+      "actual": {
+        "status": 503,
+        "seconds": 0.05,
+        "body": "{\"service\":\"enrollment-service\",\"message\":\"This part of the system is temporarily unavaila"
+      },
+      "pass": true
+    },
+    {
+      "id": "C-09",
+      "description": "Gateway per-user limit, one bucket shared by both gateway replicas through Redis",
+      "expected": "~10-16 through (each with X-RateLimit-Remaining), the rest 429 RATE_LIMITED + Retry-After",
+      "actual": {
+        "through": 10,
+        "limited": 20,
+        "allCheckedInRedis": true,
+        "retryAfter": "1"
+      },
+      "pass": true
+    },
+    {
+      "id": "C-10",
+      "description": "nginx flood guard on Keycloak's password form (per IP, burst 30)",
+      "expected": "429s after ~30",
+      "actual": {
+        "first": 400,
+        "429s": 14
+      },
+      "pass": true
+    },
+    {
+      "id": "C-11",
+      "description": "2 MB body: refused by nginx on normal routes, accepted through to the upload route",
+      "expected": "413 / not 413",
+      "actual": {
+        "json": 413,
+        "upload": 503
+      },
+      "pass": true
+    },
+    {
+      "id": "C-12",
+      "description": "Network segmentation: web reaches neither DB nor services; gateway can't see the DB; services can",
+      "expected": "web/gateway: unresolvable; base: resolves",
+      "actual": {
+        "web->postgres": 2,
+        "web->base": 2,
+        "gateway->postgres": 2,
+        "base->postgres": 0
+      },
+      "pass": true
+    },
+    {
+      "id": "C-13",
+      "description": "Service containers run as a non-root user on a read-only filesystem with no capabilities",
+      "expected": "uid != 0, write refused, CapDrop [ALL]",
+      "actual": {
+        "uid": "100",
+        "write": "ot touch '/app/x': Read-only file system",
+        "inspect": "[ALL] true [no-new-privileges:true]"
+      },
+      "pass": true
+    }
+  ]
+}

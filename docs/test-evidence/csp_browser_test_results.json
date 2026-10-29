@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-29T11:14:24.942Z",
+  "passed": 5,
+  "total": 5,
+  "results": [
+    {
+      "id": "B-01",
+      "description": "The Sign in button reaches Keycloak's hosted login page",
+      "expected": "Keycloak form",
+      "actual": "/auth/realms/ucms/protocol/openid-connect/auth",
+      "pass": true
+    },
+    {
+      "id": "B-02",
+      "description": "After signing in, the app shell shows the signed-in user (token exchange + /users/me via the gateway)",
+      "expected": "user name shown",
+      "actual": {
+        "url": "/app/dashboard",
+        "name": "Seed Administrator"
+      },
+      "pass": true
+    },
+    {
+      "id": "B-03",
+      "description": "Reload keeps the session (keycloak-js silent check-sso iframe works under the CSP)",
+      "expected": "still signed in, no Sign in button",
+      "actual": "/app/dashboard",
+      "pass": true
+    },
+    {
+      "id": "B-04",
+      "description": "Web font (Inter) loads from fonts.gstatic.com under the CSP",
+      "expected": "Inter faces loaded",
+      "actual": {
+        "faces": 35,
+        "loaded": [
+          "400",
+          "500",
+          "700",
+          "800"
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "B-05",
+      "description": "No Content-Security-Policy violation anywhere in the flow",
+      "expected": "0 violations",
+      "actual": {
+        "violations": [],
+        "console": []
+      },
+      "pass": true
+    }
+  ]
+}

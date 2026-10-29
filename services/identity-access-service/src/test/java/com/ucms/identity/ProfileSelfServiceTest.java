@@ -7,16 +7,24 @@ import com.ucms.identity.domain.User;
 import com.ucms.identity.domain.UserStatus;
 import com.ucms.identity.repository.RoleRepository;
 import com.ucms.identity.repository.UserRepository;
+import com.ucms.identity.keycloak.KeycloakUserSync;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,6 +45,9 @@ class ProfileSelfServiceTest {
     @Autowired UserRepository userRepository;
     @Autowired RoleRepository roleRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @MockBean KeycloakUserSync keycloakUserSync;
+
+    private User user;
 
     private String token;
 
@@ -47,19 +58,14 @@ class ProfileSelfServiceTest {
         student.setKind(RoleKind.STUDENT);
         roleRepository.save(student);
 
-        User user = new User();
+        user = new User();
         user.setName("Original Name");
         user.setEmail("profile@test.local");
         user.setPasswordHash(passwordEncoder.encode("OriginalPass1!"));
         user.setRole(student);
         user.setStatus(UserStatus.ACTIVE);
-        userRepository.save(user);
-
-        String body = mockMvc.perform(post("/auth/login")
-                        .contentType("application/json")
-                        .content("{\"email\":\"profile@test.local\",\"password\":\"OriginalPass1!\"}"))
-                .andReturn().getResponse().getContentAsString();
-        token = objectMapper.readTree(body).get("token").asText();
+        user = userRepository.save(user);
+        token = KeycloakTestTokens.user(user.getId(), "STUDENT");
     }
 
     @Test
@@ -86,32 +92,40 @@ class ProfileSelfServiceTest {
     }
 
     @Test
-    void updatePassword_withCorrectCurrentPassword_succeedsAndNewPasswordWorks() throws Exception {
+    void updatePassword_withCorrectCurrentPassword_setsTheNewPasswordInKeycloak() throws Exception {
+        when(keycloakUserSync.passwordMatches(any(), eq("OriginalPass1!"))).thenReturn(true);
         mockMvc.perform(patch("/users/me/password")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content("{\"currentPassword\":\"OriginalPass1!\",\"newPassword\":\"BrandNewPass2!\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(post("/auth/login")
-                        .contentType("application/json")
-                        .content("{\"email\":\"profile@test.local\",\"password\":\"BrandNewPass2!\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").isNotEmpty());
+        verify(keycloakUserSync).passwordChanged(any(), eq("BrandNewPass2!"));
+        Assertions.assertTrue(passwordEncoder.matches("BrandNewPass2!",
+                userRepository.findById(user.getId()).orElseThrow().getPasswordHash()),
+                "the local hash is kept in step with Keycloak");
     }
 
     @Test
-    void updatePassword_withWrongCurrentPassword_isRejectedAndOldPasswordStillWorks() throws Exception {
+    void updatePassword_withWrongCurrentPassword_isRejectedAndNothingChanges() throws Exception {
+        when(keycloakUserSync.passwordMatches(any(), any())).thenReturn(false);
         mockMvc.perform(patch("/users/me/password")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content("{\"currentPassword\":\"WrongCurrent1!\",\"newPassword\":\"BrandNewPass2!\"}"))
                 .andExpect(status().isBadRequest());
 
-        mockMvc.perform(post("/auth/login")
+        verify(keycloakUserSync, never()).passwordChanged(any(), any());
+    }
+
+    @Test
+    void updateName_isMirroredToKeycloak() throws Exception {
+        mockMvc.perform(patch("/users/me")
+                        .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
-                        .content("{\"email\":\"profile@test.local\",\"password\":\"OriginalPass1!\"}"))
+                        .content("{\"name\":\"Updated Name\"}"))
                 .andExpect(status().isOk());
+        verify(keycloakUserSync).profileChanged(any());
     }
 
     @Test

@@ -1,138 +1,328 @@
-# Deploys the application services onto the Contabo host, joining the existing
-# `ucms_default` network created by the infra stack at /opt/ucms/docker-compose.infra.yml
-# (Postgres/Redis/RabbitMQ/MinIO). Services reach those by container name on the
-# internal network — the 127.0.0.1-only published ports are for the SSH-tunnelled
-# local dev workflow only, not used here.
+# Deploys the application services onto the Contabo host, joining the networks created by
+# the infra stack at /opt/ucms/docker-compose.infra.yml (Postgres/Redis/RabbitMQ/MinIO/
+# Keycloak): ucms_edge, ucms_app, ucms_data — see that file. Services reach the infra by
+# container name on their container ports (5432 / 6379 / 5672 / 9000); the
+# 127.0.0.1-only published ports are for the SSH-tunnelled local dev workflow only.
 #
-# One shared Postgres database ("ucms"), one schema per service — identity-access-service
-# connects with its own schema-scoped role (identity_access_svc), not the admin role.
-# See infra/init-schemas.sh and docs/architecture/DATA_GOVERNANCE.md.
+# One shared Postgres database ("ucms"), one schema per service — each service connects
+# with its own schema-scoped role. See infra/init-schemas.sh and
+# docs/architecture/DATA_GOVERNANCE.md.
 #
-# Every service below has a healthcheck against its own /actuator/health, and every
-# depends_on uses `condition: service_healthy` rather than the bare service-name form.
-# Docker Compose only waits for "container started" with the bare form — it does NOT
-# wait for the Java process inside to actually be ready, so on every redeploy the
-# gateway (and academic-structure-service's Role Catalog sync) came up 30-40s before
-# identity-access-service finished its Spring Boot boot, producing a window of
-# Connection-refused 500s/502s for anyone hitting the app right after a deploy. The
-# healthcheck + condition pair is what actually closes that window, instead of relying
-# on restart timing lining up.
+# Replicas: the busier services run two copies (override with *_REPLICAS in .env — each
+# copy is capped at 768 MB, so check the host's free memory first). Callers reach a
+# service by its Compose service name, which Docker's DNS answers with every replica;
+# the gateway and the services load-balance across them and skip unhealthy ones. See
+# docs/security-loadbalancing-ratelimit-plan.md.
 #
-# Usage on the server:
-#   cd /opt/ucms-app && docker compose --env-file .env up -d --build
+# Every service has a healthcheck against its own /actuator/health, and every depends_on
+# uses `condition: service_healthy` — Compose's bare form only waits for "container
+# started", not for Spring Boot to be ready, which produced a window of 502s after every
+# redeploy. RabbitMQ/Redis/MinIO/SMTP are deliberately NOT part of any health indicator:
+# they're best-effort side channels (events, revocation, files, email), and a blip in one
+# must not mark a service unhealthy and block the whole stack from starting.
+#
+# Required in the .env next to this file, in addition to the per-service DB passwords:
+# RABBITMQ_PASSWORD, REDIS_PASSWORD, MINIO_ROOT_PASSWORD, the seven KC_SVC_*_SECRET
+# Keycloak client secrets and KEYCLOAK_PUBLIC_URL (the same values the infra stack was
+# started with), and optionally SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD +
+# UCMS_MAIL_ENABLED=true to send real email.
+#
+# Keycloak (ucms-keycloak) is part of the infra stack, not this one, so no depends_on
+# can point at it; services start without it and fetch its signing keys on first use.
+#
+# Usage on the server — rolling, zero-downtime (starts new replicas, waits until they're
+# healthy, then retires the old ones):
+#   cd /opt/ucms-app/infra && ./rolling-deploy.sh
+# First deploy, or after changing replica counts: the same script works; so does
+#   docker compose --env-file .env -f docker-compose.deploy.yml up -d --build
+
+x-messaging: &messaging
+  RABBITMQ_HOST: ucms-rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: ucms_admin
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+
+# Every token is issued by Keycloak. Services reach it inside the network; the issuer is
+# the public URL browsers use (KEYCLOAK_PUBLIC_URL, e.g. https://esd.azhosting.fun/auth).
+x-keycloak: &keycloak
+  KEYCLOAK_URL: http://ucms-keycloak:8080/auth
+  KEYCLOAK_ISSUER: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL, e.g. https://esd.azhosting.fun/auth}/realms/ucms
+
+x-storage: &storage
+  MINIO_ENDPOINT: http://ucms-minio:9000
+  MINIO_ACCESS_KEY: ucms_admin
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+x-redis: &redis
+  REDIS_HOST: ucms-redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+# Every Java service: no root, no writable filesystem except /tmp, no Linux capabilities,
+# bounded memory/CPU, and long enough to finish in-flight requests when stopped.
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  mem_limit: 768m
+  cpus: 1.0
+  stop_grace_period: 30s
 
 services:
   identity-access-service:
+    <<: *hardening
     build:
       context: ../services/identity-access-service
-    container_name: ucms-identity-access-service
-    restart: unless-stopped
+    deploy:
+      replicas: ${IDENTITY_REPLICAS:-2}
     environment:
+      <<: [*messaging, *keycloak, *redis]
       DB_HOST: ucms-postgres
       DB_PORT: 5432
       DB_NAME: ucms
       DB_USER: identity_access_svc
       DB_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MINUTES: 60
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_IDENTITY_ACCESS_SECRET}
     healthcheck: &service-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
       interval: 5s
       timeout: 3s
-      retries: 20
-      start_period: 15s
-    networks:
-      - ucms_default
+      retries: 30
+      # Healthy as soon as it answers; failures in the first 2 minutes don't count, so a
+      # cold start of the whole stack (every JVM at once) isn't declared dead.
+      start_period: 120s
+    networks: [app, data]
 
-  reference-data-service:
+  base-service:
+    # Renamed from reference-data-service (infrastructure rename only). Requires the
+    # one-time manual schema/role rename before first deploy over an existing database —
+    # see docs/implementation-change-log.md.
+    <<: *hardening
     build:
-      context: ../services/reference-data-service
-    container_name: ucms-reference-data-service
-    restart: unless-stopped
+      context: ../services/base-service
+    deploy:
+      replicas: ${BASE_REPLICAS:-1}
     environment:
+      <<: *keycloak
       DB_HOST: ucms-postgres
       DB_PORT: 5432
       DB_NAME: ucms
-      DB_USER: reference_data_svc
-      DB_PASSWORD: ${REFERENCE_DATA_SVC_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      DB_USER: base_svc
+      DB_PASSWORD: ${BASE_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_BASE_SECRET}
+      # Department-deletion dependents check (gap-analysis-report.md G-05).
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
     healthcheck:
       <<: *service-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
-    networks:
-      - ucms_default
+    networks: [app, data]
 
   academic-structure-service:
+    <<: *hardening
     build:
       context: ../services/academic-structure-service
-    container_name: ucms-academic-structure-service
-    restart: unless-stopped
+    deploy:
+      replicas: ${ACADEMIC_REPLICAS:-2}
     environment:
+      <<: [*keycloak, *redis]
       DB_HOST: ucms-postgres
       DB_PORT: 5432
       DB_NAME: ucms
       DB_USER: academic_structure_svc
       DB_PASSWORD: ${ACADEMIC_STRUCTURE_SVC_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      # Periodic role/permission-catalog sync (docs/SYSTEM_ARCHITECTURE_REPORT.md
-      # section 12.3) — container-name reachable on the shared internal network.
-      IDENTITY_SERVICE_URI: http://ucms-identity-access-service:8081
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ACADEMIC_STRUCTURE_SECRET}
+      # Periodic role/permission-catalog sync; scope assignments (cached in Redis).
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
     healthcheck:
       <<: *service-healthcheck
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
     depends_on:
       identity-access-service:
         condition: service_healthy
-    networks:
-      - ucms_default
+    networks: [app, data]
 
-  gateway:
+  enrollment-service:
+    <<: *hardening
     build:
-      context: ../services/gateway
-    container_name: ucms-gateway
-    restart: unless-stopped
+      context: ../services/enrollment-service
+    deploy:
+      replicas: ${ENROLLMENT_REPLICAS:-2}
     environment:
-      IDENTITY_SERVICE_URI: http://ucms-identity-access-service:8081
-      REFERENCE_DATA_SERVICE_URI: http://ucms-reference-data-service:8083
-      ACADEMIC_STRUCTURE_SERVICE_URI: http://ucms-academic-structure-service:8084
-      # Defaults to http://localhost:4200 otherwise, so the browser's request from the
-      # directly-exposed frontend (see web service below) gets rejected with 403.
-      CORS_ALLOWED_ORIGIN: http://169.58.12.239:8091
+      <<: [*messaging, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: enrollment_svc
+      DB_PASSWORD: ${ENROLLMENT_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ENROLLMENT_SECRET}
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
     healthcheck:
       <<: *service-healthcheck
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
-    ports:
-      - "127.0.0.1:8090:8080"
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/actuator/health"]
+    depends_on:
+      academic-structure-service:
+        condition: service_healthy
+    networks: [app, data]
+
+  assignment-grading-service:
+    <<: *hardening
+    build:
+      context: ../services/assignment-grading-service
+    deploy:
+      replicas: ${GRADING_REPLICAS:-1}
+    environment:
+      <<: [*messaging, *storage, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: assignment_grading_svc
+      DB_PASSWORD: ${ASSIGNMENT_GRADING_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ASSIGNMENT_GRADING_SECRET}
+      MINIO_BUCKET: ucms-assignments
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      BASE_SERVICE_URI: http://base-service:8083
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/actuator/health"]
+    depends_on:
+      enrollment-service:
+        condition: service_healthy
+    networks: [app, data]
+
+  notification-service:
+    <<: *hardening
+    build:
+      context: ../services/notification-service
+    deploy:
+      replicas: ${NOTIFICATION_REPLICAS:-2}
+    environment:
+      # Redis: live pushes are broadcast to every replica (LivePushFanout).
+      <<: [*messaging, *keycloak, *redis]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: notification_svc
+      DB_PASSWORD: ${NOTIFICATION_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_NOTIFICATION_SECRET}
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      UCMS_MAIL_ENABLED: ${UCMS_MAIL_ENABLED:-false}
+      UCMS_MAIL_FROM: ${UCMS_MAIL_FROM:-no-reply@ucms.local}
+      UCMS_APP_URL: ${UCMS_APP_URL:-https://esd.azhosting.fun}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/actuator/health"]
     depends_on:
       identity-access-service:
         condition: service_healthy
-      reference-data-service:
+    networks: [app, data]
+
+  analytics-reporting-service:
+    <<: *hardening
+    build:
+      context: ../services/analytics-reporting-service
+    deploy:
+      replicas: ${ANALYTICS_REPLICAS:-1}
+    environment:
+      <<: [*messaging, *storage, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: analytics_svc
+      DB_PASSWORD: ${ANALYTICS_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ANALYTICS_REPORTING_SECRET}
+      MINIO_REPORTS_BUCKET: ucms-reports
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      ASSIGNMENT_GRADING_SERVICE_URI: http://assignment-grading-service:8086
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8088/actuator/health"]
+    depends_on:
+      assignment-grading-service:
+        condition: service_healthy
+    networks: [app, data]
+
+  gateway:
+    <<: *hardening
+    build:
+      context: ../services/gateway
+    deploy:
+      replicas: ${GATEWAY_REPLICAS:-2}
+    environment:
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      BASE_SERVICE_URI: http://base-service:8083
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      ASSIGNMENT_GRADING_SERVICE_URI: http://assignment-grading-service:8086
+      NOTIFICATION_SERVICE_URI: http://notification-service:8087
+      ANALYTICS_REPORTING_SERVICE_URI: http://analytics-reporting-service:8088
+      # Comma-separated; Spring binds it to a list. Only the HTTPS site: the app is no
+      # longer reachable over plain HTTP on the server's address.
+      CORS_ALLOWED_ORIGIN: https://esd.azhosting.fun
+      # Token backstop (G-18), logout revocation (G-11) and the shared rate-limit buckets.
+      <<: [*keycloak, *redis]
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+    # No published port: with several replicas there's no single one to publish. The SSH
+    # tunnel reaches the API through the web container instead (127.0.0.1:8091/api/).
+    depends_on:
+      identity-access-service:
+        condition: service_healthy
+      base-service:
         condition: service_healthy
       academic-structure-service:
         condition: service_healthy
-    networks:
-      - ucms_default
+      enrollment-service:
+        condition: service_healthy
+      assignment-grading-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      analytics-reporting-service:
+        condition: service_healthy
+    networks: [edge, app]
 
   web:
     build:
       context: ../web
     container_name: ucms-web
     restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    security_opt: ["no-new-privileges:true"]
+    # nginx's master process starts as root to bind port 80 and then runs its workers as
+    # the unprivileged "nginx" user; these are the only capabilities that takes.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
+    mem_limit: 256m
     ports:
-      # Exposed directly on the host's public IP, not loopback-only — this host has
-      # no DNS/TLS set up for UCMS yet, and ports 80/443 already belong to another
-      # project's nginx-proxy, so this is plain HTTP on a non-standard port:
-      #   http://<host>:8091
-      # Requires `ufw allow 8091/tcp` on the host (see docs/LOGIN_USERS.md).
-      - "8091:80"
+      # Loopback only: the host's shared nginx terminates HTTPS for esd.azhosting.fun and
+      # proxies here. Nothing reaches the app over plain HTTP from outside.
+      - "127.0.0.1:8091:80"
     depends_on:
       gateway:
-        # So the frontend never comes up (or restarts) fronting a gateway that's still
-        # 502-ing because a backend behind it hasn't finished starting yet.
         condition: service_healthy
-    networks:
-      - ucms_default
+    networks: [edge]
 
 networks:
-  ucms_default:
+  edge:
+    name: ucms_edge
+    external: true
+  app:
+    name: ucms_app
+    external: true
+  data:
+    name: ucms_data
     external: true

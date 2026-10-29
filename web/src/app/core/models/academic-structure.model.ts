@@ -209,3 +209,31 @@ export interface UpdateDegreeProgramAcademicYearRequest {
   totalCredits?: number | null;
   status: DegreeProgramYearStatus;
 }
+
+/** One course offering (a course's run in a specific academic year), resolved —
+ *  academic-structure-service's GET /course-offerings. */
+export interface CourseOfferingResponse {
+  id: string;
+  courseId: string;
+  catalogCourseId: string;
+  code: string;
+  name: string;
+  credits: number;
+  requirementType: string | null;
+  degreeProgramId: string;
+  degreeProgramCode: string;
+  degreeProgramName: string;
+  departmentId: string;
+  yearOfStudy: number;
+  academicYearId: string;
+  academicYearName: string;
+  academicYearStatus: string;
+  semesterId: string | null;
+  semesterName: string | null;
+  enrollmentOpenAt: string | null;
+  enrollmentCloseAt: string | null;
+  capacity: number;
+  lecturerId: string | null;
+  status: CourseStatus;
+  openForEnrollment: boolean;
+}

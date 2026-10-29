@@ -17,8 +17,14 @@ public class User extends Auditable {
     @Column(nullable = false, unique = true)
     private String email;
 
+    /** Kept in step with Keycloak (which verifies sign-ins) so an account that has never
+     *  been linked can be migrated with its existing password — see KeycloakUserSync. */
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
+
+    /** The mirrored Keycloak user; null until KeycloakReconciler links it. */
+    @Column(name = "keycloak_id", unique = true)
+    private UUID keycloakId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false)
@@ -50,6 +56,8 @@ public class User extends Auditable {
     public void setEmail(String email) { this.email = email; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public UUID getKeycloakId() { return keycloakId; }
+    public void setKeycloakId(UUID keycloakId) { this.keycloakId = keycloakId; }
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
     public UserStatus getStatus() { return status; }

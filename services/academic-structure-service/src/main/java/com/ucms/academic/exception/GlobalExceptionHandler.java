@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(com.ucms.academic.security.AssignmentsUnavailableException.class)
+    public ResponseEntity<Object> handleAssignmentsUnavailable(RuntimeException ex) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
     public ResponseEntity<Object> handleNotFound(jakarta.persistence.EntityNotFoundException ex) {
         return error(HttpStatus.NOT_FOUND, ex.getMessage());
@@ -39,7 +44,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Object> handleValidation(MethodArgumentNotValidException ex) {
-        return error(HttpStatus.BAD_REQUEST, "Validation failed: " + ex.getMessage());
+        // The field's own message only: ex.getMessage() spells out internal class and
+        // method signatures, which neither belong in front of users nor on the wire.
+        String detail = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getDefaultMessage() != null ? f.getDefaultMessage() : f.getField() + " is invalid")
+                .findFirst().orElse("invalid request");
+        return error(HttpStatus.BAD_REQUEST, "Validation failed: " + detail);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

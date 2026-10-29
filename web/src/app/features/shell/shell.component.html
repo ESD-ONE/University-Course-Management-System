@@ -5,6 +5,32 @@
     <div class="spacer"></div>
 
     @if (auth.currentUser(); as user) {
+      <div class="bell-wrap">
+        <button class="bell-btn" aria-label="Notifications" (click)="toggleBell()">
+          🔔
+          @if (notifications.unreadCount() > 0) {
+            <span class="bell-count">{{ notifications.unreadCount() > 99 ? '99+' : notifications.unreadCount() }}</span>
+          }
+        </button>
+        @if (bellOpen()) {
+          <div class="bell-dropdown">
+            <div class="bell-head">
+              <b>Notifications</b>
+              @if (notifications.unreadCount() > 0) { <button class="btn-link" (click)="markAllRead()">Mark all read</button> }
+            </div>
+            @for (n of notifications.recent(); track n.id) {
+              <button class="bell-item" [class.unread]="!n.read" (click)="open(n)">
+                <div class="t">{{ n.title }}</div>
+                <div class="b">{{ n.body }}</div>
+                <div class="d">{{ n.createdAt | date: 'dd MMM, HH:mm' }}</div>
+              </button>
+            } @empty {
+              <div class="bell-empty">You're all caught up.</div>
+            }
+          </div>
+        }
+      </div>
+
       <div class="user-menu-wrap">
         <button class="user-btn" (click)="toggleUserMenu()">
           <span class="role-pill">{{ user.role }}</span>
@@ -23,45 +49,46 @@
 
   <div class="main">
     <nav class="sidebar">
-      <div class="group-label">General</div>
-      <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active">
-        <span class="dot"></span> Dashboard
-      </a>
-
-      @if (auth.currentUser()?.role === 'ADMIN') {
-        <div class="group-label">Administration</div>
-        <a class="navitem" routerLink="/app/users" routerLinkActive="active">
-          <span class="dot"></span> Users
-        </a>
-        <a class="navitem" routerLink="/app/academic-calendar" routerLinkActive="active">
-          <span class="dot"></span> Academic Calendar
-        </a>
-        <a class="navitem" routerLink="/app/program-management" routerLinkActive="active">
-          <span class="dot"></span> Program Management
-        </a>
-        <a class="navitem" routerLink="/app/courses" routerLinkActive="active">
-          <span class="dot"></span> Courses
-        </a>
-        <a class="navitem" routerLink="/app/reference-data" routerLinkActive="active">
-          <span class="dot"></span> Reference Data
-        </a>
+      @switch (auth.currentUser()?.role) {
+        @case ('ADMIN') {
+          <div class="group-label">Workspace</div>
+          <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active"><span class="dot"></span> Dashboard</a>
+          <a class="navitem" routerLink="/app/users" routerLinkActive="active"><span class="dot"></span> Users</a>
+          <a class="navitem" routerLink="/app/academic-calendar" routerLinkActive="active"><span class="dot"></span> Academic Calendar</a>
+          <a class="navitem" routerLink="/app/program-management" routerLinkActive="active"><span class="dot"></span> Program Management</a>
+          <a class="navitem" routerLink="/app/courses" routerLinkActive="active"><span class="dot"></span> Courses</a>
+          <a class="navitem" routerLink="/app/registrations" routerLinkActive="active"><span class="dot"></span> Registrations</a>
+          <div class="group-label">System</div>
+          <a class="navitem" routerLink="/app/roles" routerLinkActive="active"><span class="dot"></span> Roles &amp; Permissions</a>
+          <a class="navitem" routerLink="/app/reference-data" routerLinkActive="active"><span class="dot"></span> Reference Data</a>
+          <a class="navitem" routerLink="/app/reports" routerLinkActive="active"><span class="dot"></span> Reports</a>
+        }
+        @case ('LECTURER') {
+          <div class="group-label">Workspace</div>
+          <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active"><span class="dot"></span> Dashboard</a>
+          <a class="navitem" routerLink="/app/my-courses" routerLinkActive="active"><span class="dot"></span> My Courses</a>
+          <a class="navitem" routerLink="/app/assignments" routerLinkActive="active"><span class="dot"></span> Assignments</a>
+          <a class="navitem" routerLink="/app/grading" routerLinkActive="active"><span class="dot"></span> Grading</a>
+          <a class="navitem" routerLink="/app/students" routerLinkActive="active"><span class="dot"></span> Students</a>
+          <a class="navitem" routerLink="/app/reference-degree-details" routerLinkActive="active"><span class="dot"></span> Reference Degree Details</a>
+          <div class="group-label">Admin Tools</div>
+          <a class="navitem" routerLink="/app/registrations" routerLinkActive="active"><span class="dot"></span> Registrations</a>
+          @if (auth.hasDepartmentScope()) {
+            <a class="navitem" routerLink="/app/program-management" routerLinkActive="active"><span class="dot"></span> Program Management</a>
+          }
+        }
+        @default {
+          <div class="group-label">Workspace</div>
+          <a class="navitem" routerLink="/app/dashboard" routerLinkActive="active"><span class="dot"></span> Dashboard</a>
+          <a class="navitem" routerLink="/app/browse" routerLinkActive="active"><span class="dot"></span> Browse Courses</a>
+          <a class="navitem" routerLink="/app/my-enrollments" routerLinkActive="active"><span class="dot"></span> My Enrollments</a>
+          <a class="navitem" routerLink="/app/my-program" routerLinkActive="active"><span class="dot"></span> My Program</a>
+          <a class="navitem" routerLink="/app/my-assignments" routerLinkActive="active"><span class="dot"></span> Assignments</a>
+          <a class="navitem" routerLink="/app/grades" routerLinkActive="active"><span class="dot"></span> Grades</a>
+        }
       }
-
-      @if (auth.currentUser()?.role === 'LECTURER') {
-        <div class="group-label">Workspace</div>
-        <a class="navitem" routerLink="/app/reference-degree-details" routerLinkActive="active">
-          <span class="dot"></span> Reference Degree Details
-        </a>
-        <a class="navitem" routerLink="/app/my-courses" routerLinkActive="active">
-          <span class="dot"></span> My Courses
-        </a>
-      }
-
-      <div class="group-label">Coming soon</div>
-      <span class="navitem placeholder">Enrollment<span class="badge-soon">Soon</span></span>
-      <span class="navitem placeholder">Assignments &amp; Grading<span class="badge-soon">Soon</span></span>
-      <span class="navitem placeholder">Analytics &amp; Reports<span class="badge-soon">Soon</span></span>
-      <span class="navitem placeholder">Roles &amp; Permissions<span class="badge-soon">Soon</span></span>
+      <div class="group-label">Account</div>
+      <a class="navitem" routerLink="/app/profile" routerLinkActive="active"><span class="dot"></span> Profile</a>
     </nav>
 
     <div class="content">
@@ -69,3 +96,7 @@
     </div>
   </div>
 </div>
+
+@if (liveToast(); as n) {
+  <div class="toast" style="cursor:pointer;" (click)="open(n)"><b>{{ n.title }}</b><div style="font-weight:400;font-size:12px;">{{ n.body }}</div></div>
+}

@@ -1,0 +1,131 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Registrations</div>
+    <h1 class="page-title">Register a Student</h1>
+    <p class="page-sub">
+      @if (isAdmin()) { Register students into a degree program or a specific course on their behalf. }
+      @else { Register students into the courses you teach. }
+    </p>
+  </div>
+</div>
+
+<div class="grid g2" style="align-items:start;">
+  <div class="card">
+    @if (isAdmin()) {
+      <div class="user-tabs" style="margin-bottom:16px;">
+        <button class="user-tab" [class.active]="tab() === 'program'" (click)="tab.set('program'); formError.set(null)">Program Registration</button>
+        <button class="user-tab" [class.active]="tab() === 'course'" (click)="tab.set('course'); formError.set(null)">Course Registration</button>
+      </div>
+    }
+
+    @if (formError()) { <div class="modal-error" style="margin-bottom:12px;">{{ formError() }}</div> }
+
+    <div class="field">
+      <label for="rgSearch">Find student</label>
+      <input id="rgSearch" type="text" placeholder="Search by name or email" [ngModel]="studentQuery()" (ngModelChange)="onSearch($event)" />
+    </div>
+    <div class="field">
+      <label for="rgStudent">Student</label>
+      <select id="rgStudent" [ngModel]="studentId()" (ngModelChange)="studentId.set($event)">
+        <option value="">Choose a student…</option>
+        @for (s of students(); track s.id) {
+          <option [value]="s.id">{{ s.name }} · {{ s.studentNumber ?? 'no ID yet' }}</option>
+        }
+      </select>
+    </div>
+
+    @if (tab() === 'program') {
+      @if (selectedStudent()?.activeProgramName) {
+        <div class="info-strip warn">{{ selectedStudent()?.name }} is already registered in <b>{{ selectedStudent()?.activeProgramName }}</b> — withdraw that registration first to transfer.</div>
+      }
+      <div class="field-row">
+        <div class="field">
+          <label for="rgProgram">Degree Program</label>
+          <select id="rgProgram" [ngModel]="programId()" (ngModelChange)="programId.set($event); yearOfStudy.set(1)">
+            @for (p of programs(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label for="rgYear">Intake Academic Year</label>
+          <select id="rgYear" [ngModel]="intakeYearId()" (ngModelChange)="intakeYearId.set($event)">
+            @for (y of years(); track y.id) { <option [value]="y.id">{{ y.name }}</option> }
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="rgYos">Current Year of Study</label>
+        <select id="rgYos" [ngModel]="yearOfStudy()" (ngModelChange)="yearOfStudy.set(+$event)">
+          @for (n of durationOptions(); track n) { <option [value]="n">Year {{ n }}</option> }
+        </select>
+      </div>
+      <button class="btn btn-primary" [disabled]="submitting() || !studentId() || !programId()" (click)="registerProgram()">
+        {{ submitting() ? 'Registering…' : 'Register to Program' }}
+      </button>
+    } @else {
+      @if (selectedStudent(); as s) {
+        @if (s.activeProgramName) {
+          <div class="info-strip">{{ s.name }} is in <b>{{ s.activeProgramName }}</b> — that program's courses are listed first.</div>
+        } @else {
+          <div class="info-strip warn">{{ s.name }} isn't registered to a program yet. They can still be registered into an individual course.</div>
+        }
+      }
+      <div class="field">
+        <label for="rgOffering">Course</label>
+        <select id="rgOffering" [ngModel]="offeringId()" (ngModelChange)="offeringId.set($event)" [disabled]="!studentId()">
+          <option value="">{{ studentId() ? 'Choose a course…' : 'Choose a student first' }}</option>
+          @if (groupedOfferings().program.length) {
+            <optgroup [label]="(selectedStudent()?.activeProgramName ?? '') + ' curriculum'">
+              @for (o of groupedOfferings().program; track o.id) {
+                <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }}{{ o.semesterName ? ', ' + o.semesterName : '' }})</option>
+              }
+            </optgroup>
+          }
+          <optgroup label="Other courses">
+            @for (o of groupedOfferings().other; track o.id) {
+              <option [value]="o.id">{{ o.code }} — {{ o.name }} · {{ o.degreeProgramCode }} ({{ o.academicYearName }})</option>
+            }
+          </optgroup>
+        </select>
+      </div>
+      @if (waitlistOffer()) {
+        <div class="info-strip warn">This course is full. <button class="btn btn-link" (click)="registerCourse(true)">Add to the waitlist instead</button></div>
+      }
+      <button class="btn btn-primary" [disabled]="submitting() || !studentId() || !offeringId()" (click)="registerCourse()">
+        {{ submitting() ? 'Registering…' : 'Register to Course' }}
+      </button>
+    }
+  </div>
+
+  <div class="note-box">
+    <b>Why register manually?</b>
+    • Late admissions and mid-year transfers between programs.<br />
+    • Corrections to a student's program or course record.<br />
+    • Self-service enrollment (Browse Courses) stays the default path.<br /><br />
+    <b>Who can do what</b><br />
+    Administrators register students into programs and any course. Lecturers register students into the courses they teach — even after the enrollment window closes, for late admissions.
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+  <h3 style="margin:0 0 16px;font-size:15px;">Recent Registrations</h3>
+  <table>
+    <thead><tr><th>Student</th><th>Registered Into</th><th>Action</th><th>Registered By</th><th>Date</th></tr></thead>
+    <tbody>
+      @for (r of recent(); track r.id) {
+        <tr>
+          <td class="row-avatar"><div class="avatar" style="width:26px;height:26px;font-size:10px;">{{ initials(r.studentName) }}</div><span class="cell-name">{{ r.studentName ?? 'Unknown student' }}</span></td>
+          <td class="cell-soft">{{ r.targetLabel ?? '—' }}</td>
+          <td><span class="badge" [class.b-success]="r.action === 'COURSE_ENROLL' || r.action === 'PROGRAM_REGISTER' || r.action === 'WAITLIST_PROMOTED'" [class.b-gold]="r.action === 'COURSE_WAITLIST'" [class.b-ink]="r.action === 'COURSE_DROP' || r.action === 'PROGRAM_UPDATE'">{{ actionLabel(r.action) }}</span></td>
+          <td class="cell-soft">{{ r.actorName }} · {{ r.actorRole | titlecase }}</td>
+          <td class="cell-faint">{{ r.createdAt | date: 'dd MMM y, HH:mm' }}</td>
+        </tr>
+      } @empty {
+        <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">No registrations yet.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

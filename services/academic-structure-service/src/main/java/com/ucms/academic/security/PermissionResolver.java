@@ -16,6 +16,9 @@ import java.util.UUID;
  * Course/Course-Module scope types aren't resolved here yet — course_modules don't
  * exist (Phase 5), so only GLOBAL and DEPARTMENT scoping is live in this phase; COURSE
  * scope assignments still only matter via Course.lecturerId's existing literal check.
+ *
+ * G-09: per-assignment permission overrides (AssignmentClaim.overrides()) ARE now
+ * consulted — see effectiveGrant() below — rather than deferred.
  */
 @Component
 public class PermissionResolver {
@@ -63,12 +66,19 @@ public class PermissionResolver {
         return false;
     }
 
-    /** Resolves the role's baseline grant for (module, actionKey). Per-assignment
-     * overrides are keyed by permission id (not module/actionKey) and are deliberately
-     * not consulted at DEPARTMENT/GLOBAL scope in this phase — they matter once
-     * COURSE_MODULE-scoped assignments exist (Phase 5), where a specific permission id
-     * is already in hand at the call site. */
+    /** Resolves the role's baseline grant for (module, actionKey), then consults this
+     * assignment's per-permission overrides (G-09): overrides are keyed by permission
+     * id rather than module/actionKey, so the pair is first resolved to a permission id
+     * via roleCatalog.permissionIdOf(...). If this assignment's overrides map has an
+     * entry for that permission id, it takes precedence over the baseline — true
+     * overrides a false baseline denial, false overrides a true baseline grant. No
+     * entry (or an unresolvable permission id) falls back to the baseline unchanged. */
     private boolean effectiveGrant(AssignmentClaim a, String module, String actionKey) {
-        return roleCatalog.baselineGrant(a.roleId(), module, actionKey);
+        boolean baseline = roleCatalog.baselineGrant(a.roleId(), module, actionKey);
+        UUID permissionId = roleCatalog.permissionIdOf(module, actionKey);
+        if (permissionId != null && a.overrides() != null && a.overrides().containsKey(permissionId)) {
+            return a.overrides().get(permissionId);
+        }
+        return baseline;
     }
 }

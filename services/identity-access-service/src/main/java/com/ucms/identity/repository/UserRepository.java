@@ -12,6 +12,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     Optional<User> findByEmailAndDeletedAtIsNull(String email);
 
+    /** Accounts not yet mirrored to Keycloak — see KeycloakReconciler. */
+    java.util.List<User> findByKeycloakIdIsNullAndDeletedAtIsNull();
+
     boolean existsByStudentId(String studentId);
 
     @Query("select count(u) from User u where u.deletedAt is null")

@@ -6,8 +6,8 @@
 
 | | URL | Notes |
 |---|---|---|
-| Frontend | `http://169.58.12.239:8091` | `ucms-web` container, exposed directly (plain HTTP, no domain/TLS yet) — no SSH tunnel needed |
-| Backend (Gateway) | `http://localhost:8090` (via tunnel) | still loopback-only — see below |
+| Frontend | `https://esd.azhosting.fun` | the only public way in (since the 2026-10-29 hardening, `ucms-web` binds 127.0.0.1:8091 only) |
+| Backend API | `http://localhost:8091/api/...` (via tunnel) | through the web container, which load-balances over the gateway replicas; the gateway has no published port any more |
 | Jenkins | `http://localhost:8080` (via tunnel) | still loopback-only — multibranch pipeline job at `/job/UCMS/` |
 
 The frontend's container port was moved from `127.0.0.1:8091` to `8091` (all interfaces) and
@@ -16,8 +16,11 @@ Jenkins are still loopback-only — ports 80/443 are already owned by an unrelat
 nginx, so nothing else has a public port yet. Reach those two through an SSH tunnel:
 
 ```bash
-ssh -L 8090:127.0.0.1:8090 -L 8080:127.0.0.1:8080 root@169.58.12.239
+ssh -L 8091:127.0.0.1:8091 -L 8080:127.0.0.1:8080 root@169.58.12.239
 ```
+
+> Since the security hardening (`implementation-change-log.md` Part 4) the paragraph below
+> is history: port 8091 is loopback-only again and the `ufw` rule for it is to be removed.
 
 Jenkins requires login — it already had an admin account configured before this project
 touched the box, and **that login is not known/available here**; the `UCMS` job was set up by

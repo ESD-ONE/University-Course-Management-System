@@ -1,15 +1,35 @@
 server:
   port: 8084
+  # Finish in-flight requests on shutdown, so a rolling redeploy drops nothing.
+  shutdown: graceful
 
 spring:
   application:
     name: academic-structure-service
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: false
+      retry:
+        # Reads only (the default): a failed GET is tried once more on another replica.
+        max-retries-on-next-service-instance: 1
+    discovery:
+      client:
+        health-indicator:
+          enabled: false
+        composite-indicator:
+          enabled: false
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:ucms}
     username: ${DB_USER:academic_structure_svc}
     password: ${DB_PASSWORD:}
+    # Several replicas share one Postgres (max_connections 200): keep each pool small.
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:5}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -21,6 +41,12 @@ spring:
         # ever reads/writes its own schema, and its DB role has no grants outside
         # it. See docs/architecture/DATA_GOVERNANCE.md.
         default_schema: academic
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -31,9 +57,24 @@ spring:
     create-schemas: false
 
 ucms:
-  jwt:
-    secret: ${JWT_SECRET:}
-  identity-service-uri: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+  # Keycloak issues every token (docs/keycloak-integration.md). url is how this service
+  # reaches it; issuer is the public URL browsers use, which tokens carry as "iss".
+  keycloak:
+    url: ${KEYCLOAK_URL:http://localhost:8180/auth}
+    realm: ${KEYCLOAK_REALM:ucms}
+    issuer: ${KEYCLOAK_ISSUER:}
+    client-id: svc-academic-structure
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}
+    service-role: svc:academic
+  identity-service-uri: http://identity-access-service
+  # The *-uri values above are load-balanced service names, resolved here; a Docker
+  # service name resolves to every replica (see config/DnsDiscoveryClient).
+  discovery:
+    services:
+      identity-access-service: ${IDENTITY_SERVICE_URI:http://localhost:8081}
+  # Users' scope assignments, cached for the access-token lifetime (see AssignmentCache).
+  assignment-cache:
+    ttl-seconds: 300
 
 management:
   endpoints:
@@ -43,3 +84,12 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  # Redis only caches assignments here; an outage must not fail the healthcheck.
+  health:
+    redis:
+      enabled: false
+
+logging:
+  pattern:
+    # Every line carries the X-Request-Id of the request it belongs to.
+    level: "%5p [%X{requestId:-}]"

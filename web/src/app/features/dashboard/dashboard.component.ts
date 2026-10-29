@@ -1,46 +1,17 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { AcademicYearResponse, CourseResponse, DegreeProgramResponse } from '../../core/models/academic-structure.model';
-import {
-  CourseCategoryResponse,
-  DepartmentResponse,
-  FacultyResponse,
-  GradingScaleResponse,
-} from '../../core/models/reference-data.model';
-import { UserSummary } from '../../core/models/user.model';
-import { AcademicStructureService } from '../../core/services/academic-structure.service';
+import { AdminDashboard, LecturerDashboard, StudentDashboard } from '../../core/models/analytics.model';
+import { REGISTRATION_ACTION_LABELS } from '../../core/models/enrollment.model';
+import { AnalyticsService } from '../../core/services/analytics.service';
 import { AuthService } from '../../core/services/auth.service';
-import { ReferenceDataService } from '../../core/services/reference-data.service';
-import { UserService } from '../../core/services/user.service';
-
-interface ChartSegment {
-  label: string;
-  value: number;
-  color: string;
-}
-
-interface BarDatum {
-  label: string;
-  value: number;
-}
-
-interface ReferenceDataSummary {
-  label: string;
-  total: number;
-  active: number;
-  inactive: number;
-}
+import { donutGradient, errorMessage, initials, percentOf, Segment, withColors } from '../../shared/ui';
 
 /**
- * Role-aware overview: admin sees institution-wide stats (users, academic years,
- * degrees, courses, and every Reference Data type's active/inactive breakdown) with
- * CSS-only charts (donut + bar — no chart library dependency, see styles.scss's
- * ".donut-chart"/".bar-chart-*" rules); lecturer sees their own teaching load.
- * Everything here is read from already-existing endpoints — no new backend
- * aggregation was needed. Academic years are NOT mutually exclusive — degree programs
- * run 3-4 years, so several years can be concurrently ACTIVE (see
- * AcademicCalendarService's Javadoc) — this shows a count, not a single "the" year.
+ * Role dashboards from analytics-reporting-service (wireframe adminDashboard /
+ * lecturerDashboard / studentDashboard). The admin view is a precomputed snapshot
+ * (refreshed every few minutes and on enrollment/grading events); lecturer and student
+ * views are computed live for the signed-in user.
  */
 @Component({
   selector: 'app-dashboard',
@@ -48,106 +19,86 @@ interface ReferenceDataSummary {
   imports: [CommonModule, RouterLink],
   templateUrl: './dashboard.component.html',
 })
-export class DashboardComponent implements OnInit {
-  private userService = inject(UserService);
-  private academicStructureService = inject(AcademicStructureService);
-  private referenceDataService = inject(ReferenceDataService);
+export class DashboardComponent {
   readonly auth = inject(AuthService);
+  private analytics = inject(AnalyticsService);
 
-  readonly isAdmin = computed(() => this.auth.currentUser()?.role === 'ADMIN');
+  readonly role = computed(() => this.auth.currentUser()?.role ?? 'STUDENT');
   readonly loading = signal(true);
+  readonly loadError = signal<string | null>(null);
+  readonly refreshing = signal(false);
 
-  readonly userSummary = signal<UserSummary | null>(null);
-  readonly academicYears = signal<AcademicYearResponse[]>([]);
-  readonly degreePrograms = signal<DegreeProgramResponse[]>([]);
-  readonly courses = signal<CourseResponse[]>([]);
-  readonly faculties = signal<FacultyResponse[]>([]);
-  readonly departments = signal<DepartmentResponse[]>([]);
-  readonly gradingScales = signal<GradingScaleResponse[]>([]);
-  readonly courseCategories = signal<CourseCategoryResponse[]>([]);
+  readonly admin = signal<AdminDashboard | null>(null);
+  readonly lecturer = signal<LecturerDashboard | null>(null);
+  readonly student = signal<StudentDashboard | null>(null);
 
-  readonly activeYears = computed(() => this.academicYears().filter((y) => y.status === 'ACTIVE'));
-  readonly activeYearNames = computed(() => this.activeYears().map((y) => y.name).join(', '));
+  readonly donutGradient = donutGradient;
+  readonly percentOf = percentOf;
+  readonly initials = initials;
+  readonly actionLabel = (a: string) => REGISTRATION_ACTION_LABELS[a] ?? a;
 
-  readonly publishedCount = computed(() => this.courses().filter((c) => c.status === 'PUBLISHED').length);
-  readonly draftCount = computed(() => this.courses().filter((c) => c.status === 'DRAFT').length);
-
-  readonly courseStatusSegments = computed<ChartSegment[]>(() => [
-    { label: 'Published', value: this.publishedCount(), color: 'var(--success)' },
-    { label: 'Draft', value: this.draftCount(), color: 'var(--ink-faint)' },
-  ]);
-
-  readonly userRoleSegments = computed<ChartSegment[]>(() => {
-    const s = this.userSummary();
-    if (!s) return [];
-    return [
-      { label: 'Students', value: s.students, color: 'var(--accent)' },
-      { label: 'Staff', value: s.staff, color: 'var(--gold)' },
-    ];
+  readonly programSegments = computed<Segment[]>(() => withColors(this.admin()?.studentsByProgram ?? []));
+  readonly trendMax = computed(() => Math.max(1, ...(this.admin()?.enrollmentTrend ?? []).map((p) => p.value)));
+  readonly topMax = computed(() => Math.max(1, ...(this.admin()?.topCourses ?? []).map((c) => c.enrolled)));
+  readonly gradingSegments = computed<Segment[]>(() => {
+    const d = this.lecturer();
+    return d
+      ? [
+          { label: 'Graded', value: d.graded, color: '#1F8A5F' },
+          { label: 'Pending', value: d.pending, color: '#B4791F' },
+          { label: 'Not submitted', value: d.notSubmitted, color: '#8991A8' },
+        ]
+      : [];
+  });
+  readonly creditRatio = computed(() => {
+    const s = this.student();
+    return s?.creditsRequired ? Math.min(1, s.creditsCompleted / s.creditsRequired) : 0;
   });
 
-  readonly coursesPerProgram = computed<BarDatum[]>(() => {
-    const counts = new Map<string, number>();
-    for (const c of this.courses()) {
-      counts.set(c.degreeProgramCode, (counts.get(c.degreeProgramCode) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  });
-
-  readonly maxBarValue = computed(() => Math.max(1, ...this.coursesPerProgram().map((d) => d.value)));
-
-  private summarize(label: string, items: { status: string }[]): ReferenceDataSummary {
-    const active = items.filter((i) => i.status === 'ACTIVE').length;
-    return { label, total: items.length, active, inactive: items.length - active };
+  constructor() {
+    this.load();
   }
-  readonly referenceDataSummaries = computed<ReferenceDataSummary[]>(() => [
-    this.summarize('Faculties', this.faculties()),
-    this.summarize('Departments', this.departments()),
-    this.summarize('Grading Scales', this.gradingScales()),
-    this.summarize('Course Categories', this.courseCategories()),
-  ]);
 
-  ngOnInit(): void {
+  load(): void {
     this.loading.set(true);
-    this.academicStructureService.listDegreePrograms().subscribe({ next: (v) => this.degreePrograms.set(v) });
-    this.academicStructureService.listAcademicYears().subscribe({ next: (v) => this.academicYears.set(v) });
-
-    const mine = !this.isAdmin();
-    this.academicStructureService.listCourses(mine).subscribe({
-      next: (v) => {
-        this.courses.set(v);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
-    });
-
-    if (this.isAdmin()) {
-      this.userService.summary().subscribe({ next: (v) => this.userSummary.set(v) });
-      this.referenceDataService.listFaculties().subscribe({ next: (v) => this.faculties.set(v) });
-      this.referenceDataService.listDepartments().subscribe({ next: (v) => this.departments.set(v) });
-      this.referenceDataService.listGradingScales().subscribe({ next: (v) => this.gradingScales.set(v) });
-      this.referenceDataService.listCourseCategories().subscribe({ next: (v) => this.courseCategories.set(v) });
+    this.loadError.set(null);
+    const done = () => this.loading.set(false);
+    const fail = (err: unknown) => {
+      this.loadError.set(errorMessage(err, 'Could not load your dashboard.'));
+      this.loading.set(false);
+    };
+    switch (this.role()) {
+      case 'ADMIN':
+        this.analytics.adminDashboard().subscribe({ next: (v) => { this.admin.set(v); done(); }, error: fail });
+        break;
+      case 'LECTURER':
+        this.analytics.lecturerDashboard().subscribe({ next: (v) => { this.lecturer.set(v); done(); }, error: fail });
+        break;
+      default:
+        this.analytics.studentDashboard().subscribe({ next: (v) => { this.student.set(v); done(); }, error: fail });
     }
   }
 
-  /** CSS conic-gradient stops for a donut chart from a list of {value, color} segments. */
-  donutGradient(segments: ChartSegment[]): string {
-    const total = segments.reduce((sum, s) => sum + s.value, 0);
-    if (total === 0) return 'conic-gradient(var(--surface2) 0 100%)';
-    let cursor = 0;
-    const stops = segments.map((s) => {
-      const start = (cursor / total) * 100;
-      cursor += s.value;
-      const end = (cursor / total) * 100;
-      return `${s.color} ${start}% ${end}%`;
+  refreshAdmin(): void {
+    this.refreshing.set(true);
+    this.analytics.refreshAdminDashboard().subscribe({
+      next: (v) => {
+        this.admin.set(v);
+        this.refreshing.set(false);
+      },
+      error: (err) => {
+        this.loadError.set(errorMessage(err, 'Could not refresh the dashboard.'));
+        this.refreshing.set(false);
+      },
     });
-    return `conic-gradient(${stops.join(', ')})`;
   }
 
-  barWidth(value: number): string {
-    return `${Math.round((value / this.maxBarValue()) * 100)}%`;
+  ring(): string {
+    const deg = this.creditRatio() * 360;
+    return `conic-gradient(var(--accent) 0deg ${deg}deg, var(--line) ${deg}deg 360deg)`;
+  }
+
+  gradedPct(c: { graded: number; submitted: number }): number {
+    return c.submitted ? Math.round((c.graded / c.submitted) * 100) : 0;
   }
 }
