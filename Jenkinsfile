@@ -74,7 +74,11 @@ pipeline {
             // Redis, RabbitMQ, MinIO) and /opt/ucms-app/infra/.env (secrets) already
             // exist on this host and are not managed by this pipeline.
             when {
-                anyOf { branch 'develop'; branch 'release'; branch 'main' }
+                // develop deliberately excluded: it shares this same production target
+                // with release/main, and two branches redeploying it independently was
+                // doubling load on an already memory-tight host for no benefit — only a
+                // release/main merge should actually go live.
+                anyOf { branch 'release'; branch 'main' }
             }
             steps {
                 sh '''
