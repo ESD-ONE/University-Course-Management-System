@@ -1,39 +1,41 @@
 ---
-title: 6. Analytics and Reporting Service — ucms.analytics schema
+title: 6. Analytics and Reporting Service — ucms.analytics schema (built)
 ---
 erDiagram
     DASHBOARD_SNAPSHOTS {
         uuid id PK
-        string role
-        string metric_key
-        string metric_value
+        string role "ADMIN, LECTURER"
+        string metric_key "unique with role, e.g. kpis, class_average:offeringId"
+        text metric_value "JSON"
         timestamptz computed_at
     }
     REPORTS {
         uuid id PK
-        string name
+        string name "unique — 6 seeded"
         string description
-        string format
+        string format "CSV or PDF"
         timestamptz last_generated_at
+        string object_key "MinIO key of the latest file"
         int version "optimistic lock"
         timestamptz created_at
-        uuid created_by "ref Identity and Access, no FK"
+        uuid created_by
         timestamptz updated_at
-        uuid updated_by "ref Identity and Access, no FK"
+        uuid updated_by
     }
     SCHEDULED_REPORTS {
         uuid id PK
         uuid report_id FK
-        string frequency
+        string frequency "DAILY|HH:mm, WEEKLY|DAY|HH:mm, MONTHLY|d|HH:mm"
         string recipients
-        string status
+        string status "ACTIVE, PAUSED"
+        timestamptz next_run_at
         int version "optimistic lock — guards concurrent pause/resume"
         timestamptz created_at
-        uuid created_by "ref Identity and Access, no FK"
+        uuid created_by
         timestamptz updated_at
-        uuid updated_by "ref Identity and Access, no FK"
+        uuid updated_by
         timestamptz deleted_at "nullable, soft delete"
-        uuid deleted_by "ref Identity and Access, no FK, nullable"
+        uuid deleted_by "nullable"
     }
 
     REPORTS ||--o{ SCHEDULED_REPORTS : "delivered on a schedule as"

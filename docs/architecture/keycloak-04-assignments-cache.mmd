@@ -1,0 +1,31 @@
+---
+title: "How the scope-based assignments claim survives Keycloak — proposed. Keycloak's token no longer carries the custom 'assignments' claim; only Academic Structure needs it, resolved via a Redis cache invalidated at the write side. PermissionResolver/CurrentAssignments/AssignmentClaim/RoleCatalog are unchanged."
+---
+sequenceDiagram
+    actor Admin
+    participant UI as Roles and Permissions screen
+    participant IAM as Identity and Access
+    participant REDIS as Redis
+    participant ACAD as Academic Structure Service
+    participant PR as PermissionResolver (inside ACAD, unchanged)
+
+    Admin->>UI: grant or override a department-scoped permission
+    UI->>IAM: PATCH assignment (AssignmentService.setOverride / create / revoke)
+    IAM->>IAM: write role_scope_assignments /<br/>assignment_permission_overrides (ucms.identity_access)
+    IAM->>REDIS: DEL ucms:assignments:{userId}
+
+    Note over ACAD: Later, that same user makes a request through the Gateway
+
+    ACAD->>ACAD: UcmsJwtAuthenticationConverter extracts userId from the token's sub
+    ACAD->>REDIS: GET ucms:assignments:{userId}
+    alt cache hit
+        REDIS-->>ACAD: cached AssignmentClaim[]
+    else cache miss (just invalidated, or first request)
+        ACAD->>IAM: GET /internal/assignments/{userId}<br/>Authorization: Bearer (svc-academic-structure's own client_credentials token)
+        IAM-->>ACAD: current AssignmentClaim[]
+        ACAD->>REDIS: SET ucms:assignments:{userId} (TTL = Keycloak access-token lifespan)
+    end
+    ACAD->>PR: CurrentAssignments populated — same shape as the JWT claim gave it before
+    PR->>PR: canOnDepartment / isDepartmentScoped / isGlobal — identical logic to today
+
+    Note over PR: PermissionResolver, CurrentAssignments, AssignmentClaim, RoleCatalog —<br/>none of this changes. Only where the claim comes from changes.

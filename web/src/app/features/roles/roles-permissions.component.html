@@ -1,0 +1,151 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System</div>
+    <h1 class="page-title">Roles &amp; Permissions</h1>
+    <p class="page-sub">What each role may do, and who holds which role where.</p>
+  </div>
+  <button class="btn btn-primary" (click)="newRoleOpen.set(true)">+ New Role</button>
+</div>
+
+@if (loading()) {
+  <div class="card"><span class="skeleton" style="width:50%;height:14px;"></span></div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="grid g2" style="grid-template-columns:minmax(220px,1fr) 3fr;align-items:start;margin-bottom:20px;">
+    <div class="card" style="padding:8px;">
+      @for (r of roles(); track r.id) {
+        <button class="list-card" style="display:block;width:100%;text-align:left;margin-bottom:6px;cursor:pointer;"
+          [style.border-color]="r.id === selectedRoleId() ? 'var(--accent)' : null" (click)="selectedRoleId.set(r.id)">
+          <b style="font-size:13px;">{{ r.name }}</b>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">{{ r.kind | titlecase }} account type · {{ grantedCount(r) }} granted</div>
+        </button>
+      }
+    </div>
+
+    @if (selectedRole(); as role) {
+      <div class="card">
+        <h3 style="margin:0 0 4px;font-size:15px;">{{ role.name }}</h3>
+        <p style="font-size:12px;color:var(--ink-faint);margin:0 0 14px;">Changes apply to Degree Program / Course decisions within about a minute (role-catalog sync), for every user holding this role.</p>
+        <table>
+          <thead><tr><th>Module</th>@for (a of actions(); track a) { <th style="text-align:center;">{{ a | titlecase }}</th> }</tr></thead>
+          <tbody>
+            @for (m of modules(); track m) {
+              <tr>
+                <td class="cell-name">{{ moduleLabel(m) }}</td>
+                @for (a of actions(); track a) {
+                  <td style="text-align:center;">
+                    @if (permissionFor(m, a); as p) {
+                      <input type="checkbox" [checked]="granted(p.id)" [disabled]="savingCell() === p.id" (change)="toggle(p)"
+                        style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" />
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 4px;font-size:15px;">Scope Assignments</h3>
+    <p style="font-size:12px;color:var(--ink-faint);margin:0 0 14px;">Every account holds its account role globally. A <b>department-scoped</b> assignment adds authority over one department — e.g. a lecturer assigned "Department Head" for a department can manage its degree programs and courses.</p>
+    <div class="grid g2" style="align-items:start;">
+      <div>
+        <div class="field">
+          <label for="rpUser">Find user</label>
+          <input id="rpUser" type="text" placeholder="Search by name or email" [ngModel]="userQuery()" (ngModelChange)="searchUsers($event)" />
+        </div>
+        @for (u of users(); track u.id) {
+          <button class="list-card" style="display:block;width:100%;text-align:left;margin-bottom:6px;cursor:pointer;"
+            [style.border-color]="u.id === selectedUser()?.id ? 'var(--accent)' : null" (click)="selectUser(u)">
+            <b style="font-size:13px;">{{ u.name }}</b> <span class="badge b-ink" style="margin-left:6px;">{{ u.role }}</span>
+            <div style="font-size:11px;color:var(--ink-soft);">{{ u.email }}</div>
+          </button>
+        }
+      </div>
+      <div>
+        @if (selectedUser(); as user) {
+          <b style="font-size:13.5px;">{{ user.name }}</b>
+          <table style="margin:10px 0 16px;">
+            <thead><tr><th>Role</th><th>Scope</th><th></th></tr></thead>
+            <tbody>
+              @for (a of assignments(); track a.id) {
+                <tr>
+                  <td class="cell-name">{{ a.roleName }}</td>
+                  <td class="cell-soft">{{ a.scopeType === 'GLOBAL' ? 'Global' : (a.scopeType | titlecase) + ': ' + departmentName(a.scopeId) }}</td>
+                  <td style="text-align:right;">
+                    @if (a.scopeType !== 'GLOBAL') { <button class="btn btn-secondary btn-sm" (click)="revoke(a)">Revoke</button> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <div class="field-row">
+            <div class="field">
+              <label for="rpRole">Role</label>
+              <select id="rpRole" [ngModel]="assignRoleId()" (ngModelChange)="assignRoleId.set($event)">
+                @for (r of roles(); track r.id) { <option [value]="r.id">{{ r.name }}</option> }
+              </select>
+            </div>
+            <div class="field">
+              <label for="rpScope">Scope</label>
+              <select id="rpScope" [ngModel]="assignScope()" (ngModelChange)="assignScope.set($event)">
+                <option value="DEPARTMENT">Department</option>
+                <option value="GLOBAL">Global</option>
+              </select>
+            </div>
+          </div>
+          @if (assignScope() === 'DEPARTMENT') {
+            <div class="field">
+              <label for="rpDept">Department</label>
+              <select id="rpDept" [ngModel]="assignDepartmentId()" (ngModelChange)="assignDepartmentId.set($event)">
+                <option value="">Choose a department…</option>
+                @for (d of departments(); track d.id) { <option [value]="d.id">{{ d.name }}</option> }
+              </select>
+            </div>
+          }
+          <button class="btn btn-primary" (click)="assign()">Add Assignment</button>
+        } @else {
+          <p style="font-size:12.5px;color:var(--ink-faint);">Choose a user to see and manage their assignments.</p>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+@if (newRoleOpen()) {
+  <div class="modal-overlay" (click)="newRoleOpen.set(false)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div><h3>New Role</h3><p>A custom role starts with no permissions. Its account type decides which screens its holders see.</p></div>
+        <button class="modal-close" (click)="newRoleOpen.set(false)">✕</button>
+      </div>
+      <div class="modal-body">
+        @if (newRoleError()) { <div class="modal-error">{{ newRoleError() }}</div> }
+        <div class="field">
+          <label for="nrName">Name</label>
+          <input id="nrName" type="text" placeholder="e.g. Department Head" [ngModel]="newRoleName()" (ngModelChange)="newRoleName.set($event)" />
+        </div>
+        <div class="field">
+          <label for="nrKind">Account type</label>
+          <select id="nrKind" [ngModel]="newRoleKind()" (ngModelChange)="newRoleKind.set($event)">
+            <option value="LECTURER">Lecturer</option>
+            <option value="ADMIN">Administrator</option>
+            <option value="STUDENT">Student</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" (click)="newRoleOpen.set(false)">Cancel</button>
+        <button class="btn btn-primary" [disabled]="!newRoleName().trim()" (click)="createRole()">Create Role</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

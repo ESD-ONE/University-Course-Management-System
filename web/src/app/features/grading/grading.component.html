@@ -1,0 +1,81 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Grading</div>
+    <h1 class="page-title">Grade Submissions</h1>
+    <p class="page-sub">
+      @if (assignment(); as a) { {{ a.courseCode }} · {{ a.title }} · Max marks {{ a.maxMarks }} } @else { Choose an assignment to grade. }
+    </p>
+  </div>
+  <button class="btn btn-primary" [disabled]="!dirty().length || saving()" (click)="saveAll()">
+    {{ saving() ? 'Saving…' : 'Save All Grades' + (dirty().length ? ' (' + dirty().length + ')' : '') }}
+  </button>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="field" style="margin-bottom:0;">
+    <label for="grAssignment">Assignment</label>
+    <select id="grAssignment" [ngModel]="assignmentId()" (ngModelChange)="select($event)">
+      @for (a of assignments(); track a.id) { <option [value]="a.id">{{ a.courseCode }} — {{ a.title }} ({{ a.status | titlecase }})</option> }
+    </select>
+  </div>
+</div>
+
+@if (!assignments().length && !loadError()) {
+  <div class="card"><p style="color:var(--ink-faint);font-size:13px;margin:0;">No published assignments yet — publish one from Assignments first.</p></div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="grid g3" style="margin-bottom:20px;">
+    <div class="card"><div class="stat-label">Submitted</div><div class="stat-value">{{ submitted() }} / {{ rows().length }}</div></div>
+    <div class="card"><div class="stat-label">Graded</div><div class="stat-value">{{ graded() }} / {{ rows().length }}</div></div>
+    <div class="card"><div class="stat-label">Class Average</div><div class="stat-value">{{ average() === null ? '—' : average() + '%' }}</div></div>
+  </div>
+
+  @if (loading()) {
+    <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:200px;height:14px;"></span></div> }</div>
+  } @else {
+    <div class="card">
+      <table>
+        <thead><tr><th>Student</th><th>Submitted</th><th>File</th><th>Status</th><th>Marks</th><th>Feedback</th></tr></thead>
+        <tbody>
+          @for (r of rows(); track r.studentId) {
+            <tr>
+              <td class="row-avatar"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(r.studentName) }}</div>
+                <span class="cell-name">{{ r.studentName ?? 'Former student' }}<div class="cell-faint" style="font-size:11px;">{{ r.studentNumber }}</div></span></td>
+              <td class="cell-soft">
+                {{ r.submittedAt ? (r.submittedAt | date: 'dd MMM, HH:mm') : '—' }}
+                @if (r.late) { <span class="badge b-danger" style="margin-left:4px;">Late</span> }
+              </td>
+              <td>
+                @if (r.fileName) { <a class="btn-link" style="cursor:pointer;" (click)="download(r)">{{ r.fileName }}</a> } @else { <span class="cell-faint">—</span> }
+              </td>
+              <td><span class="badge" [class.b-success]="r.status === 'GRADED'" [class.b-gold]="r.status === 'SUBMITTED'" [class.b-ink]="r.status === 'NOT_SUBMITTED'">{{ r.status === 'GRADED' ? 'Graded' : r.status === 'SUBMITTED' ? 'Pending' : 'Not submitted' }}</span></td>
+              <td>
+                @if (r.status === 'NOT_SUBMITTED') {
+                  <span class="cell-faint">— / {{ assignment()?.maxMarks }}</span>
+                } @else {
+                  <input type="number" min="0" [max]="assignment()?.maxMarks ?? 100" [value]="r.draftMarks ?? ''" placeholder="—"
+                    (input)="setMarks(r, $any($event.target).value)"
+                    style="width:70px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
+                  <span class="cell-faint"> / {{ assignment()?.maxMarks }}</span>
+                }
+              </td>
+              <td>
+                @if (r.status !== 'NOT_SUBMITTED') {
+                  <input type="text" [value]="r.draftFeedback" placeholder="Optional feedback" (input)="setFeedback(r, $any($event.target).value)"
+                    style="width:100%;min-width:160px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6" style="padding:24px;color:var(--ink-faint);">No students are enrolled in this course yet.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

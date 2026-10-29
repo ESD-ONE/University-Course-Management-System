@@ -1,0 +1,632 @@
+{
+  "run": "3c014c",
+  "at": "2026-10-29T16:40:05.538502",
+  "passed": 66,
+  "total": 66,
+  "throttled": [],
+  "results": [
+    {
+      "id": "ST-01",
+      "description": "Migrated admin signs in at Keycloak with their pre-Keycloak password (BCrypt import)",
+      "expected": "Authorization Code + PKCE succeeds",
+      "actual": "token issued",
+      "pass": true
+    },
+    {
+      "id": "ST-01b",
+      "description": "Keycloak token identifies the UCMS account by its uid claim",
+      "expected": "uid == /users/me id, iss = realm",
+      "actual": {
+        "uid": "00000000-0000-0000-0000-00000000000a",
+        "me": "00000000-0000-0000-0000-00000000000a",
+        "iss": "http://localhost:8180/auth/realms/ucms"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-02",
+      "description": "Gateway rejects a request with no token",
+      "expected": "401",
+      "actual": 401,
+      "pass": true
+    },
+    {
+      "id": "ST-03",
+      "description": "Admin creates 2 lecturers + 3 students (temp passwords issued once)",
+      "expected": "5 x 201",
+      "actual": {
+        "L1": "staff",
+        "L2": "staff",
+        "S1": "STU-2026-0044",
+        "S2": "STU-2026-0045",
+        "S3": "STU-2026-0046"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-03b",
+      "description": "Each new account was created in Keycloak and signs in with its temporary password",
+      "expected": "5 tokens",
+      "actual": {
+        "L1": true,
+        "L2": true,
+        "S1": true,
+        "S2": true,
+        "S3": true
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-04",
+      "description": "identity.user-created \u2192 Notification creates a welcome notification",
+      "expected": "1 SYSTEM notification",
+      "actual": "Welcome to UCMS",
+      "pass": true
+    },
+    {
+      "id": "ST-05",
+      "description": "Admin creates a course template taught by L1 (capacity 2)",
+      "expected": "201",
+      "actual": "201 COSC5105",
+      "pass": true
+    },
+    {
+      "id": "ST-06",
+      "description": "Course offered in active year 2025/2026 (no semester window)",
+      "expected": "201 PUBLISHED",
+      "actual": 201,
+      "pass": true
+    },
+    {
+      "id": "ST-07",
+      "description": "New course-offerings endpoint resolves capacity/lecturer/open state",
+      "expected": "open, cap 2, lecturer L1",
+      "actual": {
+        "code": "COSC5105",
+        "capacity": 2,
+        "openForEnrollment": true
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-07b",
+      "description": "Semester window closed (2025-09-15) \u2192 students blocked",
+      "expected": "open=false, 409 NOT_OPEN",
+      "actual": [
+        false,
+        409,
+        "NOT_OPEN"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-08",
+      "description": "flow-03: admin registers S1 into a degree program",
+      "expected": "201 ACTIVE",
+      "actual": "201 BSc in Computer Science",
+      "pass": true
+    },
+    {
+      "id": "ST-09",
+      "description": "Second active program registration for the same student is rejected",
+      "expected": "409 ALREADY_REGISTERED",
+      "actual": "409 ALREADY_REGISTERED",
+      "pass": true
+    },
+    {
+      "id": "ST-09b",
+      "description": "Lecturer cannot register students into programs",
+      "expected": "403",
+      "actual": 403,
+      "pass": true
+    },
+    {
+      "id": "ST-10",
+      "description": "S1 browses the catalog and sees live seats",
+      "expected": "seatsLeft 2",
+      "actual": {
+        "code": "COSC5105",
+        "seatsLeft": 2,
+        "lecturerName": "Dr. N. Silva"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-11",
+      "description": "flow-01: S1 and S2 self-enroll",
+      "expected": "201 ENROLLED x2",
+      "actual": [
+        201,
+        201
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-12",
+      "description": "flow-01 'course full' branch for S3",
+      "expected": "409 COURSE_FULL",
+      "actual": "409 COSC5105 is full \u2014 join the waitlist?",
+      "pass": true
+    },
+    {
+      "id": "ST-13",
+      "description": "S3 joins the waitlist",
+      "expected": "201 WAITLISTED",
+      "actual": 201,
+      "pass": true
+    },
+    {
+      "id": "ST-13b",
+      "description": "Duplicate enrollment rejected",
+      "expected": "409 ALREADY_ENROLLED",
+      "actual": 409,
+      "pass": true
+    },
+    {
+      "id": "ST-14",
+      "description": "Roster: other lecturer 403, teaching lecturer sees 3 rows with names/IDs",
+      "expected": "403 / 200 x3",
+      "actual": "L2=403 L1=200 rows=3",
+      "pass": true
+    },
+    {
+      "id": "ST-15",
+      "description": "S1 drops \u2192 S3 promoted from the waitlist automatically",
+      "expected": "S3 ENROLLED",
+      "actual": "ENROLLED",
+      "pass": true
+    },
+    {
+      "id": "ST-16",
+      "description": "S3 notified of the promotion (event \u2192 Notification)",
+      "expected": "notification present",
+      "actual": "A seat opened in COSC5105",
+      "pass": true
+    },
+    {
+      "id": "ST-17",
+      "description": "Registration log records every action with actor",
+      "expected": "PROGRAM_REGISTER, COURSE_ENROLL, COURSE_WAITLIST, COURSE_DROP, WAITLIST_PROMOTED",
+      "actual": [
+        "WAITLIST_PROMOTED",
+        "COURSE_DROP",
+        "COURSE_WAITLIST",
+        "COURSE_ENROLL",
+        "COURSE_ENROLL",
+        "PROGRAM_REGISTER",
+        "WAITLIST_PROMOTED",
+        "COURSE_DROP",
+        "COURSE_WAITLIST",
+        "COURSE_ENROLL"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-18",
+      "description": "Teaching lecturer creates an assignment",
+      "expected": "201 DRAFT",
+      "actual": 201,
+      "pass": true
+    },
+    {
+      "id": "ST-19",
+      "description": "A different lecturer cannot create one on L1's course",
+      "expected": "403",
+      "actual": 403,
+      "pass": true
+    },
+    {
+      "id": "ST-20",
+      "description": "Students can't see a draft",
+      "expected": "0 visible",
+      "actual": 0,
+      "pass": true
+    },
+    {
+      "id": "ST-21",
+      "description": "Publish \u2192 grading.assignment-published fans out to enrolled students",
+      "expected": "S2 notified",
+      "actual": "New assignment: Programming Exercise 3c014c",
+      "pass": true
+    },
+    {
+      "id": "ST-22",
+      "description": "S2 uploads a submission (stored in MinIO)",
+      "expected": "201 SUBMITTED",
+      "actual": 201,
+      "pass": true
+    },
+    {
+      "id": "ST-23",
+      "description": "S1 (dropped the course) cannot submit",
+      "expected": "403",
+      "actual": 403,
+      "pass": true
+    },
+    {
+      "id": "ST-24",
+      "description": "Lecturer downloads the submission \u2014 identical bytes back from MinIO",
+      "expected": "same bytes",
+      "actual": "200 27 bytes",
+      "pass": true
+    },
+    {
+      "id": "ST-25",
+      "description": "Grading screen lists every enrolled student incl. non-submitters",
+      "expected": "S2 SUBMITTED, S3 NOT_SUBMITTED",
+      "actual": {
+        "A. Jayawardena": "SUBMITTED",
+        "C. Ranasinghe": "NOT_SUBMITTED"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-26",
+      "description": "flow-02: marks above max rejected; valid grade saved",
+      "expected": "400 then 200",
+      "actual": [
+        400,
+        200
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-27",
+      "description": "grading.grade-posted \u2192 student notified",
+      "expected": "notification present",
+      "actual": "COSC5105 \u2014 you scored 88 / 100.",
+      "pass": true
+    },
+    {
+      "id": "ST-28",
+      "description": "Student grade history: percentage, letter (from base-service scale), GPA",
+      "expected": "88.0% A, GPA 4.0",
+      "actual": {
+        "pct": 88.0,
+        "letter": "A",
+        "gpa": 4.0
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-29",
+      "description": "Resubmitting after grading is blocked",
+      "expected": "409 ALREADY_GRADED",
+      "actual": 409,
+      "pass": true
+    },
+    {
+      "id": "ST-30",
+      "description": "Admin dashboard recomputed from IAM/ACAD/ENR/GRADE",
+      "expected": "students >= 3, our course enrolled 2 (or tied out of the top 5)",
+      "actual": {
+        "kpis": {
+          "totalStudents": 46,
+          "activeCourses": 25,
+          "degreePrograms": 8,
+          "activeEnrollments": 20,
+          "waitlisted": 0
+        },
+        "top": {
+          "offeringId": "057c8134-7fc9-423e-9203-52abd82de76f",
+          "code": "COSC5105",
+          "name": "Introduction to Programming",
+          "lecturerName": "Dr. N. Silva",
+          "enrolled": 2
+        }
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-31",
+      "description": "Lecturer dashboard: class average from grading",
+      "expected": "classAverage 88.0",
+      "actual": {
+        "enrolled": 2,
+        "graded": 1,
+        "classAverage": 88.0
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-32",
+      "description": "Student dashboard: GPA and current grade",
+      "expected": "gpa 4.0, 1 course",
+      "actual": {
+        "gpa": 4.0,
+        "courses": 1,
+        "deadlines": 0
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-32b",
+      "description": "Student dashboard shows the program registration",
+      "expected": "BSc program shown",
+      "actual": "BSc in Computer Science",
+      "pass": true
+    },
+    {
+      "id": "ST-33",
+      "description": "Report library seeded (6 reports)",
+      "expected": "6",
+      "actual": [
+        "Course Pass Rate",
+        "Enrollment Summary",
+        "Grade Distribution",
+        "Program Performance",
+        "Registration Activity",
+        "User Activity"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-34",
+      "description": "CSV report: 404 before first generate; generate \u2192 MinIO; download has this run's course",
+      "expected": "404 (if never generated), 200, CSV w/ course code",
+      "actual": [
+        200,
+        200,
+        200,
+        "regenerated"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-35",
+      "description": "PDF report is a real PDF",
+      "expected": "%PDF-",
+      "actual": "b'%PDF-'",
+      "pass": true
+    },
+    {
+      "id": "ST-36",
+      "description": "Schedule a weekly report",
+      "expected": "201 + next run",
+      "actual": {
+        "label": "Weekly \u00b7 Mondays 08:00",
+        "next": "2026-11-02T08:00:00+05:30"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-36b",
+      "description": "Pause the schedule",
+      "expected": "200",
+      "actual": 200,
+      "pass": true
+    },
+    {
+      "id": "ST-37",
+      "description": "Reports are admin-only",
+      "expected": "403",
+      "actual": 403,
+      "pass": true
+    },
+    {
+      "id": "ST-38",
+      "description": "Live push (SSE through the Gateway): regrade arrives on the open stream",
+      "expected": "event:notification received",
+      "actual": [
+        "event:ready",
+        "event:notification"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-39",
+      "description": "Unread count, then mark all read",
+      "expected": ">0 then 0",
+      "actual": [
+        5,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-40",
+      "description": "Grade alerts turned off \u2192 no new grade notification",
+      "expected": "count unchanged",
+      "actual": [
+        2,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-41",
+      "description": "Email channel delivered to SMTP (Mailpit)",
+      "expected": "welcome + enrollment + grade emails",
+      "actual": "52 emails, e.g. ['[UCMS] Grade posted: Programming Exercise 3c014c', '[UCMS] Grade posted: Programming Exercise 3c014c', '[UCMS] New submission: Programming Exercise 3c014c']",
+      "pass": true
+    },
+    {
+      "id": "ST-42",
+      "description": "G-11: logout revokes the token at the Gateway (Redis)",
+      "expected": "200 then 401",
+      "actual": [
+        200,
+        401,
+        "Token has been revoked \u2014 please sign in again"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-43",
+      "description": "Malformed token rejected",
+      "expected": "401",
+      "actual": 401,
+      "pass": true
+    },
+    {
+      "id": "ST-44",
+      "description": "Renamed route /api/base works; old /api/reference is gone",
+      "expected": "200 / 404",
+      "actual": [
+        200,
+        404
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-50",
+      "description": "Keycloak rejects a wrong password on its own login page",
+      "expected": "login page with an error",
+      "actual": "Invalid username or password.",
+      "pass": true
+    },
+    {
+      "id": "ST-51",
+      "description": "The old password-to-token endpoint no longer exists",
+      "expected": "4xx",
+      "actual": 401,
+      "pass": true
+    },
+    {
+      "id": "ST-52",
+      "description": "Suspending an account on the Users screen disables it in Keycloak",
+      "expected": "signs in, then refused",
+      "actual": "Account is disabled, contact your administrator.",
+      "pass": true
+    },
+    {
+      "id": "ST-53",
+      "description": "Profile password change is verified and applied by Keycloak",
+      "expected": "200, new works, old refused, wrong current 400",
+      "actual": {
+        "change": 200,
+        "wrongCurrent": 400
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-54",
+      "description": "Service tokens are least-privilege: notification may call identity, not academic",
+      "expected": "200 / 401-or-403",
+      "actual": [
+        200,
+        403
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-55",
+      "description": "Internal assignments endpoint refuses people, even admins",
+      "expected": "403",
+      "actual": 403,
+      "pass": true
+    },
+    {
+      "id": "ST-45",
+      "description": "G-05: deleting a department still referenced by degree programs is blocked",
+      "expected": "409",
+      "actual": "409 Department of Computer Science still has degree programs or course-catalog entries \u2014 remove them first",
+      "pass": true
+    },
+    {
+      "id": "ST-46",
+      "description": "Admin creates a Department Head role and scopes L2 to one department",
+      "expected": "201",
+      "actual": 201,
+      "pass": true
+    },
+    {
+      "id": "ST-47",
+      "description": "G-01: /users/me now exposes the DEPARTMENT scope to the frontend",
+      "expected": "DEPARTMENT assignment present",
+      "actual": [
+        "DEPARTMENT",
+        "GLOBAL"
+      ],
+      "pass": true
+    },
+    {
+      "id": "ST-48",
+      "description": "Department Head creates a program in their department; blocked elsewhere",
+      "expected": "201 / 403",
+      "actual": "own dept 201, other dept 403",
+      "pass": true
+    },
+    {
+      "id": "ST-56",
+      "description": "Per-user rate limit on enrollment writes: 429 + Retry-After; other users and reads unaffected",
+      "expected": "first calls pass, then 429 RATE_LIMITED; S2 write and S3 read not limited",
+      "actual": {
+        "codes": [
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          429,
+          429,
+          429,
+          429,
+          429
+        ],
+        "429": {
+          "retryAfter": "1",
+          "body": {
+            "message": "Too many requests \u2014 please wait 1 second and try again.",
+            "code": "RATE_LIMITED"
+          }
+        },
+        "otherUser": 400,
+        "read": 200
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-57",
+      "description": "Every request carries an X-Request-Id: the caller's is kept, otherwise one is assigned",
+      "expected": "same id echoed; a fresh one when none sent",
+      "actual": {
+        "sent": "st57-3c014c-request",
+        "echoed": "st57-3c014c-request",
+        "generated": "08c2a71f-ff55-4af7-a2ff-ce78af5a5ac0"
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-58",
+      "description": "New accounts need a 12+ character password (blank still means a generated one)",
+      "expected": "400 / 201 + signs in",
+      "actual": {
+        "short": [
+          400,
+          "Validation failed: Password must be 12 to 128 characters"
+        ],
+        "long": 201
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-59",
+      "description": "Keycloak's password policy refuses the email and a recent password, with its reason (400, not 503)",
+      "expected": "400 + reason x2",
+      "actual": {
+        "email": [
+          400,
+          "Invalid password: must not be equal to the username."
+        ],
+        "recent": [
+          400,
+          "Invalid password: must not be equal to any of last 3 passwords."
+        ]
+      },
+      "pass": true
+    },
+    {
+      "id": "ST-49",
+      "description": "Malformed event is dead-lettered after retries, not redelivered forever",
+      "expected": "+1 in notification.events.dlq",
+      "actual": "dead-lettered",
+      "pass": true
+    }
+  ]
+}

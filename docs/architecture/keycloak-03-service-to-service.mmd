@@ -1,0 +1,27 @@
+---
+title: "Keycloak service-to-service auth — proposed. Example: Enrollment calling Academic Structure's /course-offerings, as AcademicClient does today. Same mintServiceToken() call site; a real, scoped, independently-revocable credential instead of a self-signed blanket-admin token."
+---
+sequenceDiagram
+    participant ENR as Enrollment Service
+    participant TCP as ClientCredentialsTokenProvider (inside ENR)
+    participant KC as Keycloak (realm ucms)
+    participant ACAD as Academic Structure Service
+
+    Note over ENR: AcademicClient.getOffering(id) needs a service token —<br/>same mintServiceToken() call site as today
+    ENR->>TCP: mintServiceToken()
+    alt cached token still valid (>30s left)
+        TCP-->>ENR: cached access_token
+    else expired or missing
+        TCP->>KC: POST /realms/ucms/protocol/openid-connect/token<br/>grant_type=client_credentials<br/>client_id=svc-enrollment, client_secret=***
+        KC->>KC: look up service account svc-enrollment —<br/>roles: academic:read, identity:read (nothing more)
+        KC-->>TCP: access_token (sub=svc-enrollment's service-account id,<br/>roles=[academic:read, identity:read])
+        TCP->>TCP: cache until near expiry
+        TCP-->>ENR: access_token
+    end
+    ENR->>ACAD: GET /course-offerings/{id}<br/>Authorization: Bearer access_token
+    ACAD->>KC: validate signature via JWKS (cached)
+    ACAD->>ACAD: UcmsJwtAuthenticationConverter → principal = service-account id,<br/>authorities = [academic:read]
+    ACAD->>ACAD: endpoint requires only academic:read — granted
+    ACAD-->>ENR: 200 Offering
+
+    Note over ENR,ACAD: Before: Enrollment self-minted an HS256 token with a hardcoded<br/>GLOBAL-Administrator assignment, valid against every service.<br/>After: a scoped credential, fetched from and revocable at Keycloak.

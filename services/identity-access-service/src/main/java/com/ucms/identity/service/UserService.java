@@ -8,17 +8,23 @@ import com.ucms.identity.domain.User;
 import com.ucms.identity.domain.UserStatus;
 import com.ucms.identity.exception.EmailAlreadyInUseException;
 import com.ucms.identity.exception.WrongPasswordException;
+import com.ucms.identity.keycloak.KeycloakUserSync;
+import com.ucms.identity.messaging.EventPublisher;
 import com.ucms.identity.repository.RoleRepository;
 import com.ucms.identity.repository.RoleScopeAssignmentRepository;
 import com.ucms.identity.repository.UserRepository;
 import com.ucms.identity.repository.UserSpecifications;
+import com.ucms.identity.security.AssignmentCacheInvalidator;
+import com.ucms.identity.web.dto.AssignmentResponse;
 import com.ucms.identity.web.dto.CreateUserRequest;
 import com.ucms.identity.web.dto.CreatedUserResponse;
 import com.ucms.identity.web.dto.ProfileResponse;
 import com.ucms.identity.web.dto.UpdateNotificationPreferencesRequest;
 import com.ucms.identity.web.dto.UserResponse;
 import com.ucms.identity.web.dto.UserSummaryResponse;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.OffsetDateTime;
 import java.time.Year;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -44,20 +52,30 @@ public class UserService {
     private static final String TEMP_PASSWORD_ALPHABET =
             "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
     private static final int TEMP_PASSWORD_LENGTH = 14;
-    private static final int STUDENT_ID_MAX_ATTEMPTS = 10;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RoleScopeAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EventPublisher eventPublisher;
+    private final KeycloakUserSync keycloak;
+    private final AssignmentCacheInvalidator assignmentCache;
     private final SecureRandom secureRandom = new SecureRandom();
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     public UserService(UserRepository userRepository, RoleRepository roleRepository,
-                        RoleScopeAssignmentRepository assignmentRepository, PasswordEncoder passwordEncoder) {
+                        RoleScopeAssignmentRepository assignmentRepository, PasswordEncoder passwordEncoder,
+                        EventPublisher eventPublisher, KeycloakUserSync keycloak,
+                        AssignmentCacheInvalidator assignmentCache) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.assignmentRepository = assignmentRepository;
         this.passwordEncoder = passwordEncoder;
+        this.eventPublisher = eventPublisher;
+        this.keycloak = keycloak;
+        this.assignmentCache = assignmentCache;
     }
 
     @Transactional
@@ -72,7 +90,7 @@ public class UserService {
                     "A new user can only be created as ACTIVE or INACTIVE — suspend it afterwards if needed");
         }
 
-        Role role = roleRepository.findByKindAndDeletedAtIsNull(request.role())
+        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(request.role())
                 .orElseThrow(() -> new IllegalStateException("Role not seeded: " + request.role()));
 
         String rawPassword = request.password();
@@ -108,6 +126,15 @@ public class UserService {
         assignment.setUpdatedBy(createdBy);
         assignmentRepository.save(assignment);
 
+        // Keycloak verifies sign-ins; the account can log in as soon as this commits.
+        keycloak.created(user, rawPassword);
+        user = userRepository.save(user);
+
+        eventPublisher.publish("identity.user-created", java.util.Map.of(
+                "userId", user.getId().toString(),
+                "name", user.getName(),
+                "role", request.role().name()));
+
         return CreatedUserResponse.from(user, temporaryPassword);
     }
 
@@ -127,8 +154,24 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public UserResponse getUser(UUID id) {
+        return UserResponse.from(findActiveOrThrow(id));
+    }
+
+    /** Unknown or deleted ids are simply absent from the result, not an error — callers
+     * resolving a roster shouldn't fail because one referenced account was removed. */
+    @Transactional(readOnly = true)
+    public List<UserResponse> lookup(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        return userRepository.findAllById(ids).stream()
+                .filter(u -> !u.isDeleted())
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public ProfileResponse getProfile(UUID id) {
-        return ProfileResponse.from(findActiveOrThrow(id));
+        return ProfileResponse.from(findActiveOrThrow(id), assignmentsFor(id));
     }
 
     @Transactional
@@ -136,18 +179,22 @@ public class UserService {
         User user = findActiveOrThrow(id);
         user.setName(name);
         user.setUpdatedBy(id);
-        return ProfileResponse.from(userRepository.save(user));
+        keycloak.profileChanged(user);
+        return ProfileResponse.from(userRepository.save(user), assignmentsFor(id));
     }
 
     @Transactional
     public ProfileResponse updateOwnPassword(UUID id, String currentPassword, String newPassword) {
         User user = findActiveOrThrow(id);
-        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+        // Keycloak holds the password that actually signs the user in, so it's the one
+        // checked; the local hash is kept in step for an account that ever needs re-linking.
+        if (!keycloak.passwordMatches(user, currentPassword)) {
             throw new WrongPasswordException("Current password is incorrect");
         }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setUpdatedBy(id);
-        return ProfileResponse.from(userRepository.save(user));
+        keycloak.passwordChanged(user, newPassword);
+        return ProfileResponse.from(userRepository.save(user), assignmentsFor(id));
     }
 
     @Transactional
@@ -158,7 +205,20 @@ public class UserService {
         user.setNotifyGrades(prefs.grades());
         user.setNotifyRegistrations(prefs.registrations());
         user.setUpdatedBy(id);
-        return ProfileResponse.from(userRepository.save(user));
+        return ProfileResponse.from(userRepository.save(user), assignmentsFor(id));
+    }
+
+    /**
+     * Gap G-01's backend half: {@code ProfileResponse.assignments} needs this on every
+     * self-service read, not just a dedicated endpoint, since the frontend decides nav
+     * visibility (e.g. Program Management for a DEPARTMENT-scoped Lecturer) off
+     * GET /users/me's response. Overrides are omitted (always empty) — see
+     * ProfileResponse's own Javadoc for why.
+     */
+    private List<AssignmentResponse> assignmentsFor(UUID userId) {
+        return assignmentRepository.findByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId).stream()
+                .map(a -> AssignmentResponse.from(a, List.of()))
+                .toList();
     }
 
     @Transactional
@@ -166,20 +226,54 @@ public class UserService {
         User user = findActiveOrThrow(id);
         user.setStatus(status);
         user.setUpdatedBy(updatedBy);
+        keycloak.statusChanged(user);
         return UserResponse.from(userRepository.save(user));
     }
 
     @Transactional
     public UserResponse updateRole(UUID id, RoleKind roleKind, UUID updatedBy) {
         User user = findActiveOrThrow(id);
-        Role role = roleRepository.findByKindAndDeletedAtIsNull(roleKind)
+        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(roleKind)
                 .orElseThrow(() -> new IllegalStateException("Role not seeded: " + roleKind));
         user.setRole(role);
         user.setUpdatedBy(updatedBy);
         if (roleKind == RoleKind.STUDENT && user.getStudentId() == null) {
             user.setStudentId(generateUniqueStudentId());
         }
-        return UserResponse.from(userRepository.save(user));
+        User savedUser = userRepository.save(user);
+
+        // G-04: the flat role and the GLOBAL scope assignment created at user-creation
+        // time (see createUser()) used to drift apart on every admin-initiated role
+        // change, leaving academic-structure-service's PermissionResolver resolving
+        // against the stale role until someone separately fixed the assignment by hand.
+        RoleScopeAssignment globalAssignment = assignmentRepository
+                .findFirstByUserIdAndScopeTypeAndDeletedAtIsNullOrderByCreatedAtAsc(id, ScopeType.GLOBAL)
+                .orElseGet(() -> {
+                    RoleScopeAssignment a = new RoleScopeAssignment();
+                    a.setUser(savedUser);
+                    a.setScopeType(ScopeType.GLOBAL);
+                    a.setCreatedBy(updatedBy);
+                    return a;
+                });
+        globalAssignment.setRole(role);
+        globalAssignment.setUpdatedBy(updatedBy);
+        assignmentRepository.save(globalAssignment);
+        assignmentCache.evict(id);
+        keycloak.roleChanged(savedUser);
+
+        return UserResponse.from(savedUser);
+    }
+
+    @Transactional
+    public void deleteUser(UUID id, UUID deletedBy) {
+        User user = findActiveOrThrow(id);
+        user.setDeletedAt(OffsetDateTime.now());
+        user.setDeletedBy(deletedBy);
+        user.setUpdatedBy(deletedBy);
+        keycloak.deleted(user);
+        user.setKeycloakId(null);
+        userRepository.save(user);
+        assignmentCache.evict(id);
     }
 
     private User findActiveOrThrow(UUID id) {
@@ -196,16 +290,24 @@ public class UserService {
         return sb.toString();
     }
 
-    /** Format STU-<year>-<4 digits>, matching the wireframe's auto-generated pattern. */
+    /**
+     * Format STU-<year>-<4 digits>, matching the wireframe's auto-generated pattern —
+     * unchanged from before. G-16: generation itself used to be a 10-attempt random
+     * retry loop checking existsByStudentId, which left a narrow race window under
+     * concurrent creation (two requests could each pass the check before either
+     * committed). A database sequence (student_id_seq — see the V6 Flyway migration)
+     * makes allocation atomic instead: every call gets a distinct value directly from
+     * Postgres, with no check-then-act gap. This is purely an internal mechanism change;
+     * the 4-digit zero-padded suffix is still, as before, only unique up to 10,000
+     * values — an accepted, pre-existing format limitation, not something this fix
+     * redesigns.
+     */
     private String generateUniqueStudentId() {
         int year = Year.now().getValue();
-        for (int attempt = 0; attempt < STUDENT_ID_MAX_ATTEMPTS; attempt++) {
-            String candidate = "STU-%d-%04d".formatted(year, secureRandom.nextInt(10_000));
-            if (!userRepository.existsByStudentId(candidate)) {
-                return candidate;
-            }
-        }
-        throw new IllegalStateException("Could not generate a unique student ID after "
-                + STUDENT_ID_MAX_ATTEMPTS + " attempts");
+        Number sequenceValue = (Number) entityManager
+                .createNativeQuery("select nextval('identity_access.student_id_seq')")
+                .getSingleResult();
+        long next = sequenceValue.longValue();
+        return "STU-%d-%04d".formatted(year, next % 10_000);
     }
 }

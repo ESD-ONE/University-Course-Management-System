@@ -1,0 +1,37 @@
+---
+title: "Keycloak login — proposed (replaces flow-04-login.mmd). Authorization Code + PKCE against Keycloak's own hosted page; the SPA never sees the password. Compare to today: the custom login form posting to /auth/login is gone."
+---
+sequenceDiagram
+    actor User
+    participant SPA as Angular SPA (keycloak-js)
+    participant KC as Keycloak (realm ucms)
+    participant GW as API Gateway
+    participant IAM as Identity and Access
+
+    User->>SPA: Open the app
+    SPA->>SPA: generate code_verifier + code_challenge (PKCE)
+    SPA->>User: redirect browser to Keycloak's hosted login page
+    User->>KC: GET /realms/ucms/protocol/openid-connect/auth<br/>...&code_challenge=...
+    User->>KC: enter email + password, submit
+
+    KC->>KC: verify password hash<br/>(BCrypt SPI — the hash migrated from identity-access-service, unchanged)
+    KC->>KC: check account enabled/disabled (mirrors today's UserStatus)
+
+    alt wrong credentials or disabled
+        KC-->>User: login failed, shown on Keycloak's own page
+    else credentials valid
+        KC-->>User: redirect back to the SPA's redirect_uri with an authorization code
+        User->>SPA: lands back on the app
+        SPA->>KC: POST /realms/ucms/protocol/openid-connect/token<br/>code + code_verifier
+        KC-->>SPA: access_token (RS256 JWT: sub=userId, realm_access.roles),<br/>refresh_token, id_token
+        SPA->>GW: GET /api/identity/users/me<br/>Authorization: Bearer access_token
+        GW->>KC: validate signature via JWKS (cached)
+        GW->>IAM: forward (StripPrefix)
+        IAM->>IAM: UcmsJwtAuthenticationConverter → UUID + authorities<br/>(same shape JwtAuthFilter builds today)
+        IAM-->>GW: 200 ProfileResponse
+        GW-->>SPA: profile
+        SPA->>SPA: currentUser signal set, keycloak-js schedules silent refresh
+        SPA-->>User: redirected to role dashboard
+    end
+
+    Note over SPA,KC: No custom login form, no /auth/login endpoint — Keycloak's own<br/>hosted page collects the password, the SPA and the Gateway never see it.

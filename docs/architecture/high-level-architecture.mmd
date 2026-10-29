@@ -1,73 +1,67 @@
 ---
-title: "High-Level Architecture — solid/filled = built and running today; dashed/hatched = planned or scaffolded-but-unused (infra container exists, zero application code references it)"
+title: "UCMS — High-Level Architecture (all components built)"
 ---
 flowchart TB
     WEB["Angular SPA<br/>Admin · Lecturer · Student"]
 
-    WEB -->|HTTPS REST| GW["API Gateway<br/>Spring Cloud Gateway — path-prefix routing + CORS only.<br/>No rate limiting, no gateway-level token check<br/>(each downstream service validates its own JWT statelessly)"]
-    WEB -.->|WebSocket — planned, not implemented| WSG["WebSocket Gateway<br/>(design artifact only — no code exists)"]
+    WEB -->|HTTPS REST| GW["API Gateway<br/>Spring Cloud Gateway — routing, CORS,<br/>JWT backstop, logout revocation"]
+    WEB -->|"live push (Server-Sent Events,<br/>through the Gateway)"| GW
 
-    subgraph BUILT["Microservices Layer — Built (3 of 7) + Gateway"]
+    subgraph SERVICES["Microservices Layer — 7 services"]
         IAM["Identity & Access"]
         ACAD["Academic Structure"]
-        REF["Reference Data"]
-    end
-
-    subgraph PLANNED["Microservices Layer — Planned only (0 code exists)"]
         ENR["Enrollment"]
         GRADE["Assignment & Grading"]
-        NOTIF["Notification"]
+        NOTIF["Notification<br/>(in-app, email, live push)"]
         ANALYTICS["Analytics & Reporting"]
+        BASE["Base<br/>(reference data)"]
     end
 
-    GW --> IAM
-    GW --> ACAD
-    GW --> REF
+    GW --> SERVICES
 
     subgraph DATALAYER["Data Layer"]
-        PG[("PostgreSQL<br/>one instance, one shared database 'ucms',<br/>one schema per built service — actively used")]
-        REDIS[("Redis<br/>container runs — zero application code uses it.<br/>JWT validation is fully stateless, no cache lookup")]
+        PG[("PostgreSQL<br/>one database 'ucms', one schema per service")]
+        REDIS[("Redis<br/>revoked-token list")]
+        MINIO[("MinIO<br/>files and generated reports")]
     end
 
-    IAM --> PG
-    ACAD --> PG
-    REF --> PG
-    IAM -.->|not wired in| REDIS
-    ACAD -.->|not wired in| REDIS
-    REF -.->|not wired in| REDIS
+    SERVICES --> PG
+    IAM --> REDIS
+    GW --> REDIS
+    GRADE --> MINIO
+    ANALYTICS --> MINIO
 
-    subgraph ASYNC["Asynchronous Backbone — not wired in"]
-        MQ{{"RabbitMQ<br/>container runs — zero application code<br/>publishes or consumes any event today"}}
+    subgraph ASYNC["Asynchronous Backbone"]
+        MQ{{"RabbitMQ<br/>ucms.events topic exchange"}}
     end
 
-    PLANNED -.->|would publish/consume events,<br/>once those services exist| MQ
-    MQ -.-> WSG
+    IAM -.->|events| MQ
+    ENR -.->|events| MQ
+    GRADE -.->|events| MQ
+    ANALYTICS -.->|events| MQ
+    MQ -.-> NOTIF
+    MQ -.-> ANALYTICS
+    NOTIF -->|email| SMTP["SMTP relay"]
 
     subgraph PIPE["Delivery Pipeline"]
-        GIT["Git"] --> CI["Jenkins CI/CD<br/>multibranch pipeline — builds + tests every branch,<br/>deploys only develop / release / main"]
+        GIT["Git"] --> CI["Jenkins CI/CD<br/>multibranch — builds + tests every branch,<br/>deploys develop / release / main"]
         CI --> DOCKER["Docker Images"]
-        DOCKER --> DEPLOY["Deployed containers on one Contabo VPS<br/>(same host also runs Jenkins itself)"]
+        DOCKER --> DEPLOY["Containers on one VPS"]
     end
 
-    DEPLOY -.->|releases| BUILT
-    DEPLOY -.->|nginx container serves the SPA and<br/>reverse-proxies /api/ to the Gateway,<br/>same-origin — no CORS needed in prod| WEB
-    DEPLOY -.->|shares the one Postgres instance,<br/>already running on that host| PG
+    DEPLOY -.->|releases| SERVICES
+    DEPLOY -.->|nginx container serves the SPA and<br/>proxies /api/ to the Gateway| WEB
 
     classDef client fill:#3450D6,color:#fff,stroke:none
     classDef gateway fill:#E4E8FC,color:#161B29,stroke:#3450D6
-    classDef svcBuilt fill:#FFFFFF,color:#161B29,stroke:#3450D6,stroke-width:2px
-    classDef svcPlanned fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-width:1.5px,stroke-dasharray: 5 3
+    classDef svc fill:#FFFFFF,color:#161B29,stroke:#3450D6,stroke-width:2px
     classDef data fill:#FBEEDC,color:#161B29,stroke:#B4791F
-    classDef dataUnused fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-dasharray: 5 3
-    classDef async fill:#F4F4F4,color:#6B7280,stroke:#9CA3AF,stroke-dasharray: 5 3
+    classDef async fill:#EEF2F6,color:#161B29,stroke:#64748B
     classDef pipe fill:#161B29,color:#fff,stroke:none
 
     class WEB client
     class GW gateway
-    class WSG svcPlanned
-    class IAM,ACAD,REF svcBuilt
-    class ENR,GRADE,NOTIF,ANALYTICS svcPlanned
-    class PG data
-    class REDIS dataUnused
-    class MQ async
+    class IAM,ACAD,ENR,GRADE,NOTIF,ANALYTICS,BASE svc
+    class PG,REDIS,MINIO data
+    class MQ,SMTP async
     class GIT,CI,DOCKER,DEPLOY pipe

@@ -55,6 +55,17 @@ Sequence diagrams — each service gets its own vertical lane, and the arrows sh
 | `flow-03-admin-registration.mmd/png` | Admin registers a student into a program — the exact same Enrollment write path as self-service, just a different actor; this is the flow-level proof of the Section 6 "why Administration isn't a service" call in the architecture report |
 | `flow-04-login.mmd/png` | Login — three-way branch: valid credentials, wrong credentials, suspended account |
 
+## 4. Proposed: Keycloak OIDC migration (not yet implemented)
+
+See `docs/keycloak-migration-plan.md` for the full plan these diagrams illustrate.
+
+| File | Shows |
+|---|---|
+| `keycloak-01-topology.mmd/png` | Every component's relationship to Keycloak at once — the SPA's PKCE client, the Gateway's client-less JWKS validation, each backend service's own scoped `client_credentials` client, and the Redis assignments cache |
+| `keycloak-02-login-flow.mmd/png` | A user logging in via Authorization Code + PKCE against Keycloak's own hosted page — would supersede `flow-04-login.mmd` |
+| `keycloak-03-service-to-service.mmd/png` | One concrete `client_credentials` call (Enrollment → Academic Structure), replacing today's self-minted blanket-admin service token |
+| `keycloak-04-assignments-cache.mmd/png` | How the scope-based `assignments` claim survives without living in the Keycloak token, via a Redis cache invalidated at the write side |
+
 ## How to read them together
 
 1. **Start with `microservices-architecture.png`** to see which services talk to which, and whether that call is synchronous or event-driven, as a static map.

@@ -1,75 +1,82 @@
 ---
-title: "All schemas below live in one shared PostgreSQL instance and database — \"ucms\" — isolated from each other by per-service database roles, not separate databases. Solid boxes/edges = built and running today; dashed boxes/edges = planned only — 4 of these services have zero code, and no event ever flows through the Message Broker today because nothing publishes or consumes one yet."
+title: "UCMS microservices — all 7 built. One PostgreSQL database ('ucms'), one schema per service, isolated by schema-scoped roles. Solid = synchronous REST; dotted = asynchronous events via RabbitMQ."
 ---
 flowchart TB
-    GW["API Gateway<br/>routing (path-prefix) + CORS only —<br/>no rate limiting, no auth check of its own<br/>(each service below validates its own JWT)"]
+    GW["API Gateway<br/>path routing + CORS<br/>JWT signature/expiry backstop<br/>logout-revocation check (Redis)"]
 
-    IAM["1. Identity and Access Service<br/>Login, Users, Roles and Permissions,<br/>RBAC scope assignments, Profile"]
+    IAM["1. Identity and Access<br/>Login, Users, Roles and Permissions,<br/>RBAC scope assignments, Profile, Logout"]
     IAMSCHEMA[("ucms.identity_access")]
     IAM --- IAMSCHEMA
 
-    ACAD["2. Academic Structure Service<br/>Calendar, Programs, Curriculum, Catalog, Offerings"]
+    ACAD["2. Academic Structure<br/>Calendar, Programs, Curriculum,<br/>Catalog, Courses, Offerings"]
     ACADSCHEMA[("ucms.academic")]
     ACAD --- ACADSCHEMA
 
-    REF["7. Reference Data Service<br/>Faculties, Departments, Grading Scales, Categories"]
-    REFSCHEMA[("ucms.reference_data")]
-    REF --- REFSCHEMA
+    ENR["3. Enrollment<br/>Program registration, Course enrollment,<br/>Waitlist, Registration log, Rosters"]
+    ENRSCHEMA[("ucms.enrollment")]
+    ENR --- ENRSCHEMA
 
-    ENR["3. Enrollment Service<br/>(planned — no code exists)"]
-    ENRSCHEMA[("ucms.enrollment<br/>schema reserved, no tables")]
-    ENR -.- ENRSCHEMA
+    GRADE["4. Assignment and Grading<br/>Assignments, Submissions, Grades, GPA"]
+    GRADESCHEMA[("ucms.assignment_grading")]
+    GRADE --- GRADESCHEMA
 
-    GRADE["4. Assignment and Grading Service<br/>(planned — no code exists)"]
-    GRADESCHEMA[("ucms.assignment_grading<br/>schema reserved, no tables")]
-    GRADE -.- GRADESCHEMA
+    NOTIF["5. Notification<br/>In-app, Email, Live push (SSE), Preferences"]
+    NOTIFSCHEMA[("ucms.notification")]
+    NOTIF --- NOTIFSCHEMA
 
-    NOTIF["5. Notification Service<br/>(planned — no code exists)"]
-    NOTIFSCHEMA[("ucms.notification<br/>schema reserved, no tables")]
-    NOTIF -.- NOTIFSCHEMA
+    ANALYTICS["6. Analytics and Reporting<br/>Role dashboards, Snapshots,<br/>Reports (CSV/PDF), Schedules"]
+    ANALYTICSSCHEMA[("ucms.analytics")]
+    ANALYTICS --- ANALYTICSSCHEMA
 
-    ANALYTICS["6. Analytics and Reporting Service<br/>(planned — no code exists)"]
-    ANALYTICSSCHEMA[("ucms.analytics<br/>schema reserved, no tables")]
-    ANALYTICS -.- ANALYTICSSCHEMA
+    BASE["7. Base (renamed from Reference Data)<br/>Faculties, Departments, Grading Scales, Categories"]
+    BASESCHEMA[("ucms.base")]
+    BASE --- BASESCHEMA
 
     GW --> IAM
     GW --> ACAD
-    GW --> REF
-    GW -.->|planned| ENR
-    GW -.->|planned| GRADE
-    GW -.->|planned| NOTIF
-    GW -.->|planned| ANALYTICS
+    GW --> ENR
+    GW --> GRADE
+    GW --> NOTIF
+    GW --> ANALYTICS
+    GW --> BASE
 
-    ACAD -->|"periodic background sync (every 60s)<br/>of role/permission catalog — RestClient<br/>GET /roles, not a per-request call"| IAM
+    ACAD -->|role/permission catalog, every 60s| IAM
+    BASE -->|department dependents check| ACAD
+    ENR -->|offering open? capacity, lecturer;<br/>program/year validation| ACAD
+    ENR -->|student lookup| IAM
+    GRADE -->|offering lecturer, credits| ACAD
+    GRADE -->|is student enrolled? rosters| ENR
+    GRADE -->|grading scale bands| BASE
+    NOTIF -->|recipients, emails| ENR
+    NOTIF -->|email addresses| IAM
+    ANALYTICS -->|reads| IAM
+    ANALYTICS -->|reads| ACAD
+    ANALYTICS -->|reads| ENR
+    ANALYTICS -->|reads| GRADE
 
-    ENR -.->|planned: validates| ACAD
-    ACAD -.->|planned: resolves| REF
-    GRADE -.->|planned: validates| ENR
-    GRADE -.->|planned: resolves| REF
+    MQ{{"RabbitMQ — topic exchange ucms.events<br/>queues with dead-letter queues"}}
+    IAM -.->|identity.user-created| MQ
+    ENR -.->|enrollment.*| MQ
+    GRADE -.->|grading.*| MQ
+    ANALYTICS -.->|analytics.report-generated| MQ
+    MQ -.->|notification.events| NOTIF
+    MQ -.->|analytics.events| ANALYTICS
 
-    MQ{{"Message Broker — RabbitMQ<br/>container runs, but zero application<br/>code publishes or consumes any event today"}}
-    ENR -.-> MQ
-    GRADE -.-> MQ
-    ACAD -.-> MQ
-    IAM -.-> MQ
-    MQ -.-> NOTIF
-    MQ -.-> ANALYTICS
-
-    ANALYTICS -.->|planned: reads| IAM
-    ANALYTICS -.->|planned: reads| ACAD
-    ANALYTICS -.->|planned: reads| ENR
-    ANALYTICS -.->|planned: reads| GRADE
+    REDIS[("Redis<br/>revoked tokens")]
+    MINIO[("MinIO<br/>submissions, briefs, reports")]
+    SMTP["SMTP"]
+    IAM -->|logout writes| REDIS
+    GW -->|reads| REDIS
+    GRADE --> MINIO
+    ANALYTICS --> MINIO
+    NOTIF --> SMTP
 
     classDef schema fill:#FBEEDC,stroke:#B4791F,color:#161B29
-    classDef schemaPlanned fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-dasharray: 5 3
-    classDef svcBuilt fill:#FFFFFF,stroke:#3450D6,stroke-width:2px,color:#161B29
-    classDef svcPlanned fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-width:1.5px,stroke-dasharray: 5 3
+    classDef svc fill:#FFFFFF,stroke:#3450D6,stroke-width:2px,color:#161B29
     classDef gateway fill:#E4E8FC,color:#161B29,stroke:#3450D6
-    classDef async fill:#F4F4F4,stroke:#9CA3AF,color:#6B7280,stroke-dasharray: 5 3
+    classDef infra fill:#EEF2F6,stroke:#64748B,color:#161B29
 
-    class IAMSCHEMA,ACADSCHEMA,REFSCHEMA schema
-    class ENRSCHEMA,GRADESCHEMA,NOTIFSCHEMA,ANALYTICSSCHEMA schemaPlanned
-    class IAM,ACAD,REF svcBuilt
-    class ENR,GRADE,NOTIF,ANALYTICS svcPlanned
+    class IAMSCHEMA,ACADSCHEMA,ENRSCHEMA,GRADESCHEMA,NOTIFSCHEMA,ANALYTICSSCHEMA,BASESCHEMA schema
+    class IAM,ACAD,ENR,GRADE,NOTIF,ANALYTICS,BASE svc
     class GW gateway
-    class MQ async
+    class MQ,REDIS,MINIO,SMTP infra

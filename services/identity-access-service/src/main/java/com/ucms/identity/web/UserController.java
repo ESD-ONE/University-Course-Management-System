@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -64,6 +65,18 @@ public class UserController {
         return userService.summary();
     }
 
+    /** Batch id → user resolution for other services (enrollment rosters, notification
+     * recipients, analytics) calling with a service token. ADMIN-only via /users/**. */
+    @GetMapping("/users/lookup")
+    public List<UserResponse> lookup(@RequestParam(name = "ids") List<UUID> ids) {
+        return userService.lookup(ids);
+    }
+
+    @GetMapping("/users/{id}")
+    public UserResponse get(@PathVariable("id") UUID id) {
+        return userService.getUser(id);
+    }
+
     @GetMapping("/users/me")
     public ProfileResponse me(@AuthenticationPrincipal UUID currentUserId) {
         return userService.getProfile(currentUserId);
@@ -99,5 +112,14 @@ public class UserController {
                                     @Valid @RequestBody UpdateUserRoleRequest request,
                                     @AuthenticationPrincipal UUID currentUserId) {
         return userService.updateRole(id, request.role(), currentUserId);
+    }
+
+    /** G-12: soft-deletes the user via the existing deletedAt/deletedBy plumbing. ADMIN-only,
+     * same as the rest of /users/** per SecurityConfig. */
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable("id") UUID id,
+                                            @AuthenticationPrincipal UUID currentUserId) {
+        userService.deleteUser(id, currentUserId);
+        return ResponseEntity.noContent().build();
     }
 }

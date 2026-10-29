@@ -3,12 +3,15 @@ package com.ucms.identity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ucms.identity.domain.*;
+import com.ucms.identity.keycloak.KeycloakUserSync;
 import com.ucms.identity.repository.*;
+import com.ucms.identity.security.AssignmentCacheInvalidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -36,7 +40,8 @@ class RbacScopeAssignmentTest {
     @Autowired UserRepository userRepository;
     @Autowired PermissionRepository permissionRepository;
     @Autowired PasswordEncoder passwordEncoder;
-    @Autowired com.ucms.identity.security.JwtService jwtService;
+    @MockBean KeycloakUserSync keycloakUserSync;
+    @MockBean AssignmentCacheInvalidator assignmentCache;
 
     private String adminToken;
     private String lecturerToken;
@@ -62,7 +67,7 @@ class RbacScopeAssignmentTest {
         adminUser.setPasswordHash(passwordEncoder.encode("AdminPass1!"));
         adminUser.setRole(admin);
         adminUser.setStatus(UserStatus.ACTIVE);
-        userRepository.save(adminUser);
+        adminUser = userRepository.save(adminUser);
 
         lecturerUser = new User();
         lecturerUser.setName("Dr. Silva");
@@ -77,16 +82,8 @@ class RbacScopeAssignmentTest {
         viewCoursesPermission.setActionKey("View");
         viewCoursesPermission = permissionRepository.save(viewCoursesPermission);
 
-        adminToken = login("admin@test.local", "AdminPass1!");
-        lecturerToken = login("lecturer@test.local", "LecturerPass1!");
-    }
-
-    private String login(String email, String password) throws Exception {
-        String body = mockMvc.perform(post("/auth/login")
-                        .contentType("application/json")
-                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
-                .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(body).get("token").asText();
+        adminToken = KeycloakTestTokens.user(adminUser.getId(), "ADMIN");
+        lecturerToken = KeycloakTestTokens.user(lecturerUser.getId(), "LECTURER");
     }
 
     // ---- TC-P2-012/013: GET /roles, GET /permissions ----
@@ -144,6 +141,28 @@ class RbacScopeAssignmentTest {
                         .content("{\"permissionId\":\"" + viewCoursesPermission.getId() + "\",\"granted\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissions[0].granted").value(true));
+    }
+
+    // ---- G-10: the version field is now a real optimistic-locking check ----
+
+    @Test
+    void updateRolePermission_withCurrentVersion_succeeds() throws Exception {
+        // lecturerRole was just persisted in @BeforeEach, so its @Version starts at 0.
+        mockMvc.perform(patch("/roles/" + lecturerRole.getId() + "/permissions")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"permissionId\":\"" + viewCoursesPermission.getId() + "\",\"granted\":true,\"version\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions[0].granted").value(true));
+    }
+
+    @Test
+    void updateRolePermission_withStaleVersion_isRejectedWith409() throws Exception {
+        mockMvc.perform(patch("/roles/" + lecturerRole.getId() + "/permissions")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"permissionId\":\"" + viewCoursesPermission.getId() + "\",\"granted\":true,\"version\":999}"))
+                .andExpect(status().isConflict());
     }
 
     // ---- TC-P2-016: POST /users/{id}/assignments ----
@@ -231,23 +250,24 @@ class RbacScopeAssignmentTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
-    // ---- Phase 3 / section 12.3: JWT carries the user's scope assignments ----
+    // ---- Scope assignments are served to academic-structure-service, which caches them ----
 
     @Test
-    void login_embedsAssignmentsClaim() throws Exception {
+    void internalAssignments_returnTheUsersCurrentAssignments_andChangesDropTheCache() throws Exception {
+        UUID departmentId = UUID.randomUUID();
         mockMvc.perform(post("/users/" + lecturerUser.getId() + "/assignments")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType("application/json")
-                        .content("{\"roleId\":\"" + lecturerRole.getId() + "\",\"scopeType\":\"DEPARTMENT\",\"scopeId\":\"" + UUID.randomUUID() + "\"}"))
+                        .content("{\"roleId\":\"" + lecturerRole.getId() + "\",\"scopeType\":\"DEPARTMENT\",\"scopeId\":\"" + departmentId + "\"}"))
                 .andExpect(status().isCreated());
+        verify(assignmentCache).evict(lecturerUser.getId());
 
-        String freshToken = login("lecturer@test.local", "LecturerPass1!");
-        var claims = jwtService.parse(freshToken);
-        var assignments = (java.util.List<?>) claims.get("assignments");
-        org.junit.jupiter.api.Assertions.assertFalse(assignments.isEmpty());
-        @SuppressWarnings("unchecked")
-        var first = (java.util.Map<String, Object>) assignments.get(0);
-        org.junit.jupiter.api.Assertions.assertEquals("DEPARTMENT", first.get("scopeType"));
+        mockMvc.perform(get("/internal/assignments/" + lecturerUser.getId())
+                        .header("Authorization", "Bearer " + KeycloakTestTokens.service("svc:identity")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].scopeType").value("DEPARTMENT"))
+                .andExpect(jsonPath("$[0].scopeId").value(departmentId.toString()))
+                .andExpect(jsonPath("$[0].roleId").value(lecturerRole.getId().toString()));
     }
 
     @Test

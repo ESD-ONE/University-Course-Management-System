@@ -5,5 +5,5 @@ import jakarta.validation.constraints.Size;
 
 public record UpdatePasswordRequest(
         @NotBlank String currentPassword,
-        @NotBlank @Size(min = 8, message = "New password must be at least 8 characters") String newPassword
+        @NotBlank @Size(min = 12, max = 128, message = "New password must be 12 to 128 characters") String newPassword
 ) {}

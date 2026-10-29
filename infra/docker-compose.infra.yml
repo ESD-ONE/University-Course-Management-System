@@ -7,19 +7,41 @@
 # Usage on the server: cd /opt/ucms && docker compose --env-file .env up -d
 # Secrets (POSTGRES_PASSWORD, IDENTITY_ACCESS_SVC_PASSWORD, REDIS_PASSWORD, ...)
 # live only in that untracked .env file, never in this repo.
+#
+# Networks (named explicitly, so they're the same whatever the Compose project is called;
+# docker-compose.deploy.yml joins them as external):
+#   ucms_edge — what the public-facing web container can reach: gateway, Keycloak
+#   ucms_app  — gateway <-> services, services <-> each other, Keycloak, Redis
+#   ucms_data — services and Keycloak <-> Postgres, RabbitMQ, MinIO, mail
+# so the internet-facing container has no route to the databases at all.
+#
+# Images are pinned by digest — bump them deliberately, never by a re-pull.
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
 
 services:
   ucms-postgres:
-    image: postgres:15-alpine
+    image: postgres:15.19-alpine@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984
     container_name: ucms-postgres
     restart: unless-stopped
+    <<: *hardening
+    # Two replicas of the busier services each hold a small pool (DB_POOL_SIZE=5), plus
+    # Keycloak's (KC_DB_POOL_MAX_SIZE): 200 leaves headroom over the default 100.
+    command: ["postgres", "-c", "max_connections=200"]
+    networks: [data]
     environment:
       POSTGRES_USER: ucms_admin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ucms
       IDENTITY_ACCESS_SVC_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
-      REFERENCE_DATA_SVC_PASSWORD: ${REFERENCE_DATA_SVC_PASSWORD}
+      BASE_SVC_PASSWORD: ${BASE_SVC_PASSWORD}
       ACADEMIC_STRUCTURE_SVC_PASSWORD: ${ACADEMIC_STRUCTURE_SVC_PASSWORD}
+      ENROLLMENT_SVC_PASSWORD: ${ENROLLMENT_SVC_PASSWORD}
+      ASSIGNMENT_GRADING_SVC_PASSWORD: ${ASSIGNMENT_GRADING_SVC_PASSWORD}
+      NOTIFICATION_SVC_PASSWORD: ${NOTIFICATION_SVC_PASSWORD}
+      ANALYTICS_SVC_PASSWORD: ${ANALYTICS_SVC_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
     ports:
       - "127.0.0.1:5434:5432"
     volumes:
@@ -32,9 +54,11 @@ services:
       retries: 5
 
   ucms-redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
     container_name: ucms-redis
     restart: unless-stopped
+    <<: *hardening
+    networks: [app]
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
     ports:
       - "127.0.0.1:6380:6379"
@@ -42,9 +66,11 @@ services:
       - ucms_redis_data:/data
 
   ucms-rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:3.13.7-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
     container_name: ucms-rabbitmq
     restart: unless-stopped
+    <<: *hardening
+    networks: [data]
     environment:
       RABBITMQ_DEFAULT_USER: ucms_admin
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -55,9 +81,16 @@ services:
       - ucms_rabbitmq_data:/var/lib/rabbitmq
 
   ucms-minio:
-    image: minio/minio
+    # minio/minio is no longer pullable from Docker Hub or quay.io (MinIO stopped
+    # publishing community images). Chainguard's build is the same MinIO server, same
+    # env vars and command. An already-running container on an existing host is
+    # unaffected until this stack is re-created.
+    # Chainguard's free tier only publishes :latest, so the pin is the digest alone.
+    image: cgr.dev/chainguard/minio@sha256:268d68a2a3b6fc65f905a61f84d7eab6345ce6bff14f551e2b028ec31e6a1341
     container_name: ucms-minio
     restart: unless-stopped
+    <<: *hardening
+    networks: [data]
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ucms_admin
@@ -67,6 +100,76 @@ services:
       - "127.0.0.1:9003:9001"
     volumes:
       - ucms_minio_data:/data
+
+  # Development mail catcher for notification-service's email channel: SMTP on 1025,
+  # web inbox on 8025. Not a real mail relay — production needs SMTP_HOST pointed at one.
+  ucms-mailpit:
+    image: axllent/mailpit:v1.20@sha256:7eef0f38dbc85e4e264f2edf5d70fbb694826791e05cb2cae4fc9e3282f968f5
+    container_name: ucms-mailpit
+    restart: unless-stopped
+    <<: *hardening
+    networks: [data]
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+  # Identity provider: issues every token in the system (users via the browser's
+  # Authorization Code + PKCE login, services via client_credentials). Its tables live in
+  # the shared Postgres under their own "keycloak" schema and role, like every service —
+  # see init-schemas.sh. Served under /auth so the web container can proxy it on the
+  # same origin as the app in production. See docs/keycloak-integration.md.
+  ucms-keycloak:
+    build:
+      context: ./keycloak
+    image: ucms-keycloak:26.0.7
+    container_name: ucms-keycloak
+    restart: unless-stopped
+    <<: *hardening
+    networks: [edge, app, data]
+    environment:
+      KC_DB_URL: jdbc:postgresql://ucms-postgres:5432/ucms
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: keycloak_svc
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      # Keycloak's default pool is 100 connections; it needs nowhere near that here.
+      KC_DB_POOL_MAX_SIZE: "20"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # The URL browsers use to reach Keycloak; it is also the token issuer every
+      # service checks. Production sets KEYCLOAK_PUBLIC_URL=https://esd.azhosting.fun/auth.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180/auth}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      # Client secrets, substituted into realm/ucms-realm.json on first import.
+      KC_SVC_IDENTITY_ACCESS_SECRET: ${KC_SVC_IDENTITY_ACCESS_SECRET}
+      KC_SVC_BASE_SECRET: ${KC_SVC_BASE_SECRET}
+      KC_SVC_ACADEMIC_STRUCTURE_SECRET: ${KC_SVC_ACADEMIC_STRUCTURE_SECRET}
+      KC_SVC_ENROLLMENT_SECRET: ${KC_SVC_ENROLLMENT_SECRET}
+      KC_SVC_ASSIGNMENT_GRADING_SECRET: ${KC_SVC_ASSIGNMENT_GRADING_SECRET}
+      KC_SVC_NOTIFICATION_SECRET: ${KC_SVC_NOTIFICATION_SECRET}
+      KC_SVC_ANALYTICS_REPORTING_SECRET: ${KC_SVC_ANALYTICS_REPORTING_SECRET}
+    ports:
+      - "127.0.0.1:8180:8080"
+    healthcheck:
+      # The image has no curl/wget; bash's /dev/tcp talks to the management port.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      ucms-postgres:
+        condition: service_healthy
+
+networks:
+  edge:
+    name: ucms_edge
+  app:
+    name: ucms_app
+  # Not "internal": Docker won't publish ports (the 127.0.0.1 ones the SSH-tunnel
+  # workflow uses) for containers on internal-only networks.
+  data:
+    name: ucms_data
 
 volumes:
   ucms_postgres_data:
