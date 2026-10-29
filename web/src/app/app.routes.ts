@@ -1,5 +1,13 @@
 import { Routes } from '@angular/router';
-import { adminGuard, authGuard, guestGuard, lecturerGuard } from './core/guards/auth.guard';
+import {
+  adminGuard,
+  authGuard,
+  departmentScopedGuard,
+  guestGuard,
+  lecturerGuard,
+  staffGuard,
+  studentGuard,
+} from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -42,21 +50,15 @@ export const routes: Routes = [
       },
       {
         path: 'reference-degree-details',
-        canActivate: [authGuard],
+        canActivate: [lecturerGuard],
         loadComponent: () =>
           import('./features/academic-structure/reference-degree-details.component').then(
             (m) => m.ReferenceDegreeDetailsComponent,
           ),
       },
       {
-        path: 'degree-programs',
-        canActivate: [adminGuard],
-        loadComponent: () =>
-          import('./features/academic-structure/degree-programs.component').then((m) => m.DegreeProgramsComponent),
-      },
-      {
         path: 'program-management',
-        canActivate: [adminGuard],
+        canActivate: [departmentScopedGuard],
         loadComponent: () =>
           import('./features/academic-structure/program-management.component').then(
             (m) => m.ProgramManagementComponent,
@@ -87,6 +89,70 @@ export const routes: Routes = [
         canActivate: [lecturerGuard],
         loadComponent: () =>
           import('./features/academic-structure/create-course.component').then((m) => m.CreateCourseComponent),
+      },
+      // Enrollment
+      {
+        path: 'registrations',
+        canActivate: [staffGuard],
+        loadComponent: () =>
+          import('./features/enrollment/registrations.component').then((m) => m.RegistrationsComponent),
+      },
+      {
+        path: 'students',
+        canActivate: [staffGuard],
+        loadComponent: () => import('./features/enrollment/students.component').then((m) => m.StudentsComponent),
+      },
+      {
+        path: 'browse',
+        canActivate: [studentGuard],
+        loadComponent: () =>
+          import('./features/enrollment/browse-courses.component').then((m) => m.BrowseCoursesComponent),
+      },
+      {
+        path: 'my-enrollments',
+        canActivate: [studentGuard],
+        loadComponent: () =>
+          import('./features/enrollment/my-enrollments.component').then((m) => m.MyEnrollmentsComponent),
+      },
+      {
+        path: 'my-program',
+        canActivate: [studentGuard],
+        loadComponent: () => import('./features/enrollment/my-program.component').then((m) => m.MyProgramComponent),
+      },
+      // Assignment & Grading
+      {
+        path: 'assignments',
+        canActivate: [staffGuard],
+        loadComponent: () =>
+          import('./features/grading/lecturer-assignments.component').then((m) => m.LecturerAssignmentsComponent),
+      },
+      {
+        path: 'grading',
+        canActivate: [staffGuard],
+        loadComponent: () => import('./features/grading/grading.component').then((m) => m.GradingComponent),
+      },
+      {
+        path: 'my-assignments',
+        canActivate: [studentGuard],
+        loadComponent: () =>
+          import('./features/grading/my-assignments.component').then((m) => m.MyAssignmentsComponent),
+      },
+      {
+        path: 'grades',
+        canActivate: [studentGuard],
+        loadComponent: () => import('./features/grading/grades.component').then((m) => m.GradesComponent),
+      },
+      // Analytics & Reporting, Roles & Permissions
+      {
+        path: 'reports',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/analytics/reports.component').then((m) => m.ReportsComponent),
+      },
+      {
+        path: 'roles',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/roles/roles-permissions.component').then((m) => m.RolesPermissionsComponent),
       },
     ],
   },

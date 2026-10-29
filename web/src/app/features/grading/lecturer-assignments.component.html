@@ -1,0 +1,115 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Assignment Management</div>
+    <h1 class="page-title">Assignments</h1>
+    <p class="page-sub">Create and manage assignments across all of your courses.</p>
+  </div>
+  <button class="btn btn-primary" [disabled]="!offerings().length" (click)="openNew()">+ Create Assignment</button>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="field-row" style="margin-bottom:0;">
+    <div class="field">
+      <label for="laCourse">Course</label>
+      <select id="laCourse" [ngModel]="courseFilter()" (ngModelChange)="courseFilter.set($event)">
+        <option value="">All courses</option>
+        @for (o of offerings(); track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
+      </select>
+    </div>
+    <div class="field">
+      <label for="laStatus">Status</label>
+      <select id="laStatus" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <option value="">All statuses</option>
+        <option value="OPEN">Open</option>
+        <option value="CLOSED">Closed</option>
+        <option value="DRAFT">Draft</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:220px;height:14px;"></span></div> }</div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="card">
+    <table>
+      <thead><tr><th>Title</th><th>Course</th><th>Due</th><th>Max Marks</th><th>Submissions</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        @for (a of filtered(); track a.id) {
+          <tr>
+            <td class="cell-name">
+              {{ a.title }}
+              @if (a.briefFileName) { <div><a class="btn-link" style="font-size:11.5px;cursor:pointer;" (click)="downloadBrief(a)">📎 {{ a.briefFileName }}</a></div> }
+            </td>
+            <td class="cell-soft">{{ a.courseCode }} · {{ a.courseName }}</td>
+            <td class="cell-faint">{{ a.dueDate | date: 'dd MMM y, HH:mm' }}</td>
+            <td class="cell-soft">{{ a.maxMarks }}</td>
+            <td class="cell-soft">{{ a.totalStudents ? a.submittedCount + ' / ' + a.totalStudents : '—' }} @if (a.gradedCount) { <span style="color:var(--success);">· {{ a.gradedCount }} graded</span> }</td>
+            <td><span class="badge" [class.b-success]="a.status === 'OPEN'" [class.b-ink]="a.status === 'CLOSED'" [class.b-gold]="a.status === 'DRAFT'">{{ a.status | titlecase }}</span></td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+              @if (a.status === 'DRAFT') { <button class="btn btn-primary btn-sm" (click)="setStatus(a, 'OPEN')">Publish</button> }
+              @if (a.status === 'OPEN') { <button class="btn btn-secondary btn-sm" (click)="setStatus(a, 'CLOSED')">Close</button> }
+              @if (a.status === 'CLOSED') { <button class="btn btn-secondary btn-sm" (click)="setStatus(a, 'OPEN')">Reopen</button> }
+              <button class="btn btn-secondary btn-sm" (click)="openEdit(a)">Edit</button>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Brief<input type="file" style="display:none;" (change)="uploadBrief(a, $event)" /></label>
+              @if (a.status !== 'DRAFT') { <a class="btn btn-secondary btn-sm" [routerLink]="['/app/grading']" [queryParams]="{ assignment: a.id }">Submissions ›</a> }
+              @if (!a.submittedCount) { <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="remove(a)">Delete</button> }
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">No assignments match these filters.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (editing(); as e) {
+  <div class="modal-overlay" (click)="editing.set(null)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div><h3>{{ e === 'new' ? 'Create Assignment' : 'Edit Assignment' }}</h3><p>{{ e === 'new' ? 'Saved as a draft — publish it when it is ready for students.' : 'Changes are visible to students immediately.' }}</p></div>
+        <button class="modal-close" (click)="editing.set(null)">✕</button>
+      </div>
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <div class="modal-body">
+          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
+          <div class="field">
+            <label for="afCourse">Course</label>
+            <select id="afCourse" formControlName="offeringId">
+              @for (o of offerings(); track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
+            </select>
+          </div>
+          <div class="field">
+            <label for="afTitle">Title</label>
+            <input id="afTitle" type="text" formControlName="title" placeholder="e.g. Programming Exercise 2" />
+          </div>
+          <div class="field">
+            <label for="afDesc">Instructions</label>
+            <textarea id="afDesc" rows="4" formControlName="description" placeholder="What students need to do and submit"></textarea>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="afDue">Due</label>
+              <input id="afDue" type="datetime-local" formControlName="dueDate" />
+            </div>
+            <div class="field">
+              <label for="afMax">Max Marks</label>
+              <input id="afMax" type="number" min="1" max="1000" formControlName="maxMarks" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-secondary" (click)="editing.set(null)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="form.invalid || submitting()">{{ submitting() ? 'Saving…' : 'Save' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

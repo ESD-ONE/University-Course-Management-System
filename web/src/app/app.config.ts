@@ -1,7 +1,6 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { ApplicationConfig, inject, provideAppInitializer, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { catchError, firstValueFrom, of } from 'rxjs';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -12,23 +11,14 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
-    // A page refresh still has a token in localStorage but an empty currentUser
-    // signal — resolve it once before the router activates any route, so guards
-    // see accurate state on the very first navigation instead of bouncing to
-    // /login for a split second. An expired/invalid token just logs out quietly.
-    provideAppInitializer(() => {
-      const auth = inject(AuthService);
-      if (!auth.getToken()) {
-        return;
-      }
-      return firstValueFrom(
-        auth.restoreSession().pipe(
-          catchError(() => {
-            auth.logout();
-            return of(null);
-          }),
-        ),
-      );
-    }),
+    // Finish a redirect back from Keycloak's login page, or silently pick up an existing
+    // Keycloak session, before the router activates any route — so guards see accurate
+    // state on the very first navigation. If Keycloak can't be reached the app still
+    // starts, signed out; the login page's button retries.
+    provideAppInitializer(() =>
+      inject(AuthService)
+        .init()
+        .catch((err) => console.warn('Sign-in could not be restored', err)),
+    ),
   ],
 };

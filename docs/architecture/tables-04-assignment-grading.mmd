@@ -1,48 +1,53 @@
 ---
-title: 4. Assignment and Grading Service — ucms.assignment_grading schema
+title: 4. Assignment and Grading Service — ucms.assignment_grading schema (built)
 ---
 erDiagram
     ASSIGNMENTS {
         uuid id PK
-        uuid course_id "ref Academic Structure, no FK"
+        uuid course_offering_id "ref Academic Structure course_academic_years, no FK"
         string title
         text description
         timestamptz due_date
         int max_marks
-        string status
+        string status "DRAFT, OPEN, CLOSED"
+        string brief_file_name "nullable"
+        string brief_object_key "nullable, MinIO key"
         int version "optimistic lock"
         timestamptz created_at
-        uuid created_by "ref Identity and Access, no FK"
+        uuid created_by
         timestamptz updated_at
-        uuid updated_by "ref Identity and Access, no FK"
+        uuid updated_by
         timestamptz deleted_at "nullable, soft delete"
-        uuid deleted_by "ref Identity and Access, no FK, nullable"
+        uuid deleted_by "nullable"
     }
     SUBMISSIONS {
         uuid id PK
         uuid assignment_id FK
-        uuid student_id "ref Identity and Access, no FK"
+        uuid student_id "ref Identity and Access, no FK — one per assignment"
         string file_name
+        string object_key "MinIO key"
+        string content_type
+        bigint size_bytes
         timestamptz submitted_at
-        string status
+        string status "SUBMITTED, GRADED"
         int version "optimistic lock — guards resubmission races"
         timestamptz created_at
-        uuid created_by "ref Identity and Access, no FK"
+        uuid created_by
         timestamptz updated_at
-        uuid updated_by "ref Identity and Access, no FK"
+        uuid updated_by
     }
     GRADES {
         uuid id PK
-        uuid submission_id FK
+        uuid submission_id FK "unique"
         decimal marks
         text feedback
         uuid graded_by "ref Identity and Access, no FK"
         timestamptz graded_at
         int version "optimistic lock — guards re-grading races"
         timestamptz created_at
-        uuid created_by "ref Identity and Access, no FK"
+        uuid created_by
         timestamptz updated_at
-        uuid updated_by "ref Identity and Access, no FK"
+        uuid updated_by
     }
 
     ASSIGNMENTS ||--o{ SUBMISSIONS : "receives"

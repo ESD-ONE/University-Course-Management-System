@@ -9,5 +9,6 @@ import java.util.UUID;
 public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, UUID> {
     boolean existsByDegreeProgramIdAndCatalogCourseId(UUID degreeProgramId, UUID catalogCourseId);
     boolean existsByDegreeProgramId(UUID degreeProgramId);
+    boolean existsByCatalogCourseId(UUID catalogCourseId);
     List<ProgramCourse> findByDegreeProgramIdOrderByRecommendedYearAscRecommendedSemesterAsc(UUID degreeProgramId);
 }

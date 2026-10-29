@@ -11,8 +11,12 @@
 
     <modules>
         <module>services/identity-access-service</module>
-        <module>services/reference-data-service</module>
+        <module>services/base-service</module>
         <module>services/academic-structure-service</module>
+        <module>services/enrollment-service</module>
+        <module>services/assignment-grading-service</module>
+        <module>services/notification-service</module>
+        <module>services/analytics-reporting-service</module>
         <module>services/gateway</module>
     </modules>
 

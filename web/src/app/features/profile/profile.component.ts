@@ -3,15 +3,11 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { ReactiveFormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { UserService } from '../../core/services/user.service';
 
-/**
- * Matches html-wireframes/index.html's profile() (lines 2199-2234) exactly:
- * name edit, change password, and notification preferences, all self-service —
- * see docs/FULL_SYSTEM_GAP_ANALYSIS.md section D for why this view, specifically,
- * is fully buildable without a new backend service when the other 19 missing
- * views aren't.
- */
+/** Matches html-wireframes/index.html's profile(): name edit, change password, and
+ *  notification preferences (owned by notification-service), all self-service. */
 @Component({
   selector: 'app-profile',
   standalone: true,
@@ -21,6 +17,7 @@ import { UserService } from '../../core/services/user.service';
 export class ProfileComponent {
   private fb = inject(FormBuilder);
   private userService = inject(UserService);
+  private notifications = inject(NotificationService);
   readonly auth = inject(AuthService);
 
   readonly nameForm = this.fb.group({
@@ -29,7 +26,7 @@ export class ProfileComponent {
 
   readonly passwordForm = this.fb.group({
     currentPassword: ['', Validators.required],
-    newPassword: ['', [Validators.required, Validators.minLength(8)]],
+    newPassword: ['', [Validators.required, Validators.minLength(12), Validators.maxLength(128)]],
     confirmPassword: ['', Validators.required],
   });
 
@@ -41,12 +38,21 @@ export class ProfileComponent {
   readonly prefsSaving = signal(false);
   readonly prefsSaved = signal(false);
 
-  readonly prefs = signal({
-    email: this.auth.currentUser()?.notifyEmail ?? true,
-    assignments: this.auth.currentUser()?.notifyAssignments ?? true,
-    grades: this.auth.currentUser()?.notifyGrades ?? true,
-    registrations: this.auth.currentUser()?.notifyRegistrations ?? true,
-  });
+  readonly prefs = signal({ email: true, assignments: true, grades: true, registrations: true });
+
+  constructor() {
+    // Preferences are owned by notification-service (it seeds them from the account's
+    // older identity-access values the first time they're read).
+    this.notifications.preferences().subscribe({
+      next: (p) =>
+        this.prefs.set({
+          email: p.emailEnabled,
+          assignments: p.assignmentAlerts,
+          grades: p.gradeAlerts,
+          registrations: p.registrationAlerts,
+        }),
+    });
+  }
 
   togglePref(key: keyof ReturnType<typeof this.prefs>): void {
     this.prefs.update((p) => ({ ...p, [key]: !p[key] }));
@@ -79,7 +85,7 @@ export class ProfileComponent {
   savePassword(): void {
     this.passwordError.set(null);
     if (this.passwordForm.invalid) {
-      this.passwordError.set('Fill in all three fields - the new password needs at least 8 characters.');
+      this.passwordError.set('Fill in all three fields - the new password needs 12 to 128 characters.');
       return;
     }
     const { currentPassword, newPassword, confirmPassword } = this.passwordForm.getRawValue();
@@ -106,9 +112,16 @@ export class ProfileComponent {
   savePrefs(): void {
     this.prefsSaving.set(true);
     this.prefsSaved.set(false);
-    this.userService.updateOwnNotificationPreferences(this.prefs()).subscribe({
-      next: (user) => {
-        this.auth.setCurrentUser(user);
+    const p = this.prefs();
+    this.notifications
+      .updatePreferences({
+        emailEnabled: p.email,
+        assignmentAlerts: p.assignments,
+        gradeAlerts: p.grades,
+        registrationAlerts: p.registrations,
+      })
+      .subscribe({
+      next: () => {
         this.prefsSaving.set(false);
         this.prefsSaved.set(true);
         setTimeout(() => this.prefsSaved.set(false), 2500);

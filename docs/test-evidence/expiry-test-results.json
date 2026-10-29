@@ -1,0 +1,50 @@
+[
+  {
+    "id": "EXP-1",
+    "desc": "token lifetime matches JWT_EXPIRATION_MINUTES=1",
+    "pass": true,
+    "actual": "60s"
+  },
+  {
+    "id": "EXP-2",
+    "desc": "idle user is redirected to /login?expired=1 at expiry",
+    "pass": true,
+    "actual": "http://localhost:4200/login?expired=1"
+  },
+  {
+    "id": "EXP-3",
+    "desc": "login page explains the session expired",
+    "pass": true,
+    "actual": "Your session has expired. Please sign in again."
+  },
+  {
+    "id": "EXP-4",
+    "desc": "token removed from storage",
+    "pass": true,
+    "actual": "null"
+  },
+  {
+    "id": "EXP-5",
+    "desc": "protected route is no longer reachable",
+    "pass": true,
+    "actual": "http://localhost:4200/login"
+  },
+  {
+    "id": "EXP-6",
+    "desc": "reopening with an expired token lands on /login?expired=1",
+    "pass": true,
+    "actual": "http://localhost:4200/login?expired=1"
+  },
+  {
+    "id": "EXP-7",
+    "desc": "expired message shown after refresh",
+    "pass": true,
+    "actual": "banner"
+  },
+  {
+    "id": "EXP-8",
+    "desc": "a 401 on an API call signs the user out",
+    "pass": true,
+    "actual": "logout 204, now at http://localhost:4200/login?expired=1"
+  }
+]

@@ -130,6 +130,18 @@ public class DegreeProgramService {
                 .toList();
     }
 
+    /** Same View rule as list(), for a single program — used by enrollment-service to
+     * validate a program registration target and by the student "My Program" screen. */
+    @Transactional(readOnly = true)
+    public DegreeProgramResponse get(UUID programId) {
+        DegreeProgram program = degreeProgramRepository.findByIdAndDeletedAtIsNull(programId)
+                .orElseThrow(() -> new EntityNotFoundException("Degree program not found"));
+        if (!permissionResolver.canOnDepartment(program.getDepartmentId(), MODULE, "View")) {
+            throw new AccessDeniedException("No permission to view this degree program");
+        }
+        return DegreeProgramResponse.from(program);
+    }
+
     @Transactional
     public DegreeProgramResponse create(CreateDegreeProgramRequest request, UUID createdBy) {
         if (!permissionResolver.canOnDepartment(request.departmentId(), MODULE, "Create")) {
@@ -150,8 +162,17 @@ public class DegreeProgramService {
         return DegreeProgramResponse.from(degreeProgramRepository.save(p));
     }
 
+    /** G-07: this read was previously unguarded — any authenticated user of any role
+     * could read any department's curriculum. Now matches the write-side scoping
+     * (canOnDepartment), same View check its sibling list()/listForAcademicYear()
+     * already apply. */
     @Transactional(readOnly = true)
     public List<ProgramCourseResponse> listCurriculum(UUID programId) {
+        DegreeProgram program = degreeProgramRepository.findByIdAndDeletedAtIsNull(programId)
+                .orElseThrow(() -> new EntityNotFoundException("Degree program not found"));
+        if (!permissionResolver.canOnDepartment(program.getDepartmentId(), MODULE, "View")) {
+            throw new AccessDeniedException("No permission to view this program's curriculum");
+        }
         return programCourseRepository.findByDegreeProgramIdOrderByRecommendedYearAscRecommendedSemesterAsc(programId).stream()
                 .map(ProgramCourseResponse::from)
                 .toList();

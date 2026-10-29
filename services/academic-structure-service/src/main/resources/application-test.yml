@@ -14,5 +14,21 @@ spring:
     enabled: false
 
 ucms:
-  jwt:
-    secret: test-secret-key-used-only-for-automated-tests-not-real
+  # Tokens in tests are signed with src/test/resources/keycloak-test-private.pem (see
+  # KeycloakTestTokens); this is its public half, used instead of Keycloak's JWKS.
+  keycloak:
+    url: http://keycloak.test/auth
+    issuer: http://keycloak.test/auth/realms/ucms
+    client-id: svc-academic-structure
+    client-secret: test
+    service-role: svc:academic
+    public-key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArNteaUwiuIk8Ts8I40sz
+      EvivOy9QpYxIWh483RrZPUHtVqLpoPn9lZiA3YCR01KRuMuCj+41JG6hhqkaNWEn
+      dCokNjrTtGRs+VP0+ig9LKDEsVif9g9S3owHBoI6stl/+YHh6R24Rs6T5c0YQPZJ
+      o50GBmvwdb/q5T8x3SbBKljtJgho8s3voCn9JSUXFdtxiElK2gdpObrHUnqW5GLR
+      qdwOSpY6DCqlAKx/K3ucKoqJIh5dvp1Iwf97WSrK6ROZT9vYIaqxXOqFDEROBbhA
+      /fh4gnWZZ0UEoVquzHaS1/pjt56r2Zm42Io+kUsxvWG0PwE42EFReNNqlP9z3b2g
+      WQIDAQAB
+      -----END PUBLIC KEY-----

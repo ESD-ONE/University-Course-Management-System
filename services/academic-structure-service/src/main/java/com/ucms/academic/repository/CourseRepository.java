@@ -13,4 +13,5 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     List<Course> findByLecturerIdAndDegreeProgramIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID lecturerId, UUID degreeProgramId);
     List<Course> findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(List<UUID> ids);
     boolean existsByDegreeProgramIdAndDeletedAtIsNull(UUID degreeProgramId);
+    boolean existsByCatalogCourseIdAndDeletedAtIsNull(UUID catalogCourseId);
 }

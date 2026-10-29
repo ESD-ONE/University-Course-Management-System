@@ -5,6 +5,8 @@ import com.ucms.identity.domain.Role;
 import com.ucms.identity.domain.RoleKind;
 import com.ucms.identity.domain.User;
 import com.ucms.identity.domain.UserStatus;
+import com.ucms.identity.keycloak.KeycloakUnavailableException;
+import com.ucms.identity.keycloak.KeycloakUserSync;
 import com.ucms.identity.repository.RoleRepository;
 import com.ucms.identity.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +22,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -38,6 +46,7 @@ class UserManagementTest {
     @Autowired UserRepository userRepository;
     @Autowired RoleRepository roleRepository;
     @Autowired PasswordEncoder passwordEncoder;
+    @MockBean KeycloakUserSync keycloakUserSync;
 
     private String adminToken;
 
@@ -64,13 +73,8 @@ class UserManagementTest {
         adminUser.setPasswordHash(passwordEncoder.encode("AdminPass1!"));
         adminUser.setRole(admin);
         adminUser.setStatus(UserStatus.ACTIVE);
-        userRepository.save(adminUser);
-
-        String body = mockMvc.perform(post("/auth/login")
-                        .contentType("application/json")
-                        .content("{\"email\":\"admin@test.local\",\"password\":\"AdminPass1!\"}"))
-                .andReturn().getResponse().getContentAsString();
-        adminToken = objectMapper.readTree(body).get("token").asText();
+        adminUser = userRepository.save(adminUser);
+        adminToken = KeycloakTestTokens.user(adminUser.getId(), "ADMIN");
     }
 
     @Test
@@ -83,6 +87,39 @@ class UserManagementTest {
                 .andExpect(jsonPath("$.temporaryPassword").isNotEmpty())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.studentId").value(org.hamcrest.Matchers.matchesPattern("STU-\\d{4}-\\d{4}")));
+    }
+
+    @Test
+    void createUser_withAShortPassword_isRejectedWithAPlainMessage() throws Exception {
+        mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"T. Short\",\"email\":\"t.short@test.local\",\"password\":\"Short-pw1\",\"role\":\"STUDENT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed: Password must be 12 to 128 characters"));
+    }
+
+    @Test
+    void createUser_createsTheKeycloakAccountWithTheSamePasswordItReturns() throws Exception {
+        String body = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"K. Perera\",\"email\":\"k.perera@test.local\",\"role\":\"LECTURER\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String temporaryPassword = objectMapper.readTree(body).get("temporaryPassword").asText();
+
+        verify(keycloakUserSync).created(argThat(u -> u.getEmail().equals("k.perera@test.local")), eq(temporaryPassword));
+    }
+
+    @Test
+    void createUser_isRolledBackWhenKeycloakIsUnavailable() throws Exception {
+        doThrow(new KeycloakUnavailableException("down", null)).when(keycloakUserSync).created(any(), any());
+        mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Q\",\"email\":\"q@test.local\",\"role\":\"STUDENT\"}"))
+                .andExpect(status().isServiceUnavailable());
     }
 
     @Test
@@ -130,11 +167,8 @@ class UserManagementTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUSPENDED"));
 
-        // suspended users can no longer log in — flow-04-login.mmd's third branch
-        mockMvc.perform(post("/auth/login")
-                        .contentType("application/json")
-                        .content("{\"email\":\"z@test.local\",\"password\":\"irrelevant\"}"))
-                .andExpect(status().isUnauthorized()); // wrong password, but proves nothing broke; see next test for the real check
+        // Keycloak is told, so the account can no longer sign in.
+        verify(keycloakUserSync).statusChanged(argThat(u -> u.getStatus() == UserStatus.SUSPENDED));
     }
 
     @Test
@@ -232,5 +266,106 @@ class UserManagementTest {
                         .contentType("application/json")
                         .content("{\"name\":\"" + name + "\",\"email\":\"" + email + "\",\"role\":\"STUDENT\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    // ---- G-03/G-03b: role kind-collision no longer breaks user creation ----
+
+    @Test
+    void createRole_sharingKindWithSeededRole_doesNotBreakUserCreation() throws Exception {
+        // A custom role sharing a kind with the already-seeded "Lecturer" role used to
+        // make findByKindAndDeletedAtIsNull throw NonUniqueResultException the moment a
+        // second LECTURER-kind role existed, surfacing as a 403/500 on user creation.
+        mockMvc.perform(post("/roles")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Department Head\",\"kind\":\"LECTURER\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"New Lecturer\",\"email\":\"new.lecturer@test.local\",\"role\":\"LECTURER\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("LECTURER"));
+    }
+
+    @Test
+    void createRole_duplicateName_isRejectedWith409() throws Exception {
+        // "Lecturer" already exists from @BeforeEach's seed data.
+        mockMvc.perform(post("/roles")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Lecturer\",\"kind\":\"LECTURER\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    // ---- G-04: role change syncs the user's GLOBAL scope assignment ----
+
+    @Test
+    void updateRole_syncsTheUsersGlobalScopeAssignment() throws Exception {
+        String body = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"V\",\"email\":\"v@test.local\",\"role\":\"STUDENT\"}"))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(put("/users/" + id + "/role")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"role\":\"ADMIN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+
+        mockMvc.perform(get("/users/" + id + "/assignments")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].scopeType").value("GLOBAL"))
+                .andExpect(jsonPath("$[0].roleName").value("Administrator"));
+    }
+
+    // ---- G-12: DELETE /users/{id} soft-deletes and removes them from listings ----
+
+    @Test
+    void deleteUser_removesThemFromTheUsersListing() throws Exception {
+        String body = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"To Delete\",\"email\":\"to.delete@test.local\",\"role\":\"STUDENT\"}"))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(delete("/users/" + id)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/users").param("q", "to.delete@test.local")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+    }
+
+    // ---- G-16: student ID generation is now atomic (DB sequence), not random-retry ----
+
+    @Test
+    void createStudents_backToBack_getDistinctStudentIds() throws Exception {
+        String first = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"First Student\",\"email\":\"first.student@test.local\",\"role\":\"STUDENT\"}"))
+                .andReturn().getResponse().getContentAsString();
+        String second = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"Second Student\",\"email\":\"second.student@test.local\",\"role\":\"STUDENT\"}"))
+                .andReturn().getResponse().getContentAsString();
+
+        String firstId = objectMapper.readTree(first).get("studentId").asText();
+        String secondId = objectMapper.readTree(second).get("studentId").asText();
+
+        org.junit.jupiter.api.Assertions.assertNotEquals(firstId, secondId);
+        org.hamcrest.MatcherAssert.assertThat(firstId, org.hamcrest.Matchers.matchesPattern("STU-\\d{4}-\\d{4}"));
+        org.hamcrest.MatcherAssert.assertThat(secondId, org.hamcrest.Matchers.matchesPattern("STU-\\d{4}-\\d{4}"));
     }
 }

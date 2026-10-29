@@ -184,8 +184,20 @@ public class CourseOfferingService {
 
     // ---- Per-academic-year assignment ----
 
+    /** G-07: this read was previously unguarded — any authenticated user of any role
+     * could read any course's year-assignments. Now matches the write-side scoping
+     * (canOnDepartment), resolving the course's degree program's department. Looks the
+     * course up WITHOUT excluding a soft-deleted one (unlike the write paths above) —
+     * delete()'s own cascade already soft-deletes this course's assignments, so this
+     * read must keep working against an already-deleted course and simply return that
+     * now-empty list, rather than 404 on a course id that did exist. */
     @Transactional(readOnly = true)
     public List<CourseAcademicYearResponse> listAcademicYearAssignments(UUID courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new EntityNotFoundException("Course not found"));
+        if (!permissionResolver.canOnDepartment(course.getDegreeProgram().getDepartmentId(), MODULE, "View")) {
+            throw new AccessDeniedException("No permission to view this course's academic-year assignments");
+        }
         return courseAcademicYearRepository.findByCourseIdAndDeletedAtIsNull(courseId).stream()
                 .map(CourseAcademicYearResponse::from)
                 .toList();

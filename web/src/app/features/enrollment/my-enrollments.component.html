@@ -1,0 +1,67 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Course Enrollment</div>
+    <h1 class="page-title">My Enrollments</h1>
+    <p class="page-sub">Your enrolled and waitlisted courses — drop one if your schedule changes.</p>
+  </div>
+  <a class="btn btn-primary" routerLink="/app/browse">Browse Courses</a>
+</div>
+
+@if (loading()) {
+  <div class="card">
+    @for (i of [1,2,3]; track i) {
+      <div class="skeleton-row"><span class="skeleton" style="width:70px;height:14px;"></span><span class="skeleton" style="width:200px;height:14px;"></span></div>
+    }
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <div class="card">
+    @if (rows().length) {
+      <table>
+        <thead><tr><th>Code</th><th>Course Name</th><th>Lecturer</th><th>Requirement</th><th>Credits</th><th>Term</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          @for (r of rows(); track r.id) {
+            <tr>
+              <td class="cell-code">{{ r.courseCode }}</td>
+              <td class="cell-name">{{ r.courseName }}</td>
+              <td class="cell-soft">{{ r.lecturerName ?? '—' }}</td>
+              <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
+              <td class="cell-soft">{{ r.credits ?? '—' }}</td>
+              <td class="cell-soft">{{ r.academicYearName }}{{ r.semesterName ? ' · ' + r.semesterName : '' }}</td>
+              <td><span class="badge" [class.b-success]="r.status === 'ENROLLED'" [class.b-gold]="r.status === 'WAITLISTED'">{{ r.status === 'ENROLLED' ? 'Enrolled' : 'Waitlisted' }}</span></td>
+              <td style="text-align:right;">
+                <button class="btn btn-secondary btn-sm" (click)="confirming.set(r)">{{ r.status === 'WAITLISTED' ? 'Leave Waitlist' : 'Drop' }}</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <p style="font-size:12px;color:var(--ink-faint);margin:14px 0 0;">{{ enrolledCredits() }} credits enrolled this term.</p>
+    } @else {
+      <p style="color:var(--ink-faint);font-size:13px;">You're not enrolled in any courses. <a style="color:var(--accent);" routerLink="/app/browse">Browse courses ›</a></p>
+    }
+  </div>
+}
+
+@if (confirming(); as c) {
+  <div class="modal-overlay" (click)="confirming.set(null)">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>{{ c.status === 'WAITLISTED' ? 'Leave waitlist' : 'Drop course' }}</h3>
+          <p>{{ c.courseCode }} — {{ c.courseName }}. You can enroll again later if seats are available.</p>
+        </div>
+        <button class="modal-close" (click)="confirming.set(null)">✕</button>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" (click)="confirming.set(null)">Cancel</button>
+        <button class="btn btn-danger" [disabled]="busy()" (click)="drop(c)">{{ busy() ? 'Dropping…' : 'Confirm' }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

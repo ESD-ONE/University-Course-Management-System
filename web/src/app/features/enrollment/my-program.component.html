@@ -1,0 +1,58 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Academic Progress</div>
+    <h1 class="page-title">My Program</h1>
+    <p class="page-sub">
+      @if (program(); as p) { {{ p.degreeProgramName }} — full curriculum checklist. } @else { Your degree program's curriculum. }
+    </p>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="card"><span class="skeleton" style="width:50%;height:14px;"></span></div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else if (!program()) {
+  <div class="card">
+    <p style="color:var(--ink-faint);font-size:13px;margin:0;">You aren't registered in a degree program yet — an administrator registers students into programs. You can still enroll in individual courses from <a style="color:var(--accent);" routerLink="/app/browse">Browse Courses</a>.</p>
+  </div>
+} @else {
+  @if (program(); as p) {
+    <div class="grid g2" style="margin-bottom:20px;">
+      <div class="card" style="text-align:center;">
+        <div class="donut-chart" style="margin:0 auto;" [style.background]="ring()">
+          <div class="donut-chart-center"><div class="v">{{ (creditRatio() * 100) | number: '1.0-0' }}%</div><div class="l">complete</div></div>
+        </div>
+        <div style="font-size:12.5px;font-weight:700;margin-top:14px;">{{ creditsEarned() }} / {{ p.totalCredits }} credits</div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-top:4px;">{{ inProgress() }} course{{ inProgress() === 1 ? '' : 's' }} in progress · Year {{ p.currentYearOfStudy }} · Intake {{ p.intakeAcademicYearName }}</div>
+      </div>
+      <div class="note-box">
+        <b>How this is tracked</b>
+        Every course in {{ p.degreeProgramName }}'s curriculum is listed below. Courses you're enrolled in now show as <b>In Progress</b>; a course becomes <b>Completed</b> once its academic year closes with a passing grade. See <a style="color:var(--accent);" routerLink="/app/grades">Grades</a> for marks.
+      </div>
+    </div>
+  }
+  <div class="card">
+    <table>
+      <thead><tr><th>Year</th><th>Semester</th><th>Course</th><th>Type</th><th>Credits</th><th>Status</th></tr></thead>
+      <tbody>
+        @for (r of rows(); track r.id) {
+          <tr>
+            <td>Year {{ r.recommendedYear }}</td>
+            <td class="cell-soft">Semester {{ r.recommendedSemester }}</td>
+            <td class="cell-name">{{ r.catalogCourseCode }} — {{ r.catalogCourseName }}</td>
+            <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
+            <td class="cell-soft">{{ r.creditValue }}</td>
+            <td>
+              <span class="badge" [class.b-success]="r.progress === 'completed'" [class.b-gold]="r.progress === 'in-progress'" [class.b-ink]="r.progress === 'not-started'">
+                {{ r.progress === 'completed' ? 'Completed' : r.progress === 'in-progress' ? 'In Progress' : 'Not Started' }}
+              </span>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" style="padding:24px;color:var(--ink-faint);">This program has no curriculum entries yet.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
