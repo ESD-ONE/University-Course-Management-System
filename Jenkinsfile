@@ -74,7 +74,11 @@ pipeline {
             // Redis, RabbitMQ, MinIO) and /opt/ucms-app/infra/.env (secrets) already
             // exist on this host and are not managed by this pipeline.
             when {
-                anyOf { branch 'develop'; branch 'release'; branch 'main' }
+                // release is the only branch that goes to production. develop and main
+                // both used to deploy here too — more than one branch independently
+                // redeploying the same target doubled load on an already memory-tight
+                // host for no benefit, and only a release build should actually go live.
+                branch 'release'
             }
             steps {
                 sh '''

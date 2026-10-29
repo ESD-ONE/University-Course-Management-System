@@ -308,17 +308,30 @@ services:
     cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
     mem_limit: 256m
     ports:
-      # Loopback only: the host's shared nginx terminates HTTPS for esd.azhosting.fun and
-      # proxies here. Nothing reaches the app over plain HTTP from outside.
+      # Loopback only — nothing reaches the app over plain HTTP from outside. HTTPS for
+      # esd.azhosting.fun is terminated by another project's nginx-proxy container
+      # (proj001-nginx-proxy-1, not managed by this repo), which reaches this container
+      # by name over the "legacy" network below. That network is declared here, not just
+      # joined by hand after the fact, specifically so every redeploy of this
+      # single-instance container keeps the connection — a manual `docker network
+      # connect` doesn't survive a container recreation, which is exactly what broke
+      # this after the first production deploy (web recreated -> dropped off that
+      # network -> the proxy's cached DNS pointed nowhere -> 502 until it was reloaded).
       - "127.0.0.1:8091:80"
     depends_on:
       gateway:
         condition: service_healthy
-    networks: [edge]
+    networks: [edge, legacy]
 
 networks:
   edge:
     name: ucms_edge
+    external: true
+  # Pre-existing network created by another project's compose stack, carrying its
+  # nginx-proxy container; this app joins it only so that proxy can resolve "ucms-web"
+  # by name. Not ours to manage — never declare other services on it.
+  legacy:
+    name: ucms_default
     external: true
   app:
     name: ucms_app
