@@ -1,6 +1,0 @@
----
-title: enrollment schema — registrations and their audit trail
----
-erDiagram
-    student_program_enrollments |o..o{ registration_log : "logged as PROGRAM_REGISTER (by target id)"
-    course_enrollments |o..o{ registration_log : "logged as ENROLL / WAITLIST / DROP / PROMOTED (by target id)"

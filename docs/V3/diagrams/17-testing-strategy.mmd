@@ -1,9 +1,0 @@
-flowchart LR
-    U["Unit & integration — 239 tests<br/>JUnit 5 · MockMvc · H2 · Testcontainers Redis<br/>every service, every build (Jenkins)"]
-    S["System / end-to-end — 66 steps<br/>system_test.py through the gateway:<br/>Keycloak login → enroll → grade → notify → report"]
-    C["Edge & container — 13 checks<br/>headers, Keycloak lockdown, load balancing,<br/>failover, rate limits, isolation, hardening"]
-    BR["Real browser — 5 checks<br/>Chromium: sign-in, silent SSO, CSP"]
-    R["Operational — rolling deploy<br/>686 / 686 requests OK"]
-    SC["Security scan — Trivy + npm audit<br/>(every Jenkins build)"]
-    U --> S --> C --> BR --> R
-    SC -.-> U
