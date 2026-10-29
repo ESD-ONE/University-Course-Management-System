@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant API as Enrollment API
+    participant DB as enrollment schema (PostgreSQL)
+    participant MQ as RabbitMQ
+    Note over API,DB: ONE local transaction — all or nothing
+    API->>DB: BEGIN
+    API->>DB: pg_advisory_xact_lock(offering id) — seat lock
+    Note right of DB: concurrent enrollments for the same<br/>offering now queue here, one at a time
+    API->>DB: SELECT existing enrollment (student, offering)
+    alt already enrolled / waitlisted
+        API->>DB: ROLLBACK → 409 ALREADY_ENROLLED
+    end
+    API->>DB: COUNT enrolled for offering
+    alt full and no waitlist wanted
+        API->>DB: ROLLBACK → 409 COURSE_FULL
+    end
+    API->>DB: INSERT course_enrollments (ENROLLED or WAITLISTED)
+    API->>DB: INSERT registration_log (COURSE_ENROLL / COURSE_WAITLIST)
+    API->>DB: COMMIT — lock released
+    API-)MQ: publish enrollment.student-enrolled (only after commit)

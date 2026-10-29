@@ -1,0 +1,26 @@
+flowchart LR
+    B(["Browsers"]) --> HN["Host nginx (TLS)"]
+    HN --> W["ucms-web nginx<br/>upstream ucms_gateway<br/>least_conn · re-resolves DNS"]
+
+    W --> G1["gateway #1"]
+    W --> G2["gateway #2"]
+
+    subgraph L2["Layer 2 — gateway → services"]
+        direction TB
+        D["DNS discovery<br/>service name → every replica IP"]
+        H["Health check every 5 s<br/>(/actuator/health)"]
+        CB["Circuit breaker + 503 fallback<br/>GET retried on another replica"]
+    end
+    G1 & G2 --- L2
+    G1 & G2 --> E1["enrollment #1"]
+    G1 & G2 --> E2["enrollment #2"]
+
+    subgraph L3["Layer 3 — service → service"]
+        direction TB
+        LB3["@LoadBalanced RestClient<br/>2 s connect / 10 s read timeouts<br/>failed GET retried on next replica"]
+    end
+    E1 & E2 --- L3
+    E1 & E2 --> A1["academic #1"]
+    E1 & E2 --> A2["academic #2"]
+
+    R[("Redis<br/>shared rate-limit buckets")] --- G1 & G2

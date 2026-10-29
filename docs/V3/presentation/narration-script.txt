@@ -1,0 +1,172 @@
+SLIDE 1 — Title
+Good morning. Today I'll walk through the architecture of our University Course Management System — not just what we built, but why we built it this way. We'll cover the microservices design and the reasoning behind it, the DevOps pipeline that builds and deploys it, how the seven services actually talk to each other, the transactional design inside the database, the entity relationships across schemas, and finally how we load-balance, secure, rate-limit and test the whole system.
+
+======================================================================
+
+SLIDE 2 — Agenda
+Here's the roadmap. We'll move from the big picture down to the details: architecture first, then how we build and ship it, then how the pieces talk to each other, then the database design underneath, then how it's deployed and kept reliable, how it's secured, and finally how we know all of this actually works — through testing.
+
+======================================================================
+
+SLIDE 3 — Section 1
+Let's start with the architecture. UCMS is built as seven independent microservices sitting behind an API gateway, each with its own database schema. The question worth answering first isn't what the services are — it's why we chose this shape at all.
+
+======================================================================
+
+SLIDE 4 — Why Microservices
+Why microservices instead of one large application? Five concrete reasons, all things we can point to in the running system rather than theory. First, independent deployability — we added four entire new services over the life of this project without redeploying or even recompiling the first three. Second, failure isolation — we actually tested this: we killed a running service container in the middle of live traffic, and every single request still succeeded because the load balancer and circuit breaker routed around it. Third, independent scaling — the enrollment service and the notification service run two copies each, because enrollment traffic spikes hard at the start of a term and notification holds many long-lived connections, while a service like analytics barely needs more than one copy. Fourth, each service maps to one bounded piece of how a university actually works. And finally, this isn't a whiteboard diagram — these are the actual folders and Docker images in our repository.
+
+======================================================================
+
+SLIDE 5 — Microservices Architecture Diagram
+Here's the whole system at a glance. Every request from the browser goes through nginx, then the API gateway, which routes to one of seven services. Each service owns its own schema inside one shared PostgreSQL database — I'll explain why it's one database but separate schemas on the next slide. Underneath, RabbitMQ carries events between services that don't need to talk synchronously, Redis backs the cache, the rate limiter and logout revocation, and MinIO stores uploaded files like assignment submissions.
+
+======================================================================
+
+SLIDE 6 — Why One Schema Per Service
+Why not one shared schema, or seven separate database servers? We chose the middle path: one Postgres instance — so there's only one thing to back up and monitor — but each service gets its own schema and its own database login that can only see its own schema. This isn't just a naming convention, it's enforced by Postgres grants. And we never create a real foreign key across two schemas — if enrollment needs to reference a student, it stores a plain UUID with a comment, not a constraint, because a real cross-schema foreign key would mean every write in one service has to coordinate with another service's schema, which breaks the whole point of having separate services. And one more thing we enforce everywhere: every table that can change carries the same seven audit columns, so 'who changed this and when' is always answerable the same way, anywhere in the system.
+
+======================================================================
+
+SLIDE 7 — Section 2
+Next, the DevOps side — how code actually gets from a developer's laptop into production, and why we built the pipeline the way we did.
+
+======================================================================
+
+SLIDE 8 — Why This Pipeline
+A few deliberate choices here. Every single push, on every branch, runs the full build and test suite and a security scan — not just the branches we deploy. That way a feature branch is already known-good before it's ever merged. Only three branches actually deploy: develop, release and main. Jenkins lives on the exact same server it deploys to, which sounds simple but removes an entire category of bugs where a deploy script can't reach the target machine or the right credentials aren't available. And the biggest operational change we made: instead of just restarting containers — which causes a brief outage every single release — we now start the new version alongside the old one, wait until it's actually healthy, and only then retire the old version. We proved this works: during a live redeploy under constant traffic, 686 out of 686 requests succeeded. Zero dropped.
+
+======================================================================
+
+SLIDE 9 — Jenkins Pipeline Diagram
+Here's the pipeline end to end. A push triggers Jenkins, which checks out the code, builds every service and runs all 239 tests, packages eight Spring Boot jars, builds the Angular frontend, and runs a security scan with Trivy and npm audit. If it's a feature branch, that's the end — verified, not deployed. If it's develop, release or main, the pipeline continues: it copies the build artifacts, scans the container images that are about to go live, then hands off to our rolling deploy script, which only replaces old containers once new ones are confirmed healthy.
+
+======================================================================
+
+SLIDE 10 — Section 3
+Now, how do seven independent services actually talk to each other? We use two different patterns, and which one applies depends on whether the caller needs an answer right now.
+
+======================================================================
+
+SLIDE 11 — Synchronous Communication
+This is plain REST over HTTP, used whenever a service needs an answer right now to complete its own work — for example, before Enrollment can accept a student into a course, it has to ask Academic Structure whether that course offering still has seats and is actually open. Every one of these calls is authenticated with its own Keycloak service token — not one shared secret for everything, but a separate client per service, each holding only the specific roles it actually needs. Notification, for instance, is allowed to call Identity but not Academic Structure — and we have an automated test that proves exactly that boundary is enforced.
+
+======================================================================
+
+SLIDE 12 — Asynchronous Communication
+The second pattern is asynchronous, over RabbitMQ. We use this whenever the caller doesn't need to wait for the answer — enrolling a student shouldn't be blocked on whether the notification service happens to be up at that exact moment. Events are published to one topic exchange, and each consumer — Notification, Analytics — binds its own queue with its own routing pattern. That means we can add a brand new consumer of these events without changing a single line in the service that publishes them. Because RabbitMQ guarantees at-least-once delivery, not exactly-once, every consumer has to be idempotent — Notification, for example, checks whether it's already handled this exact event id before creating anything.
+
+======================================================================
+
+SLIDE 13 — Event Flow Example
+Let's make this concrete with one real example: a student enrolling in a course. The browser calls the gateway, which verifies the token, checks the rate limit, and forwards to an enrollment service replica. Enrollment synchronously asks Academic Structure whether the offering has room — that's the synchronous path. It then runs one local database transaction to record the enrollment, and only after that transaction commits does it publish an event onto RabbitMQ. From there, Notification and Analytics each independently pick up that event — Notification to push a live update and an email, Analytics to mark its dashboards as needing a recompute. Enrollment itself never waits for either of them.
+
+======================================================================
+
+SLIDE 14 — Section 4
+This section was specifically requested: let's go inside the database and look at what a transaction actually does, step by step, and how we keep data consistent both within one schema and across schemas.
+
+======================================================================
+
+SLIDE 15 — Transaction — Enroll
+Here's a real transaction, exactly as it runs in the enrollment schema. It opens, takes a Postgres advisory lock keyed on the course offering id — this is important: we don't have a seat-counter row to lock, because the capacity actually lives in a different service's schema, so an advisory lock is how we safely serialize two students trying to grab the last seat in the same course at the same moment. It checks for an existing enrollment, counts how many seats are taken, and either enrolls or waitlists the student, writes an audit log row, and commits. Only after that commit succeeds does it publish the event — if anything fails before the commit, the whole thing rolls back as if it never happened, and no event is ever sent for something that didn't actually happen.
+
+======================================================================
+
+SLIDE 16 — Transaction — Drop and Promote
+This one shows why doing this as a single transaction matters. When a student drops a course, and that drop frees a seat, the very next waitlisted student is automatically promoted to enrolled — all inside the same transaction as the drop itself. Because it's one transaction, there's no window where the system could crash between the drop and the promotion and leave a seat open with nobody properly promoted into it. It either both happened, or neither did.
+
+======================================================================
+
+SLIDE 17 — Transaction — Grading to Notification
+And here's what happens when a change needs to cross a schema boundary. A lecturer posts a grade — that's one local transaction entirely inside the assignment_grading schema. Once it commits, an event goes out. The notification service picks it up and runs its OWN separate local transaction inside its own schema — it checks whether it's already processed this exact event for this user, reads the student's notification preferences, and inserts the notification. Two independent, fully-local transactions, linked only by an event. This is eventual consistency by design — never a distributed transaction spanning two schemas — and the idempotency check is exactly what makes 'deliver at least once' safe to use here.
+
+======================================================================
+
+SLIDE 18 — Section 5
+Now let's look at the tables themselves — just the tables and how they relate, without getting into individual columns.
+
+======================================================================
+
+SLIDE 19 — ER Legend
+Quick key before we look at the diagrams. A box is a table — just its name, no columns, because the interesting thing to understand at this level is which tables exist and how they relate, not every field in them. A solid line with a crow's foot is a real, database-enforced foreign key within the same schema. A dashed line, labelled with the actual column name, is a cross-schema reference — a plain id column, deliberately not a real foreign key, for the reasons I covered earlier. And each grouped box is one service's schema boundary.
+
+======================================================================
+
+SLIDE 20 — ER — identity_access
+The identity_access schema: users, roles, permissions, role_permissions, role_scope_assignments, assignment_permission_overrides, and user_sessions. A user has one role; a role is granted a set of permissions; and a role_scope_assignment lets a user be granted a role within a specific scope — for example, as a department head over just one department — with individual permission overrides layered on top of that assignment.
+
+======================================================================
+
+SLIDE 21 — ER — academic
+The academic schema: course_catalog is the master list of courses that exist; degree_programs builds its curriculum from that catalog through program_courses; and a course template actually gets offered in a given year as a course_academic_years row — what we call an offering — inside an academic_years and semesters calendar. That offering is where capacity, the assigned lecturer, and the enrollment window actually live.
+
+======================================================================
+
+SLIDE 22 — ER — base and enrollment
+Two smaller schemas side by side. Base holds faculties, departments, grading scales and course categories — the institution's shared reference data. Enrollment holds the actual registration records — program enrollments and course enrollments — and a single registration_log table that every one of those tables writes to, so there's one place to see the full audit trail of who registered, dropped, waitlisted or got promoted, and when.
+
+======================================================================
+
+SLIDE 23 — ER — grading, notification, analytics
+Three smaller schemas together. In assignment_grading, a submission is graded once, producing a grade row. In notification, a user's notification_preferences decide which categories of notification are actually delivered to them. And in analytics, scheduled_reports run on a timer and feed into the same reports table used for on-demand generation, while dashboard_snapshots cache the computed numbers so dashboards load instantly instead of recomputing on every page view.
+
+======================================================================
+
+SLIDE 24 — Cross-Schema Relationships
+And here's everything together — every dashed line on this diagram is a cross-schema reference. An offering stores the lecturer's id, pointing into identity_access, but there's no foreign key enforcing it — the owning schema, identity_access, could evolve its own users table without needing to coordinate a migration across six other codebases. A department head's scope assignment points at a department id in the base schema. A course enrollment points at both a student in identity_access and an offering in academic. Ownership of each table always stays with exactly one service; consistency across these dashed lines is handled by the application layer — validated through synchronous calls when it matters immediately, and through events when it doesn't — never by a database constraint spanning two schemas.
+
+======================================================================
+
+SLIDE 25 — Section 6
+Now let's look at how this actually runs in production — the containers, the networks, and how we balance load and deploy without downtime.
+
+======================================================================
+
+SLIDE 26 — Deployment Architecture
+This is the actual deployment topology. One Docker host runs everything, but it's split into three networks. The edge network is the only one reachable from the internet. The app network holds the gateway and the services. The data network holds Postgres, RabbitMQ and MinIO. The web container — the one thing exposed to the public internet — sits only on the edge network, so even if it were compromised, it has no network route at all to the database. We verified this directly: from inside the web container, the database hostname simply doesn't resolve.
+
+======================================================================
+
+SLIDE 27 — Load Balancing
+Load balancing happens at three layers, each doing the same basic job — spread traffic across healthy replicas and route around unhealthy ones — but at different points in the request path. nginx spreads incoming traffic across gateway replicas. The gateway spreads traffic across service replicas, using DNS to discover every running replica of a service, health-checking each one every five seconds, and opening a circuit breaker — returning an immediate, clean error — when a service is failing, instead of making callers wait on it. And every service-to-service call uses the exact same pattern when it talks to another service.
+
+======================================================================
+
+SLIDE 28 — Rolling Deploy
+And here's how a deploy actually happens without anyone noticing. New replicas of the new version start up right next to the old ones. The deploy script waits until the new ones report healthy — if one never does, it aborts and the old version just keeps serving traffic, nothing is lost. Only once the new version is confirmed healthy and the load balancers have had time to discover it do the old replicas get stopped, and even then gracefully, finishing any request already in flight. We measured this for real: while continuously sending requests during an actual redeploy, 686 out of 686 succeeded.
+
+======================================================================
+
+SLIDE 29 — Section 7
+Security and rate limiting. These work together — rate limiting is itself a security control against abuse, so I'll cover them as one connected picture.
+
+======================================================================
+
+SLIDE 30 — Security Hardening
+Security is layered in three groups. At the edge: the application is only reachable over HTTPS at our real domain now, with a strict content security policy, HSTS, and the usual browser-protection headers — and Keycloak's own admin console, which used to be reachable from the public internet, now returns a plain 404 from outside. On identity: passwords must be 12 to 128 characters and can't reuse the last few, Keycloak locks out repeated failed logins, and every login and admin action is logged. We also built two-factor login for administrators — tested working both on and off, just not switched on yet until every admin has an authenticator app. And on containers: every service runs as a non-root user on a read-only filesystem with every Linux capability dropped, and the network is split so the one internet-facing container literally cannot reach the database.
+
+======================================================================
+
+SLIDE 31 — Rate Limiting
+Rate limiting works at two layers. nginx limits by client IP address before a request even reaches a service — generous limits, because a whole computer lab can sit behind one shared IP address, so this is really just a flood guard. The real per-account protection against password guessing is Keycloak's own lockout. The second layer is the gateway, which limits per signed-in user, with the count shared across every gateway replica through Redis, so a user can't dodge the limit by being routed to a different replica. Different actions get different limits — enrollment writes are tight, because the real risk is a script hammering the enrollment window, while ordinary reads are generous. Go over the limit and you get a 429 with a Retry-After header telling you exactly how long to wait, and the app surfaces that message directly.
+
+======================================================================
+
+SLIDE 32 — Section 8
+Finally — how do we actually know everything I've just described works? Through five layers of testing, each one checking something the layer below it can't.
+
+======================================================================
+
+SLIDE 33 — Testing Pyramid
+Five layers, from fastest and most numerous at the top, to slowest and most end-to-end at the bottom. 239 unit and integration tests run in every single build and check each service in isolation. 66 end-to-end steps drive the real running stack through the real gateway, starting with an actual Keycloak login and walking all the way through enrolling, grading, notifying and reporting. 13 checks specifically target the edge and the containers — things like confirming the Keycloak admin console is actually blocked, and that killing a replica doesn't lose a request. 5 checks run in a real headless browser to confirm the strict security policy doesn't break anything a real user would do. And finally, the operational proof — 686 out of 686 real requests succeeding during an actual live redeploy. Running alongside all of this, independent of the pyramid, is a dependency and image vulnerability scan on every build.
+
+======================================================================
+
+SLIDE 34 — Summary
+So, to summarize where this leaves us. Seven microservices, eight database schemas, 239 automated unit and integration tests, 66 end-to-end steps, load balancing operating at every layer of the stack, and zero content security policy violations in real browser testing. The important point isn't the list of features — it's that every single thing I've described in this presentation, we actually measured. We didn't just design for failure isolation; we killed a container and counted the successful requests. We didn't just design for zero-downtime deploys; we redeployed live and counted 686 out of 686. We're honest about what's still open too — our current dependency versions carry known vulnerabilities, which is why the security scan currently just reports rather than blocking a build, and we have a planned upgrade to close that.
+
+======================================================================
+
+SLIDE 35 — Thank You
+Thank you. I'm happy to take any questions — about the architecture, the testing, the deployment pipeline, or anything else.

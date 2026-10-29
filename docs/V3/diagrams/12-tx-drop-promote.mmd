@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    participant API as Enrollment API
+    participant DB as enrollment schema
+    participant MQ as RabbitMQ
+    Note over API,DB: drop + waitlist promotion are ONE transaction
+    API->>DB: BEGIN · seat lock (offering)
+    API->>DB: UPDATE course_enrollments SET status=DROPPED, deleted_at=now()
+    API->>DB: INSERT registration_log COURSE_DROP
+    alt the dropped row held a seat
+        API->>DB: SELECT first WAITLISTED ORDER BY created_at
+        API->>DB: UPDATE that row → ENROLLED
+        API->>DB: INSERT registration_log WAITLIST_PROMOTED
+    end
+    API->>DB: COMMIT
+    API-)MQ: enrollment.course-dropped
+    API-)MQ: enrollment.waitlist-promoted
+    Note over API,MQ: a crash before COMMIT leaves nothing half-done:<br/>no lost seat, no orphan promotion, no stray event

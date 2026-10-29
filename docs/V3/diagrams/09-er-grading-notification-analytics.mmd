@@ -1,0 +1,10 @@
+---
+title: assignment_grading, notification and analytics schemas
+---
+erDiagram
+    assignments ||--o{ submissions : "receives (one per student)"
+    submissions ||--o| grades : "has (updated on regrade)"
+    notification_preferences |o..o{ notifications : "decides delivery of (same user id)"
+    reports ||--o{ scheduled_reports : "scheduled as"
+    dashboard_snapshots {
+    }

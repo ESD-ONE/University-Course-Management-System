@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant L as Lecturer
+    participant GRD as Grading API
+    participant GDB as assignment_grading schema
+    participant MQ as RabbitMQ
+    participant NOT as Notification consumer
+    participant NDB as notification schema
+    L->>GRD: PUT /submissions/{id}/grade
+    GRD->>GDB: BEGIN
+    GRD->>GDB: check marks ≤ max · INSERT/UPDATE grades
+    GRD->>GDB: UPDATE submissions SET status = GRADED
+    GRD->>GDB: COMMIT
+    GRD-)MQ: grading.grade-posted (after commit)
+    MQ-)NOT: deliver (at least once)
+    NOT->>NDB: BEGIN
+    NOT->>NDB: already have source_event_id for this user? → skip (idempotent)
+    NOT->>NDB: read notification_preferences
+    NOT->>NDB: INSERT notifications
+    NOT->>NDB: COMMIT
+    NOT-)NOT: after commit: live push (SSE) + email

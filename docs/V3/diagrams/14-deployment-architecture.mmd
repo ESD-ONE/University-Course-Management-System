@@ -1,0 +1,47 @@
+flowchart LR
+    INET(["Internet users"]) -->|"HTTPS :443 · esd.azhosting.fun"| HN
+
+    subgraph HOST["Contabo VPS — one Docker host (Jenkins runs here too)"]
+        HN["Host nginx<br/>TLS termination"] -->|"127.0.0.1:8091 only"| WEB
+
+        subgraph EDGE["network ucms_edge — internet-facing"]
+            WEB["ucms-web (nginx)<br/>Angular app · CSP/HSTS · per-IP limits"]
+            KC["Keycloak<br/>(also on app + data)"]
+        end
+
+        subgraph APP["network ucms_app — application"]
+            subgraph GWS["API Gateway replicas"]
+                direction TB
+                GW1["gateway #1"]
+                GW2["gateway #2"]
+            end
+            subgraph SVCS["Service replicas"]
+                direction TB
+                S1["identity ×2"]
+                S2["academic ×2"]
+                S3["enrollment ×2"]
+                S4["notification ×2"]
+                S5["base ×1"]
+                S6["grading ×1"]
+                S7["analytics ×1"]
+            end
+            REDIS[("Redis")]
+        end
+
+        subgraph DATA["network ucms_data — data stores"]
+            direction TB
+            PG[("PostgreSQL 15<br/>8 schemas")]
+            MQ{{"RabbitMQ"}}
+            MINIO[("MinIO files")]
+            MAIL["SMTP"]
+        end
+
+        WEB -->|"/auth"| KC
+        WEB -->|"/api (least_conn)"| GWS
+        GWS -->|"lb:// health-checked"| SVCS
+        GWS --- REDIS
+        SVCS --- REDIS
+        SVCS --> DATA
+        KC --> PG
+        JEN["Jenkins"] -.->|"rolling-deploy.sh"| SVCS
+    end

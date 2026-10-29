@@ -1,0 +1,20 @@
+flowchart TB
+    DEV(["Developer: git push"]) --> GH["GitHub repository"]
+    GH -->|"webhook / branch scan"| CI
+
+    subgraph CI["Continuous Integration — every branch, every push"]
+        direction LR
+        J1["1 Checkout"] --> J2["2 Build &amp; Test<br/>mvnw verify · 239 tests"] --> J3["3 Package<br/>8 Spring Boot jars"] --> J4["4 Frontend Build<br/>ng build (node:20 container)"] --> J5["5 Security Scan<br/>Trivy jars · npm audit"]
+        J5 ~~~ NOTE["any failing stage → pipeline red,<br/>nothing is deployed"]
+    end
+
+    CI --> Q{"develop / release / main?"}
+    Q -->|"no (feature branch)"| STOP(["Verified, not deployed"])
+    Q -->|yes| CD
+
+    subgraph CD["Continuous Deployment — same Contabo host"]
+        direction LR
+        J6["6 Copy artifacts<br/>compose build"] --> J7["7 Image scan<br/>Trivy"] --> J8["8 rolling-deploy.sh<br/>new replicas beside old"] --> H{"healthy?"}
+        H -->|yes| LIVE(["Old replicas drained<br/>zero downtime"])
+        H -->|no| KEEP(["Abort — old version<br/>keeps serving"])
+    end

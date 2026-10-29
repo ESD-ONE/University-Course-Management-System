@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant GW as API Gateway
+    participant ENR as Enrollment
+    participant ACAD as Academic Structure
+    participant DB as enrollment schema
+    participant MQ as RabbitMQ
+    participant NOT as Notification
+    participant ANA as Analytics
+
+    S->>GW: POST /api/enrollment/course-enrollments (Bearer token)
+    GW->>GW: verify JWT · rate limit · pick a replica
+    GW->>ENR: forward (X-Request-Id)
+    ENR->>ACAD: GET offering (service token)
+    ACAD-->>ENR: capacity, window, status
+    ENR->>DB: BEGIN · seat lock · count · INSERT enrollment + log · COMMIT
+    ENR-->>S: 201 ENROLLED (or WAITLISTED)
+    ENR-)MQ: enrollment.student-enrolled (after commit)
+    MQ-)NOT: notification.events
+    NOT->>NOT: dedupe by event id · save notification · push live + email
+    MQ-)ANA: analytics.events
+    ANA->>ANA: mark dashboards dirty → recompute

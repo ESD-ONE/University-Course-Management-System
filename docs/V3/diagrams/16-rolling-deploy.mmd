@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    participant J as Jenkins / rolling-deploy.sh
+    participant OLD as Old replicas (v1)
+    participant NEW as New replicas (v2)
+    participant LB as Gateway & nginx load balancers
+    Note over OLD,LB: users are served by v1 throughout
+    J->>NEW: docker compose up --scale (start v2 next to v1)
+    J->>NEW: check networks (repair if missing)
+    loop until healthy (max ~6 min)
+        J->>NEW: health status?
+    end
+    alt a v2 replica never becomes healthy
+        J-->>J: abort — v1 keeps serving, nothing lost
+    end
+    J->>LB: wait 20 s — discovery sees v2
+    LB->>NEW: traffic now spread over v1 + v2
+    J->>OLD: docker stop -t 30 (graceful: finish in-flight requests)
+    LB->>NEW: all traffic on v2
+    Note over J,LB: measured: 686 / 686 requests OK during a redeploy
