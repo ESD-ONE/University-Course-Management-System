@@ -5,6 +5,11 @@ import { CreatedUserResponse, RoleKind, UserResponse, UserStatus, UserSummary } 
 import { UserService } from '../../core/services/user.service';
 import { ChangeRoleDialogComponent } from './change-role-dialog.component';
 import { NewUserDialogComponent } from './new-user-dialog.component';
+import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, statusOptions } from '../../shared/filters';
 
 const PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -40,7 +45,7 @@ function freshTabState(): TabState {
 @Component({
   selector: 'app-users-list',
   standalone: true,
-  imports: [FormsModule, NewUserDialogComponent, ChangeRoleDialogComponent],
+  imports: [FormsModule, NewUserDialogComponent, ChangeRoleDialogComponent, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './users-list.component.html',
 })
 export class UsersListComponent implements OnInit {
@@ -142,13 +147,27 @@ export class UsersListComponent implements OnInit {
     this.showToast(`${updated.name}'s role is now ${updated.role}.`);
   }
 
-  cycleStatus(user: UserResponse): void {
-    const next: Record<UserStatus, UserStatus> = {
-      ACTIVE: 'INACTIVE',
-      INACTIVE: 'SUSPENDED',
-      SUSPENDED: 'ACTIVE',
-    };
-    const newStatus = next[user.status];
+  readonly statusFilterOptions = statusOptions(['ACTIVE', 'INACTIVE', 'SUSPENDED']);
+
+  activeFilterCount(): number {
+    return countActive(this.current().q.trim(), this.current().status);
+  }
+
+  filterSummary(): string {
+    const c = this.current();
+    if (c.loading || c.error) return '';
+    return `${c.totalElements} ${this.activeTab().label.toLowerCase()}${this.activeFilterCount() ? ' match' : ' in total'}`;
+  }
+
+  clearFilters(): void {
+    const role = this.activeTab().role;
+    clearTimeout(this.searchDebounce);
+    this.patchTab(role, { q: '', status: '', page: 0 });
+    this.load(role);
+  }
+
+  setStatus(user: UserResponse, newStatus: UserStatus): void {
+    if (newStatus === 'SUSPENDED' && !confirm(`Suspend ${user.name}? They won't be able to sign in.`)) return;
     this.userService.updateStatus(user.id, newStatus).subscribe({
       next: (updated) => {
         this.load(this.activeTab().role);

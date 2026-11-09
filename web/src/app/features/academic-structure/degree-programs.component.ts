@@ -14,6 +14,10 @@ import { UserResponse } from '../../core/models/user.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { UserService } from '../../core/services/user.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, numberOptions, showingSummary, statusOptions, uniqueOptions } from '../../shared/filters';
 
 /**
  * "Program Management → Degree Programs" — which reference degrees (managed on the
@@ -26,7 +30,7 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 @Component({
   selector: 'app-degree-programs',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './degree-programs.component.html',
 })
 export class DegreeProgramsComponent implements OnInit {
@@ -50,6 +54,40 @@ export class DegreeProgramsComponent implements OnInit {
   readonly expandedCoursesLoading = signal(false);
   readonly editingCourseLecturerId = signal<string | null>(null);
   readonly lecturerEditValue = signal<string>('');
+
+  /** Client-side filters on top of the server-side year filter. */
+  readonly programFilter = signal('');
+  readonly codeFilter = signal('');
+  readonly durationFilter = signal('');
+  readonly creditsFilter = signal('');
+  readonly statusFilter = signal('');
+
+  readonly yearOptions = computed(() =>
+    this.allYears().map((y) => ({ value: y.id, label: y.name, sublabel: y.status === 'ARCHIVED' ? 'Archived' : undefined })),
+  );
+  readonly programOptions = computed(() =>
+    uniqueOptions(this.assignments(), (a) => a.degreeProgramId, (a) => a.degreeProgramName, (a) => a.degreeProgramCode),
+  );
+  readonly durationOptions = computed(() =>
+    numberOptions(this.assignments().map((a) => a.durationYears), (n) => `${n} year${n === 1 ? '' : 's'}`),
+  );
+  readonly creditOptions = computed(() => numberOptions(this.assignments().map((a) => a.totalCredits), (n) => `${n} credits`));
+  readonly statusFilterOptions = statusOptions(['PLANNED', 'ACTIVE', 'DISCONTINUED']);
+
+  readonly filteredAssignments = computed(() =>
+    this.assignments().filter(
+      (a) =>
+        (!this.programFilter() || a.degreeProgramId === this.programFilter()) &&
+        matchesText(this.codeFilter(), a.degreeProgramCode) &&
+        (!this.durationFilter() || String(a.durationYears) === this.durationFilter()) &&
+        (!this.creditsFilter() || String(a.totalCredits) === this.creditsFilter()) &&
+        (!this.statusFilter() || a.status === this.statusFilter()),
+    ),
+  );
+  readonly activeFilterCount = computed(() =>
+    countActive(this.yearFilter(), this.programFilter(), this.codeFilter().trim(), this.durationFilter(), this.creditsFilter(), this.statusFilter()),
+  );
+  readonly filterSummary = computed(() => showingSummary(this.filteredAssignments().length, this.assignments().length, 'program'));
 
   /** Non-archived years — what "Assign to Year" and the filter's useful choices are. */
   readonly assignableYears = computed(() => this.allYears().filter((y) => y.status !== 'ARCHIVED'));
@@ -135,6 +173,15 @@ export class DegreeProgramsComponent implements OnInit {
   onYearFilterChange(value: string): void {
     this.yearFilter.set(value);
     this.load();
+  }
+
+  clearFilters(): void {
+    this.programFilter.set('');
+    this.codeFilter.set('');
+    this.durationFilter.set('');
+    this.creditsFilter.set('');
+    this.statusFilter.set('');
+    if (this.yearFilter()) this.onYearFilterChange('');
   }
 
   referenceOf(programId: string): DegreeProgramResponse | undefined {

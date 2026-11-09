@@ -81,6 +81,15 @@ export class CreateCourseComponent implements OnInit {
     }
   }
 
+  /** Clearing the code also unlocks name/credits (they were filled from the catalog match). */
+  clearCode(event: Event): void {
+    event.preventDefault();
+    const wasMatched = !!this.matchedCatalog();
+    this.form.patchValue({ courseCode: '' });
+    this.matchedCatalog.set(null);
+    if (wasMatched) this.form.patchValue({ courseName: '', defaultCredits: 3 });
+  }
+
   save(publish: boolean): void {
     if (this.form.invalid) {
       this.error.set('Fill in the course code, name, degree program, begin date and year of study.');

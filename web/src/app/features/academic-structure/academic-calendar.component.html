@@ -38,14 +38,17 @@
         <div class="list-card" [class.selected]="ay.id === selectedYear()?.id" (click)="selectYear(ay.id)">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <b style="font-size:15px;">{{ ay.name }}</b>
-            <span class="badge" [class.b-success]="ay.status === 'ACTIVE'" [class.b-accent]="ay.status === 'UPCOMING'" [class.b-ink]="ay.status === 'ARCHIVED'">{{ ay.status }}</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge" [class.b-success]="ay.status === 'ACTIVE'" [class.b-accent]="ay.status === 'UPCOMING'" [class.b-ink]="ay.status === 'ARCHIVED'">{{ ay.status }}</span>
+              <app-row-menu [label]="'Actions for ' + ay.name">
+                <button type="button" class="row-menu-item" (click)="openEditYearDialog(ay)">Edit year</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteYear(ay)">Delete year</button>
+              </app-row-menu>
+            </div>
           </div>
           <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">{{ ay.startDate || '-' }} – {{ ay.endDate || '-' }}</div>
           <div style="font-size:11.5px;color:var(--ink-faint);margin-top:2px;">{{ ay.semesters.length }} semesters</div>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
-            <button class="btn btn-secondary btn-sm" (click)="$event.stopPropagation(); openEditYearDialog(ay)">Edit</button>
-            <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="$event.stopPropagation(); deleteYear(ay)">Delete</button>
-          </div>
         </div>
       } @empty {
         <p style="color:var(--ink-faint);font-size:13px;">No academic years yet.</p>
@@ -70,9 +73,12 @@
                     @else { Not yet configured }
                   </td>
                   <td><span class="badge" [class.b-success]="s.status === 'ACTIVE'" [class.b-accent]="s.status === 'UPCOMING'" [class.b-ink]="s.status === 'ARCHIVED'">{{ s.status }}</span></td>
-                  <td style="display:flex;gap:6px;">
-                    <button class="btn btn-secondary btn-sm" (click)="openEditSemesterDialog(s)">Edit</button>
-                    <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteSemester(s)">Delete</button>
+                  <td class="row-actions">
+                    <app-row-menu [label]="'Actions for ' + s.name">
+                      <button type="button" class="row-menu-item" (click)="openEditSemesterDialog(s)">Edit semester</button>
+                      <div class="row-menu-sep"></div>
+                      <button type="button" class="row-menu-item danger" (click)="deleteSemester(s)">Delete semester</button>
+                    </app-row-menu>
                   </td>
                 </tr>
               }

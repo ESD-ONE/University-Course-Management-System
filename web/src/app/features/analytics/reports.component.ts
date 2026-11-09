@@ -4,13 +4,14 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ReportResponse, ScheduleResponse } from '../../core/models/analytics.model';
 import { AnalyticsService } from '../../core/services/analytics.service';
 import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
+import { RowMenuComponent } from '../../shared/row-menu.component';
 
 /** Wireframe adminReports: on-demand reports (Generate stores a fresh file, Download
  *  fetches the latest) and scheduled reports emailed to recipients. */
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RowMenuComponent],
   templateUrl: './reports.component.html',
 })
 export class ReportsComponent {

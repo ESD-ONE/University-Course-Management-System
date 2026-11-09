@@ -8,6 +8,11 @@ import { AcademicStructureService } from '../../core/services/academic-structure
 import { AuthService } from '../../core/services/auth.service';
 import { GradingService } from '../../core/services/grading.service';
 import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
+import { SearchableSelectComponent, SearchableSelectOption } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, showingSummary, statusOptions } from '../../shared/filters';
 
 /**
  * Wireframe lecturerAssignments: every assignment across the lecturer's course
@@ -17,7 +22,7 @@ import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
 @Component({
   selector: 'app-lecturer-assignments',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './lecturer-assignments.component.html',
 })
 export class LecturerAssignmentsComponent {
@@ -32,6 +37,11 @@ export class LecturerAssignmentsComponent {
   readonly loadError = signal<string | null>(null);
   readonly courseFilter = signal('');
   readonly statusFilter = signal<AssignmentStatus | ''>('');
+  readonly titleFilter = signal('');
+  readonly courseFilterOptions = computed<SearchableSelectOption[]>(() =>
+    this.offerings().map((o) => ({ value: o.id, label: `${o.code} — ${o.name}`, sublabel: o.academicYearName })),
+  );
+  readonly statusFilterOptions = statusOptions(['DRAFT', 'OPEN', 'CLOSED']);
   readonly editing = signal<AssignmentResponse | 'new' | null>(null);
   readonly dialogError = signal<string | null>(null);
   readonly submitting = signal(false);
@@ -40,9 +50,21 @@ export class LecturerAssignmentsComponent {
 
   readonly filtered = computed(() =>
     this.assignments().filter(
-      (a) => (!this.courseFilter() || a.offeringId === this.courseFilter()) && (!this.statusFilter() || a.status === this.statusFilter()),
+      (a) =>
+        (!this.courseFilter() || a.offeringId === this.courseFilter()) &&
+        (!this.statusFilter() || a.status === this.statusFilter()) &&
+        matchesText(this.titleFilter(), a.title, a.courseCode),
     ),
   );
+
+  readonly activeFilterCount = computed(() => countActive(this.courseFilter(), this.statusFilter(), this.titleFilter().trim()));
+  readonly filterSummary = computed(() => showingSummary(this.filtered().length, this.assignments().length, 'assignment'));
+
+  clearFilters(): void {
+    this.courseFilter.set('');
+    this.statusFilter.set('');
+    this.titleFilter.set('');
+  }
 
   readonly form = this.fb.group({
     offeringId: ['', Validators.required],

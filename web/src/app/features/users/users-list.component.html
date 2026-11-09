@@ -43,26 +43,19 @@
   }
 </div>
 
-<div class="card" style="margin-bottom:0;">
-  <div class="field-row" style="margin-bottom:0;">
-    <div class="field" style="flex:1.4;">
-      <label for="userSearch">Search</label>
-      <input id="userSearch" type="text" placeholder="Search by name or email"
-             [ngModel]="current().q" (ngModelChange)="onSearchInput($event)" />
-    </div>
-    <div class="field">
-      <label for="userStatusFilter">Status</label>
-      <select id="userStatusFilter" [ngModel]="current().status" (ngModelChange)="onStatusFilterChange($event)">
-        <option value="">All Statuses</option>
-        <option value="ACTIVE">Active</option>
-        <option value="INACTIVE">Inactive</option>
-        <option value="SUSPENDED">Suspended</option>
-      </select>
-    </div>
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field wide">
+    <label for="userSearch">Search</label>
+    <app-search-input inputId="userSearch" placeholder="Search by name or email…" [value]="current().q" (valueChange)="onSearchInput($event)"></app-search-input>
   </div>
-</div>
+  <div class="filter-field">
+    <label for="userStatusFilter">Status</label>
+    <app-searchable-select inputId="userStatusFilter" placeholder="All Statuses" [options]="statusFilterOptions"
+      [ngModel]="current().status" (ngModelChange)="onStatusFilterChange($event)"></app-searchable-select>
+  </div>
+</app-filter-bar>
 
-<div class="card" style="padding:0;overflow:hidden;margin-top:20px;" role="tabpanel">
+<div class="card" style="padding:0;overflow:hidden;" role="tabpanel">
   @if (current().loading) {
     <div style="padding:8px 20px;">
       @for (i of [1,2,3,4,5]; track i) {
@@ -100,20 +93,29 @@
                 {{ user.status }}
               </span>
             </td>
-            <td style="text-align:right;white-space:nowrap;">
-              <button class="btn btn-secondary btn-sm" (click)="roleDialogTarget.set(user)">Change Role</button>
-              <button class="btn btn-secondary btn-sm" (click)="cycleStatus(user)">
-                @switch (user.status) {
-                  @case ('ACTIVE') { Deactivate }
-                  @case ('INACTIVE') { Suspend }
-                  @case ('SUSPENDED') { Reactivate }
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + user.name">
+                <button type="button" class="row-menu-item" (click)="roleDialogTarget.set(user)">Change role</button>
+                <div class="row-menu-sep"></div>
+                @if (user.status !== 'ACTIVE') {
+                  <button type="button" class="row-menu-item" (click)="setStatus(user, 'ACTIVE')">Reactivate</button>
                 }
-              </button>
+                @if (user.status !== 'INACTIVE') {
+                  <button type="button" class="row-menu-item" (click)="setStatus(user, 'INACTIVE')">Deactivate</button>
+                }
+                @if (user.status !== 'SUSPENDED') {
+                  <button type="button" class="row-menu-item danger" (click)="setStatus(user, 'SUSPENDED')">Suspend</button>
+                }
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
           <tr><td [attr.colspan]="activeTab().role === 'STUDENT' ? 4 : 3" style="padding:24px;color:var(--ink-faint);">
-            No {{ activeTab().label.toLowerCase() }} match these filters.
+            @if (activeFilterCount()) {
+              No {{ activeTab().label.toLowerCase() }} match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+            } @else {
+              No {{ activeTab().label.toLowerCase() }} yet.
+            }
           </td></tr>
         }
       </tbody>

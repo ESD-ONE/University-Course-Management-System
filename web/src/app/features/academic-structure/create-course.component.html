@@ -1,3 +1,8 @@
+<a class="back-link" [routerLink]="backLink()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+  Back to {{ backLabel() }}
+</a>
+
 <div class="page-head">
   <div>
     <div class="eyebrow">Course Management</div>
@@ -23,8 +28,15 @@
       <div class="field-row">
         <div class="field" style="flex:1 1 150px;">
           <label for="ccCode">Course Code</label>
-          <input id="ccCode" type="text" formControlName="courseCode" list="catalogCodes" placeholder="e.g. COSC5105"
-                 (input)="onCodeInput($any($event.target).value)" style="text-transform:uppercase;" />
+          <div class="clearable-field">
+            <input id="ccCode" type="text" formControlName="courseCode" list="catalogCodes" placeholder="e.g. COSC5105"
+                   (input)="onCodeInput($any($event.target).value)" style="text-transform:uppercase;" />
+            @if (form.controls.courseCode.value) {
+              <button type="button" class="input-clear" aria-label="Clear course code" title="Clear" (mousedown)="clearCode($event)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            }
+          </div>
           <datalist id="catalogCodes">
             @for (c of catalog(); track c.id) { <option [value]="c.code">{{ c.name }}</option> }
           </datalist>
@@ -81,6 +93,7 @@
       </div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <a class="btn btn-secondary" [routerLink]="backLink()" style="margin-right:auto;">Cancel</a>
         <button type="button" class="btn btn-secondary" [disabled]="submitting()" (click)="save(false)">Save as Draft</button>
         <button type="button" class="btn btn-primary" [disabled]="submitting()" (click)="save(true)">Publish Course</button>
       </div>

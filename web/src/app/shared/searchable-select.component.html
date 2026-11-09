@@ -1,28 +1,43 @@
-<div class="searchable-select" [class.disabled]="disabled()">
+<div class="searchable-select" [class.disabled]="disabled()" [class.is-open]="open()" [class.has-value]="showClear()">
   <input
+    #input
     type="text"
+    role="combobox"
+    [attr.aria-expanded]="open()"
     [id]="inputId"
     [placeholder]="placeholder"
     [value]="query()"
     [disabled]="disabled()"
     autocomplete="off"
     (focus)="onFocus()"
+    (click)="onFocus()"
     (input)="onInput($any($event.target).value)"
     (keydown)="onKeydown($event)"
   />
-  <svg class="searchable-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-    <path d="M6 9l6 6 6-6" />
-  </svg>
+  @if (showClear()) {
+    <button type="button" class="input-clear" aria-label="Clear selection" title="Clear" (mousedown)="clear($event)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  }
+  <button type="button" class="searchable-select-caret" tabindex="-1" aria-hidden="true" (mousedown)="toggleFromCaret($event, input)">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  </button>
 
   @if (open()) {
-    <div class="searchable-select-panel">
+    <div class="searchable-select-panel" role="listbox">
       @if (filteredOptions().length) {
         @for (o of filteredOptions(); track o.value; let i = $index) {
           <button
             type="button"
+            role="option"
             class="searchable-select-option"
             [class.highlighted]="i === highlightedIndex()"
             [class.selected]="o.value === selectedOption()?.value"
+            [attr.aria-selected]="o.value === selectedOption()?.value"
             (mousedown)="onOptionMouseDown($event, o)"
           >
             <span>{{ o.label }}</span>
@@ -30,7 +45,7 @@
           </button>
         }
       } @else {
-        <div class="searchable-select-empty">No matches</div>
+        <div class="searchable-select-empty">{{ emptyText }}</div>
       }
     </div>
   }
