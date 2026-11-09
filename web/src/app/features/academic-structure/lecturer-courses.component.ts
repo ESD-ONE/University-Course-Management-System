@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
   AcademicYearResponse,
@@ -10,6 +10,11 @@ import {
   CourseStatus,
 } from '../../core/models/academic-structure.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
+import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, numberOptions, showingSummary, statusOptions, uniqueOptions } from '../../shared/filters';
 
 /**
  * "My Courses" — the courses a lecturer is assigned, independent of academic year
@@ -19,7 +24,7 @@ import { AcademicStructureService } from '../../core/services/academic-structure
 @Component({
   selector: 'app-lecturer-courses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './lecturer-courses.component.html',
 })
 export class LecturerCoursesComponent {
@@ -30,6 +35,29 @@ export class LecturerCoursesComponent {
   readonly academicYears = signal<AcademicYearResponse[]>([]);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
+
+  readonly searchFilter = signal('');
+  readonly programFilter = signal('');
+  readonly yearOfStudyFilter = signal('');
+  readonly statusFilter = signal('');
+  readonly programOptions = computed(() =>
+    uniqueOptions(this.courses(), (c) => c.degreeProgramId, (c) => c.degreeProgramName, (c) => c.degreeProgramCode),
+  );
+  readonly yearOfStudyOptions = computed(() => numberOptions(this.courses().map((c) => c.yearOfStudy), (n) => `Year ${n}`));
+  readonly statusFilterOptions = statusOptions(['DRAFT', 'PUBLISHED', 'CANCELLED']);
+  readonly filteredCourses = computed(() =>
+    this.courses().filter(
+      (c) =>
+        matchesText(this.searchFilter(), c.catalogCourseCode, c.catalogCourseName) &&
+        (!this.programFilter() || c.degreeProgramId === this.programFilter()) &&
+        (!this.yearOfStudyFilter() || String(c.yearOfStudy) === this.yearOfStudyFilter()) &&
+        (!this.statusFilter() || c.status === this.statusFilter()),
+    ),
+  );
+  readonly activeFilterCount = computed(() =>
+    countActive(this.searchFilter().trim(), this.programFilter(), this.yearOfStudyFilter(), this.statusFilter()),
+  );
+  readonly filterSummary = computed(() => showingSummary(this.filteredCourses().length, this.courses().length, 'course'));
 
   readonly editingCourse = signal<CourseResponse | null>(null);
   readonly managingCourse = signal<CourseResponse | null>(null);
@@ -72,6 +100,13 @@ export class LecturerCoursesComponent {
         this.loading.set(false);
       },
     });
+  }
+
+  clearFilters(): void {
+    this.searchFilter.set('');
+    this.programFilter.set('');
+    this.yearOfStudyFilter.set('');
+    this.statusFilter.set('');
   }
 
   semestersFor(yearId: string) {

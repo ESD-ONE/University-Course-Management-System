@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   CourseCatalogResponse,
@@ -14,6 +14,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, showingSummary, statusOptions } from '../../shared/filters';
 
 /**
  * "Reference Degree Details" — the catalog of degree templates (name, department,
@@ -25,7 +29,7 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 @Component({
   selector: 'app-reference-degree-details',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './reference-degree-details.component.html',
 })
 export class ReferenceDegreeDetailsComponent implements OnInit {
@@ -45,17 +49,31 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
   readonly curriculumLoading = signal(false);
   readonly departmentFilter = signal<string>('');
 
-  readonly selectedProgram = computed(
-    () => this.programs().find((p) => p.id === this.selectedProgramId()) ?? this.programs().at(0) ?? null,
+  readonly searchFilter = signal('');
+  readonly statusFilter = signal('');
+  readonly statusFilterOptions = statusOptions(['ACTIVE', 'INACTIVE']);
+  readonly filteredPrograms = computed(() =>
+    this.programs().filter(
+      (p) => matchesText(this.searchFilter(), p.name, p.code) && (!this.statusFilter() || p.status === this.statusFilter()),
+    ),
   );
+  readonly activeFilterCount = computed(() => countActive(this.searchFilter().trim(), this.departmentFilter(), this.statusFilter()));
+  readonly filterSummary = computed(() => showingSummary(this.filteredPrograms().length, this.programs().length, 'degree'));
+
+  readonly selectedProgram = computed(
+    () => this.filteredPrograms().find((p) => p.id === this.selectedProgramId()) ?? this.filteredPrograms().at(0) ?? null,
+  );
+
+  /** When a filter hides the open degree, show (and load the curriculum of) the first one left. */
+  private readonly keepSelectionVisible = effect(() => {
+    const shown = this.selectedProgram();
+    if (shown && shown.id !== untracked(this.selectedProgramId)) untracked(() => this.selectProgram(shown.id));
+  });
 
   readonly totalCore = computed(() => this.curriculum().filter((c) => c.requirementType === 'CORE').length);
   readonly totalElective = computed(() => this.curriculum().filter((c) => c.requirementType === 'ELECTIVE').length);
 
-  readonly departmentFilterOptions = computed(() => [
-    { value: '', label: 'All Departments' },
-    ...this.departments().map((d) => ({ value: d.id, label: `${d.name} (${d.facultyName})` })),
-  ]);
+  readonly departmentFilterOptions = computed(() => this.departments().map((d) => ({ value: d.id, label: d.name, sublabel: d.facultyName })));
   readonly departmentFieldOptions = computed(() => this.departments().map((d) => ({ value: d.id, label: `${d.name} (${d.facultyName})` })));
   readonly catalogCourseOptions = computed(() => this.catalog().map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })));
 
@@ -107,6 +125,12 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
         this.loading.set(false);
       },
     });
+  }
+
+  clearFilters(): void {
+    this.searchFilter.set('');
+    this.statusFilter.set('');
+    if (this.departmentFilter()) this.onDepartmentFilterChange('');
   }
 
   onDepartmentFilterChange(value: string): void {

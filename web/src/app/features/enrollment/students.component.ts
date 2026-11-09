@@ -8,6 +8,11 @@ import { AcademicStructureService } from '../../core/services/academic-structure
 import { AuthService } from '../../core/services/auth.service';
 import { EnrollmentService } from '../../core/services/enrollment.service';
 import { errorMessage, initials, saveBlob, Toaster } from '../../shared/ui';
+import { SearchableSelectComponent, SearchableSelectOption } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, showingSummary } from '../../shared/filters';
 
 /**
  * Wireframe lecturerStudents + lecturerRoster in one screen. "All my courses" lists every
@@ -17,7 +22,7 @@ import { errorMessage, initials, saveBlob, Toaster } from '../../shared/ui';
 @Component({
   selector: 'app-students',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './students.component.html',
 })
 export class StudentsComponent {
@@ -35,6 +40,8 @@ export class StudentsComponent {
   readonly loadError = signal<string | null>(null);
   readonly search = signal('');
   readonly programFilter = signal('');
+  readonly yearFilter = signal('');
+  readonly statusFilter = signal('');
   readonly toast = signal<{ message: string; error: boolean } | null>(null);
   private toaster = new Toaster((t) => this.toast.set(t));
   readonly initials = initials;
@@ -46,11 +53,39 @@ export class StudentsComponent {
       : this.allStudents().map((s) => s.programName);
     return [...new Set(names.filter((n): n is string => !!n))];
   });
+  readonly offeringOptions = computed<SearchableSelectOption[]>(() =>
+    this.offerings().map((o) => ({ value: o.id, label: `${o.code} — ${o.name}`, sublabel: `${o.academicYearName}${o.semesterName ? ' · ' + o.semesterName : ''}` })),
+  );
+  readonly programOptions = computed<SearchableSelectOption[]>(() =>
+    [...this.programs()].sort().map((p) => ({ value: p, label: p })),
+  );
+  readonly yearOptions = computed<SearchableSelectOption[]>(() => {
+    const years = this.offeringId()
+      ? this.roster().map((r) => r.studentYearOfStudy)
+      : this.allStudents().map((s) => s.yearOfStudy);
+    return [...new Set(years.filter((n): n is number => typeof n === 'number'))]
+      .sort((a, b) => a - b)
+      .map((n) => ({ value: String(n), label: `Year ${n}` }));
+  });
+  readonly statusOptions: SearchableSelectOption[] = [
+    { value: 'ENROLLED', label: 'Enrolled' },
+    { value: 'WAITLISTED', label: 'Waitlisted' },
+  ];
+  readonly activeFilterCount = computed(() =>
+    countActive(this.offeringId(), this.programFilter(), this.yearFilter(), this.statusFilter(), this.search().trim()),
+  );
+  readonly filterSummary = computed(() =>
+    this.offeringId()
+      ? showingSummary(this.filteredRoster().length, this.roster().length, 'student')
+      : showingSummary(this.filteredAll().length, this.allStudents().length, 'student'),
+  );
+
   readonly filteredAll = computed(() => {
     const q = this.search().trim().toLowerCase();
     return this.allStudents().filter(
       (s) =>
         (!this.programFilter() || s.programName === this.programFilter()) &&
+        (!this.yearFilter() || String(s.yearOfStudy) === this.yearFilter()) &&
         (!q || (s.name ?? '').toLowerCase().includes(q) || (s.studentNumber ?? '').toLowerCase().includes(q)),
     );
   });
@@ -59,6 +94,8 @@ export class StudentsComponent {
     return this.roster().filter(
       (r) =>
         (!this.programFilter() || r.studentProgramName === this.programFilter()) &&
+        (!this.yearFilter() || String(r.studentYearOfStudy) === this.yearFilter()) &&
+        (!this.statusFilter() || r.status === this.statusFilter()) &&
         (!q || (r.studentName ?? '').toLowerCase().includes(q) || (r.studentNumber ?? '').toLowerCase().includes(q)),
     );
   });
@@ -77,8 +114,20 @@ export class StudentsComponent {
   selectOffering(id: string): void {
     this.offeringId.set(id);
     this.programFilter.set('');
+    this.yearFilter.set('');
+    this.statusFilter.set('');
     this.router.navigate([], { queryParams: { offering: id || null }, replaceUrl: true });
     this.load();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    if (this.offeringId()) this.selectOffering('');
+    else {
+      this.programFilter.set('');
+      this.yearFilter.set('');
+      this.statusFilter.set('');
+    }
   }
 
   load(): void {

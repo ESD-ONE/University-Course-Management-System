@@ -12,6 +12,10 @@ import {
 } from '../../core/models/academic-structure.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, numberOptions, showingSummary, statusOptions } from '../../shared/filters';
 
 /**
  * University-wide course oversight. Courses are reusable templates (not tied to one
@@ -22,7 +26,7 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 @Component({
   selector: 'app-admin-courses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './admin-courses.component.html',
 })
 export class AdminCoursesComponent {
@@ -37,10 +41,27 @@ export class AdminCoursesComponent {
   readonly loadError = signal<string | null>(null);
   readonly degreeProgramFilter = signal<string>('');
 
-  readonly degreeProgramFilterOptions = computed(() => [
-    { value: '', label: 'All Degree Programs' },
-    ...this.degreePrograms().map((d) => ({ value: d.id, label: `${d.code} - ${d.name}` })),
-  ]);
+  readonly searchFilter = signal('');
+  readonly yearOfStudyFilter = signal('');
+  readonly statusFilter = signal('');
+
+  readonly degreeProgramFilterOptions = computed(() =>
+    this.degreePrograms().map((d) => ({ value: d.id, label: d.name, sublabel: d.code })),
+  );
+  readonly yearOfStudyOptions = computed(() => numberOptions(this.courses().map((c) => c.yearOfStudy), (n) => `Year ${n}`));
+  readonly statusFilterOptions = statusOptions(['DRAFT', 'PUBLISHED', 'CANCELLED']);
+  readonly filteredCourses = computed(() =>
+    this.courses().filter(
+      (c) =>
+        matchesText(this.searchFilter(), c.catalogCourseCode, c.catalogCourseName) &&
+        (!this.yearOfStudyFilter() || String(c.yearOfStudy) === this.yearOfStudyFilter()) &&
+        (!this.statusFilter() || c.status === this.statusFilter()),
+    ),
+  );
+  readonly activeFilterCount = computed(() =>
+    countActive(this.searchFilter().trim(), this.degreeProgramFilter(), this.yearOfStudyFilter(), this.statusFilter()),
+  );
+  readonly filterSummary = computed(() => showingSummary(this.filteredCourses().length, this.courses().length, 'course'));
 
   readonly editingCourse = signal<CourseResponse | null>(null);
   readonly managingCourse = signal<CourseResponse | null>(null);
@@ -92,6 +113,13 @@ export class AdminCoursesComponent {
   onDegreeProgramFilterChange(value: string): void {
     this.degreeProgramFilter.set(value);
     this.load();
+  }
+
+  clearFilters(): void {
+    this.searchFilter.set('');
+    this.yearOfStudyFilter.set('');
+    this.statusFilter.set('');
+    if (this.degreeProgramFilter()) this.onDegreeProgramFilterChange('');
   }
 
   semestersFor(yearId: string) {

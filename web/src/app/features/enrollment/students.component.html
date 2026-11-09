@@ -21,28 +21,34 @@
   </div>
 }
 
-<div class="card" style="margin-bottom:20px;">
-  <div class="field-row" style="margin-bottom:0;">
-    <div class="field">
-      <label for="stCourse">Course</label>
-      <select id="stCourse" [ngModel]="offeringId()" (ngModelChange)="selectOffering($event)">
-        <option value="">All my courses</option>
-        @for (o of offerings(); track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
-      </select>
-    </div>
-    <div class="field">
-      <label for="stProgram">Program</label>
-      <select id="stProgram" [ngModel]="programFilter()" (ngModelChange)="programFilter.set($event)">
-        <option value="">All programs</option>
-        @for (p of programs(); track p) { <option [value]="p">{{ p }}</option> }
-      </select>
-    </div>
-    <div class="field" style="flex:1.2;">
-      <label for="stSearch">Search</label>
-      <input id="stSearch" type="text" placeholder="Search by name or student ID" [ngModel]="search()" (ngModelChange)="search.set($event)" />
-    </div>
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field">
+    <label for="stCourse">Course</label>
+    <app-searchable-select inputId="stCourse" placeholder="All my courses" [options]="offeringOptions()"
+      [ngModel]="offeringId()" (ngModelChange)="selectOffering($event)"></app-searchable-select>
   </div>
-</div>
+  <div class="filter-field">
+    <label for="stProgram">Program</label>
+    <app-searchable-select inputId="stProgram" placeholder="All Programs" [options]="programOptions()"
+      [ngModel]="programFilter()" (ngModelChange)="programFilter.set($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="stYear">Year of Study</label>
+    <app-searchable-select inputId="stYear" placeholder="All Years" [options]="yearOptions()"
+      [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)"></app-searchable-select>
+  </div>
+  @if (offeringId()) {
+    <div class="filter-field">
+      <label for="stStatus">Status</label>
+      <app-searchable-select inputId="stStatus" placeholder="Enrolled & Waitlisted" [options]="statusOptions"
+        [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+    </div>
+  }
+  <div class="filter-field">
+    <label for="stSearch">Student</label>
+    <app-search-input inputId="stSearch" placeholder="Name or student ID…" [value]="search()" (valueChange)="search.set($event)"></app-search-input>
+  </div>
+</app-filter-bar>
 
 @if (loading()) {
   <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:200px;height:14px;"></span></div> }</div>
@@ -62,7 +68,11 @@
             <td class="cell-faint">{{ r.enrolledOn | date: 'dd MMM y' }}</td>
             <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
             <td><span class="badge" [class.b-success]="r.status === 'ENROLLED'" [class.b-gold]="r.status === 'WAITLISTED'">{{ r.status === 'ENROLLED' ? 'Enrolled' : 'Waitlisted' }}</span></td>
-            <td style="text-align:right;"><button class="btn btn-secondary btn-sm" (click)="remove(r)">Remove</button></td>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + r.studentName">
+                <button type="button" class="row-menu-item danger" (click)="remove(r)">Remove from course</button>
+              </app-row-menu>
+            </td>
           </tr>
         } @empty {
           <tr><td colspan="8" style="padding:24px;color:var(--ink-faint);">No students match these filters.</td></tr>
@@ -89,7 +99,6 @@
       </tbody>
     </table>
   </div>
-  <p style="font-size:12px;color:var(--ink-faint);margin-top:14px;">Showing {{ filteredAll().length }} of {{ allStudents().length }} students</p>
 }
 
 @if (toast(); as t) {

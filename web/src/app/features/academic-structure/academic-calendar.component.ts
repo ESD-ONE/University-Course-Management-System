@@ -9,6 +9,7 @@ import {
   SemesterStatus,
 } from '../../core/models/academic-structure.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
+import { RowMenuComponent } from '../../shared/row-menu.component';
 
 /** Matches html-wireframes/index.html's adminCalendar() / newYear() / addSemester(),
  * extended with full CRUD (edit/delete) on both years and semesters — including
@@ -16,7 +17,7 @@ import { AcademicStructureService } from '../../core/services/academic-structure
 @Component({
   selector: 'app-academic-calendar',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RowMenuComponent],
   templateUrl: './academic-calendar.component.html',
 })
 export class AcademicCalendarComponent implements OnInit {

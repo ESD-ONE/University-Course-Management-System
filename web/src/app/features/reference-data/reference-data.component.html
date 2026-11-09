@@ -23,6 +23,25 @@
   </div>
 }
 
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field">
+    <label for="refSearch">Search</label>
+    <app-search-input inputId="refSearch" [placeholder]="'Search ' + tabLabels[activeTab()].toLowerCase() + '…'" [value]="searchFilter()" (valueChange)="searchFilter.set($event)"></app-search-input>
+  </div>
+  @if (activeTab() === 'departments') {
+    <div class="filter-field">
+      <label for="refFaculty">Faculty</label>
+      <app-searchable-select inputId="refFaculty" placeholder="All Faculties" [options]="facultyFilterOptions()"
+        [ngModel]="facultyFilter()" (ngModelChange)="facultyFilter.set($event)"></app-searchable-select>
+    </div>
+  }
+  <div class="filter-field">
+    <label for="refStatus">Status</label>
+    <app-searchable-select inputId="refStatus" placeholder="All Statuses" [options]="statusFilterOptions"
+      [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+  </div>
+</app-filter-bar>
+
 <div class="card" style="padding:0;overflow:hidden;">
   @if (loading()) {
     <div style="padding:8px 20px;">
@@ -40,18 +59,21 @@
     <table>
       <thead><tr><th>Faculty</th><th>Code</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        @for (f of faculties(); track f.id) {
+        @for (f of filteredFaculties(); track f.id) {
           <tr>
             <td class="cell-name">{{ f.name }}</td>
             <td><span class="badge b-ink">{{ f.code }}</span></td>
             <td><span class="badge" [class.b-success]="f.status === 'ACTIVE'" [class.b-gold]="f.status === 'INACTIVE'">{{ f.status }}</span></td>
-            <td style="display:flex;gap:6px;">
-              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('faculties', f)">Edit</button>
-              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('faculties', f)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + f.name">
+                <button type="button" class="row-menu-item" (click)="openEditDialog('faculties', f)">Edit</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteEntry('faculties', f)">Delete</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No faculties yet.</td></tr>
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">@if (activeFilterCount()) { Nothing matches these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button> } @else { No faculties yet. }</td></tr>
         }
       </tbody>
     </table>
@@ -59,19 +81,22 @@
     <table>
       <thead><tr><th>Department</th><th>Code</th><th>Faculty</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        @for (d of departments(); track d.id) {
+        @for (d of filteredDepartments(); track d.id) {
           <tr>
             <td class="cell-name">{{ d.name }}</td>
             <td><span class="badge b-ink">{{ d.code }}</span></td>
             <td class="cell-soft">{{ d.facultyName }}</td>
             <td><span class="badge" [class.b-success]="d.status === 'ACTIVE'" [class.b-gold]="d.status === 'INACTIVE'">{{ d.status }}</span></td>
-            <td style="display:flex;gap:6px;">
-              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('departments', d)">Edit</button>
-              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('departments', d)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + d.name">
+                <button type="button" class="row-menu-item" (click)="openEditDialog('departments', d)">Edit</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteEntry('departments', d)">Delete</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">No departments yet.</td></tr>
+          <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">@if (activeFilterCount()) { Nothing matches these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button> } @else { No departments yet. }</td></tr>
         }
       </tbody>
     </table>
@@ -79,18 +104,21 @@
     <table>
       <thead><tr><th>Scale</th><th>Bands</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        @for (g of gradingScales(); track g.id) {
+        @for (g of filteredGradingScales(); track g.id) {
           <tr>
             <td class="cell-name">{{ g.name }}</td>
             <td class="cell-faint">{{ g.bands }}</td>
             <td><span class="badge" [class.b-success]="g.status === 'ACTIVE'" [class.b-gold]="g.status === 'INACTIVE'">{{ g.status }}</span></td>
-            <td style="display:flex;gap:6px;">
-              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('grading', g)">Edit</button>
-              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('grading', g)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + g.name">
+                <button type="button" class="row-menu-item" (click)="openEditDialog('grading', g)">Edit</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteEntry('grading', g)">Delete</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No grading scales yet.</td></tr>
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">@if (activeFilterCount()) { Nothing matches these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button> } @else { No grading scales yet. }</td></tr>
         }
       </tbody>
     </table>
@@ -98,18 +126,21 @@
     <table>
       <thead><tr><th>Category</th><th>Description</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        @for (c of courseCategories(); track c.id) {
+        @for (c of filteredCategories(); track c.id) {
           <tr>
             <td class="cell-name">{{ c.name }}</td>
             <td class="cell-faint">{{ c.description }}</td>
             <td><span class="badge" [class.b-success]="c.status === 'ACTIVE'" [class.b-gold]="c.status === 'INACTIVE'">{{ c.status }}</span></td>
-            <td style="display:flex;gap:6px;">
-              <button class="btn btn-secondary btn-sm" (click)="openEditDialog('categories', c)">Edit</button>
-              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteEntry('categories', c)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + c.name">
+                <button type="button" class="row-menu-item" (click)="openEditDialog('categories', c)">Edit</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteEntry('categories', c)">Delete</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">No course categories yet.</td></tr>
+          <tr><td colspan="4" style="padding:24px;color:var(--ink-faint);">@if (activeFilterCount()) { Nothing matches these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button> } @else { No course categories yet. }</td></tr>
         }
       </tbody>
     </table>

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   CourseCategoryResponse,
   DepartmentResponse,
@@ -11,6 +11,10 @@ import {
 } from '../../core/models/reference-data.model';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, matchesText, showingSummary, statusOptions } from '../../shared/filters';
 
 type Tab = 'faculties' | 'departments' | 'grading' | 'categories';
 
@@ -33,7 +37,7 @@ interface TabCounts {
 @Component({
   selector: 'app-reference-data',
   standalone: true,
-  imports: [ReactiveFormsModule, CommonModule, SearchableSelectComponent],
+  imports: [ReactiveFormsModule, FormsModule, CommonModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
   templateUrl: './reference-data.component.html',
 })
 export class ReferenceDataComponent implements OnInit {
@@ -57,6 +61,42 @@ export class ReferenceDataComponent implements OnInit {
     const active = items.filter((i) => i.status === 'ACTIVE').length;
     return { total: items.length, active, inactive: items.length - active };
   }
+  /** Filters, reset whenever the tab changes. */
+  readonly searchFilter = signal('');
+  readonly statusFilter = signal('');
+  readonly facultyFilter = signal('');
+  readonly statusFilterOptions = statusOptions(['ACTIVE', 'INACTIVE']);
+  readonly facultyFilterOptions = computed(() => this.faculties().map((f) => ({ value: f.id, label: f.name, sublabel: f.code })));
+  private passes(status: string, ...text: (string | null | undefined)[]): boolean {
+    return (!this.statusFilter() || status === this.statusFilter()) && matchesText(this.searchFilter(), ...text);
+  }
+  readonly filteredFaculties = computed(() => this.faculties().filter((f) => this.passes(f.status, f.name, f.code)));
+  readonly filteredDepartments = computed(() =>
+    this.departments().filter(
+      (d) => this.passes(d.status, d.name, d.code, d.facultyName) && (!this.facultyFilter() || d.facultyId === this.facultyFilter()),
+    ),
+  );
+  readonly filteredGradingScales = computed(() => this.gradingScales().filter((g) => this.passes(g.status, g.name, g.bands)));
+  readonly filteredCategories = computed(() => this.courseCategories().filter((c) => this.passes(c.status, c.name, c.description)));
+  readonly activeFilterCount = computed(() =>
+    countActive(this.searchFilter().trim(), this.statusFilter(), this.activeTab() === 'departments' ? this.facultyFilter() : ''),
+  );
+  readonly filterSummary = computed(() => {
+    const [shown, total] = {
+      faculties: [this.filteredFaculties().length, this.faculties().length],
+      departments: [this.filteredDepartments().length, this.departments().length],
+      grading: [this.filteredGradingScales().length, this.gradingScales().length],
+      categories: [this.filteredCategories().length, this.courseCategories().length],
+    }[this.activeTab()];
+    return showingSummary(shown, total, 'entry').replace(/entrys/, 'entries');
+  });
+
+  clearFilters(): void {
+    this.searchFilter.set('');
+    this.statusFilter.set('');
+    this.facultyFilter.set('');
+  }
+
   readonly facultyCounts = computed(() => this.countsOf(this.faculties()));
   readonly departmentCounts = computed(() => this.countsOf(this.departments()));
   readonly gradingCounts = computed(() => this.countsOf(this.gradingScales()));
@@ -104,6 +144,7 @@ export class ReferenceDataComponent implements OnInit {
 
   selectTab(tab: Tab): void {
     this.activeTab.set(tab);
+    this.clearFilters();
   }
 
   loadAll(): void {

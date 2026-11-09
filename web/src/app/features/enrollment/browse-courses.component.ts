@@ -4,6 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { CatalogEntry } from '../../core/models/enrollment.model';
 import { EnrollmentService } from '../../core/services/enrollment.service';
 import { errorCode, errorMessage, Toaster } from '../../shared/ui';
+import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { countActive, numberOptions, showingSummary, uniqueOptions } from '../../shared/filters';
 
 /**
  * Student "Browse Courses" (wireframe studentBrowse): published offerings with live seat
@@ -13,7 +17,7 @@ import { errorCode, errorMessage, Toaster } from '../../shared/ui';
 @Component({
   selector: 'app-browse-courses',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, SearchableSelectComponent, SearchInputComponent, FilterBarComponent],
   templateUrl: './browse-courses.component.html',
 })
 export class BrowseCoursesComponent {
@@ -30,6 +34,13 @@ export class BrowseCoursesComponent {
   readonly yearFilter = signal('');
   readonly search = signal('');
   readonly availableOnly = signal(false);
+  readonly programFilter = signal('');
+  readonly yearOfStudyFilter = signal('');
+  readonly yearOptions = computed(() => uniqueOptions(this.entries(), (e) => e.academicYearName, (e) => e.academicYearName));
+  readonly programOptions = computed(() =>
+    uniqueOptions(this.entries(), (e) => e.degreeProgramId, (e) => e.degreeProgramName, (e) => e.degreeProgramCode),
+  );
+  readonly yearOfStudyOptions = computed(() => numberOptions(this.entries().map((e) => e.yearOfStudy), (n) => `Year ${n}`));
 
   readonly years = computed(() => [...new Set(this.entries().map((e) => e.academicYearName))]);
   readonly filtered = computed(() => {
@@ -37,10 +48,25 @@ export class BrowseCoursesComponent {
     return this.entries().filter(
       (e) =>
         (!this.yearFilter() || e.academicYearName === this.yearFilter()) &&
+        (!this.programFilter() || e.degreeProgramId === this.programFilter()) &&
+        (!this.yearOfStudyFilter() || String(e.yearOfStudy) === this.yearOfStudyFilter()) &&
         (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)) &&
         (!this.availableOnly() || (e.seatsLeft > 0 && e.openForEnrollment)),
     );
   });
+
+  readonly activeFilterCount = computed(() =>
+    countActive(this.yearFilter(), this.programFilter(), this.yearOfStudyFilter(), this.search().trim(), this.availableOnly()),
+  );
+  readonly filterSummary = computed(() => showingSummary(this.filtered().length, this.entries().length, 'course'));
+
+  clearFilters(): void {
+    this.yearFilter.set('');
+    this.programFilter.set('');
+    this.yearOfStudyFilter.set('');
+    this.search.set('');
+    this.availableOnly.set(false);
+  }
 
   constructor() {
     this.load();

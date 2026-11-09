@@ -7,18 +7,27 @@
   <a class="btn btn-primary" routerLink="/app/courses/create">+ Create Course</a>
 </div>
 
-<div class="card" style="margin-bottom:16px;padding:12px 16px;">
-  <div class="field" style="margin:0;max-width:360px;">
-    <label for="degreeFilter">Filter by Degree Program</label>
-    <app-searchable-select
-      inputId="degreeFilter"
-      placeholder="Search degree programs…"
-      [options]="degreeProgramFilterOptions()"
-      [ngModel]="degreeProgramFilter()"
-      (ngModelChange)="onDegreeProgramFilterChange($event)"
-    ></app-searchable-select>
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field">
+    <label for="courseSearch">Course</label>
+    <app-search-input inputId="courseSearch" placeholder="Search code or name…" [value]="searchFilter()" (valueChange)="searchFilter.set($event)"></app-search-input>
   </div>
-</div>
+  <div class="filter-field">
+    <label for="degreeFilter">Degree Program</label>
+    <app-searchable-select inputId="degreeFilter" placeholder="All Degree Programs" [options]="degreeProgramFilterOptions()"
+      [ngModel]="degreeProgramFilter()" (ngModelChange)="onDegreeProgramFilterChange($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="yosFilter">Year of Study</label>
+    <app-searchable-select inputId="yosFilter" placeholder="All Years of Study" [options]="yearOfStudyOptions()"
+      [ngModel]="yearOfStudyFilter()" (ngModelChange)="yearOfStudyFilter.set($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="statusFilter">Status</label>
+    <app-searchable-select inputId="statusFilter" placeholder="All Statuses" [options]="statusFilterOptions"
+      [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+  </div>
+</app-filter-bar>
 
 @if (loading()) {
   <div class="card">
@@ -40,7 +49,7 @@
     <table>
       <thead><tr><th>Code</th><th>Name</th><th>Degree Program</th><th>Begin Date</th><th>Year of Study</th><th>Status</th><th></th></tr></thead>
       <tbody>
-        @for (c of courses(); track c.id) {
+        @for (c of filteredCourses(); track c.id) {
           <tr>
             <td class="cell-code">{{ c.catalogCourseCode }}</td>
             <td class="cell-name">{{ c.catalogCourseName }}</td>
@@ -48,19 +57,27 @@
             <td class="cell-soft">{{ c.beginDate }}</td>
             <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
             <td><span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span></td>
-            <td style="display:flex;gap:6px;">
-              <button class="btn btn-secondary btn-sm" (click)="openEditCourse(c)">Edit</button>
-              <button class="btn btn-secondary btn-sm" (click)="openManageYears(c)">Manage Years</button>
-              <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteCourse(c)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + c.catalogCourseCode">
+                <button type="button" class="row-menu-item" (click)="openEditCourse(c)">Edit course</button>
+                <button type="button" class="row-menu-item" (click)="openManageYears(c)">Manage years</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteCourse(c)">Delete course</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">No courses have been created yet.</td></tr>
+          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">
+            @if (activeFilterCount()) {
+              No courses match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+            } @else {
+              No courses have been created yet.
+            }
+          </td></tr>
         }
       </tbody>
     </table>
   </div>
-  <p style="font-size:12px;color:var(--ink-faint);margin-top:14px;">Showing {{ courses().length }} courses</p>
 }
 
 @if (editingCourse(); as course) {
@@ -132,9 +149,11 @@
                   <td class="cell-soft">{{ y.semesterName ?? '-' }}</td>
                   <td class="cell-soft">{{ y.capacity }}</td>
                   <td><span class="badge" [class.b-success]="y.status === 'PUBLISHED'" [class.b-ink]="y.status === 'DRAFT' || y.status === 'CANCELLED'">{{ y.status }}</span></td>
-                  <td style="display:flex;gap:6px;">
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="openEditYearAssignment(y)">Edit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="deleteYearAssignment(y)">Remove</button>
+                  <td class="row-actions">
+                    <app-row-menu [label]="'Actions for ' + y.academicYearName">
+                      <button type="button" class="row-menu-item" (click)="openEditYearAssignment(y)">Edit</button>
+                      <button type="button" class="row-menu-item danger" (click)="deleteYearAssignment(y)">Remove from year</button>
+                    </app-row-menu>
                   </td>
                 </tr>
               }

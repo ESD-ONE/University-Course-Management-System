@@ -6,27 +6,34 @@
   </div>
 </div>
 
-<div class="card" style="margin-bottom:20px;">
-  <div class="field-row" style="margin-bottom:0;align-items:flex-end;">
-    <div class="field">
-      <label for="bcYear">Academic Year</label>
-      <select id="bcYear" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)">
-        <option value="">All active years</option>
-        @for (y of years(); track y) { <option [value]="y">{{ y }}</option> }
-      </select>
-    </div>
-    <div class="field" style="flex:1.6;">
-      <label for="bcSearch">Search</label>
-      <input id="bcSearch" type="text" placeholder="Search by code or name" [ngModel]="search()" (ngModelChange)="search.set($event)" />
-    </div>
-    <div class="field" style="flex:none;padding-bottom:12px;">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-        <input type="checkbox" [ngModel]="availableOnly()" (ngModelChange)="availableOnly.set($event)" style="width:16px;height:16px;" />
-        Available only
-      </label>
-    </div>
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field">
+    <label for="bcSearch">Course</label>
+    <app-search-input inputId="bcSearch" placeholder="Search code or name…" [value]="search()" (valueChange)="search.set($event)"></app-search-input>
   </div>
-</div>
+  <div class="filter-field">
+    <label for="bcYear">Academic Year</label>
+    <app-searchable-select inputId="bcYear" placeholder="All Active Years" [options]="yearOptions()"
+      [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="bcProgram">Degree Program</label>
+    <app-searchable-select inputId="bcProgram" placeholder="All Degree Programs" [options]="programOptions()"
+      [ngModel]="programFilter()" (ngModelChange)="programFilter.set($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="bcYos">Year of Study</label>
+    <app-searchable-select inputId="bcYos" placeholder="All Years of Study" [options]="yearOfStudyOptions()"
+      [ngModel]="yearOfStudyFilter()" (ngModelChange)="yearOfStudyFilter.set($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label>&nbsp;</label>
+    <label class="filter-check">
+      <input type="checkbox" [ngModel]="availableOnly()" (ngModelChange)="availableOnly.set($event)" />
+      Seats available only
+    </label>
+  </div>
+</app-filter-bar>
 
 @if (loading()) {
   <div class="grid g3">
@@ -68,7 +75,13 @@
         </div>
       </div>
     } @empty {
-      <p style="color:var(--ink-faint);font-size:13px;">No courses match these filters.</p>
+      <p style="color:var(--ink-faint);font-size:13px;">
+        @if (activeFilterCount()) {
+          No courses match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+        } @else {
+          No published courses are open right now.
+        }
+      </p>
     }
   </div>
 }
