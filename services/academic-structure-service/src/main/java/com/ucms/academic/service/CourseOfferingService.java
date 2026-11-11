@@ -5,6 +5,7 @@ import com.ucms.academic.domain.AcademicYearStatus;
 import com.ucms.academic.domain.Course;
 import com.ucms.academic.domain.CourseAcademicYear;
 import com.ucms.academic.domain.CourseCatalog;
+import com.ucms.academic.domain.CourseStatus;
 import com.ucms.academic.domain.DegreeProgram;
 import com.ucms.academic.domain.Semester;
 import com.ucms.academic.exception.ArchivedYearException;
@@ -13,6 +14,7 @@ import com.ucms.academic.repository.AcademicYearRepository;
 import com.ucms.academic.repository.CourseAcademicYearRepository;
 import com.ucms.academic.repository.CourseCatalogRepository;
 import com.ucms.academic.repository.CourseRepository;
+import com.ucms.academic.repository.CourseSpecifications;
 import com.ucms.academic.repository.DegreeProgramRepository;
 import com.ucms.academic.repository.SemesterRepository;
 import com.ucms.academic.security.AssignmentClaim;
@@ -26,6 +28,9 @@ import com.ucms.academic.web.dto.CreateCourseRequest;
 import com.ucms.academic.web.dto.UpdateCourseAcademicYearRequest;
 import com.ucms.academic.web.dto.UpdateCourseRequest;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,14 +74,12 @@ public class CourseOfferingService {
         this.permissionResolver = permissionResolver;
     }
 
-    /** Admin oversight listing, optionally narrowed by degreeProgramId (the Courses
-     * page's new Degree Program filter). */
+    /** Admin oversight listing, optionally narrowed by degreeProgramId/yearOfStudy/status,
+     * plus a catalog code/name search (the Courses page's filters). */
     @Transactional(readOnly = true)
-    public List<CourseResponse> list(UUID degreeProgramId) {
-        List<Course> courses = degreeProgramId == null
-                ? courseRepository.findByDeletedAtIsNullOrderByCreatedAtDesc()
-                : courseRepository.findByDegreeProgramIdAndDeletedAtIsNullOrderByCreatedAtDesc(degreeProgramId);
-        return courses.stream().map(CourseResponse::from).toList();
+    public Page<CourseResponse> list(UUID degreeProgramId, Integer yearOfStudy, CourseStatus status, String q, Pageable pageable) {
+        return courseRepository.findAll(CourseSpecifications.filter(degreeProgramId, yearOfStudy, status, q), pageable)
+                .map(CourseResponse::from);
     }
 
     /** "mine=true" resolves to: courses where the caller is the literal lecturer_id
@@ -85,16 +88,18 @@ public class CourseOfferingService {
      * Department Head sees every course in their department, not just ones they
      * personally teach. See docs/SYSTEM_ARCHITECTURE_REPORT.md section 7.2. */
     @Transactional(readOnly = true)
-    public List<CourseResponse> listForLecturer(UUID lecturerId, UUID degreeProgramId) {
+    public Page<CourseResponse> listForLecturer(UUID lecturerId, UUID degreeProgramId, Integer yearOfStudy,
+                                                 CourseStatus status, String q, Pageable pageable) {
         List<AssignmentClaim> assignments = CurrentAssignments.get();
-        List<Course> all = degreeProgramId == null
-                ? courseRepository.findByDeletedAtIsNullOrderByCreatedAtDesc()
-                : courseRepository.findByDegreeProgramIdAndDeletedAtIsNullOrderByCreatedAtDesc(degreeProgramId);
-        return all.stream()
-                .filter(c -> c.getLecturerId().equals(lecturerId)
-                        || permissionResolver.isDepartmentScoped(assignments, c.getDegreeProgram().getDepartmentId(), MODULE, "View"))
-                .map(CourseResponse::from)
+        List<UUID> scopedDepartmentIds = assignments.stream()
+                .filter(a -> "DEPARTMENT".equals(a.scopeType()))
+                .map(AssignmentClaim::scopeId)
+                .filter(id -> permissionResolver.isDepartmentScoped(assignments, id, MODULE, "View"))
+                .distinct()
                 .toList();
+        Specification<Course> spec = CourseSpecifications.filter(degreeProgramId, yearOfStudy, status, q)
+                .and(CourseSpecifications.ownedByOrDepartmentScoped(lecturerId, scopedDepartmentIds));
+        return courseRepository.findAll(spec, pageable).map(CourseResponse::from);
     }
 
     @Transactional
@@ -114,6 +119,9 @@ public class CourseOfferingService {
             throw new AccessDeniedException(actingForSelf
                     ? "No permission to create a course in this program's department"
                     : "No permission to create a course on another lecturer's behalf in this department");
+        }
+        if (courseRepository.existsByDegreeProgramIdAndCatalogCourseIdAndDeletedAtIsNull(program.getId(), catalogCourse.getId())) {
+            throw new DuplicateEntityException(catalogCourse.getCode() + " is already a course in " + program.getName());
         }
 
         Course course = new Course();

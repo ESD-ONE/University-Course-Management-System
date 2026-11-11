@@ -61,6 +61,19 @@
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
                 </plugin>
+                <plugin>
+                    <!-- Dev machines ahead of this project's JDK 17 target (e.g. JDK 24) hit
+                         Mockito's bundled Byte Buddy refusing to instrument classes for
+                         @MockBean: "Java 24 (68) is not supported ... officially supports
+                         Java 23 (67)". This is Byte Buddy's own documented workaround —
+                         same bytecode, just without its newest-JDK fast paths — and has no
+                         effect on a build actually run under JDK 17. -->
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
     </build>

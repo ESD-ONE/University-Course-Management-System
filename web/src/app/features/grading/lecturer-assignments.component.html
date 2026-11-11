@@ -7,34 +7,31 @@
   <button class="btn btn-primary" [disabled]="!offerings().length" (click)="openNew()">+ Create Assignment</button>
 </div>
 
-<div class="card" style="margin-bottom:20px;">
-  <div class="field-row" style="margin-bottom:0;">
-    <div class="field">
-      <label for="laCourse">Course</label>
-      <select id="laCourse" [ngModel]="courseFilter()" (ngModelChange)="courseFilter.set($event)">
-        <option value="">All courses</option>
-        @for (o of offerings(); track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
-      </select>
-    </div>
-    <div class="field">
-      <label for="laStatus">Status</label>
-      <select id="laStatus" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-        <option value="">All statuses</option>
-        <option value="OPEN">Open</option>
-        <option value="CLOSED">Closed</option>
-        <option value="DRAFT">Draft</option>
-      </select>
-    </div>
+<app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
+  <div class="filter-field">
+    <label for="laTitle">Assignment</label>
+    <app-search-input inputId="laTitle" placeholder="Search title…" [value]="titleFilter()" (valueChange)="titleFilter.set($event)"></app-search-input>
   </div>
-</div>
+  <div class="filter-field">
+    <label for="laCourse">Course</label>
+    <app-searchable-select inputId="laCourse" placeholder="All Courses" [options]="courseFilterOptions()"
+      [ngModel]="courseFilter()" (ngModelChange)="onCourseFilterChange($event)"></app-searchable-select>
+  </div>
+  <div class="filter-field">
+    <label for="laStatus">Status</label>
+    <app-searchable-select inputId="laStatus" placeholder="All Statuses" [options]="statusFilterOptions"
+      [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($any($event))"></app-searchable-select>
+  </div>
+</app-filter-bar>
 
 @if (loading()) {
   <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:220px;height:14px;"></span></div> }</div>
 } @else if (loadError()) {
   <p style="color:var(--danger);">{{ loadError() }}</p>
 } @else {
-  <div class="card">
-    <table>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
       <thead><tr><th>Title</th><th>Course</th><th>Due</th><th>Max Marks</th><th>Submissions</th><th>Status</th><th></th></tr></thead>
       <tbody>
         @for (a of filtered(); track a.id) {
@@ -48,22 +45,40 @@
             <td class="cell-soft">{{ a.maxMarks }}</td>
             <td class="cell-soft">{{ a.totalStudents ? a.submittedCount + ' / ' + a.totalStudents : '—' }} @if (a.gradedCount) { <span style="color:var(--success);">· {{ a.gradedCount }} graded</span> }</td>
             <td><span class="badge" [class.b-success]="a.status === 'OPEN'" [class.b-ink]="a.status === 'CLOSED'" [class.b-gold]="a.status === 'DRAFT'">{{ a.status | titlecase }}</span></td>
-            <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-              @if (a.status === 'DRAFT') { <button class="btn btn-primary btn-sm" (click)="setStatus(a, 'OPEN')">Publish</button> }
-              @if (a.status === 'OPEN') { <button class="btn btn-secondary btn-sm" (click)="setStatus(a, 'CLOSED')">Close</button> }
-              @if (a.status === 'CLOSED') { <button class="btn btn-secondary btn-sm" (click)="setStatus(a, 'OPEN')">Reopen</button> }
-              <button class="btn btn-secondary btn-sm" (click)="openEdit(a)">Edit</button>
-              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Brief<input type="file" style="display:none;" (change)="uploadBrief(a, $event)" /></label>
-              @if (a.status !== 'DRAFT') { <a class="btn btn-secondary btn-sm" [routerLink]="['/app/grading']" [queryParams]="{ assignment: a.id }">Submissions ›</a> }
-              @if (!a.submittedCount) { <button class="btn btn-secondary btn-sm" style="color:var(--danger);" (click)="remove(a)">Delete</button> }
+            <td class="row-actions">
+              <input #briefInput type="file" hidden (change)="uploadBrief(a, $event)" />
+              <app-row-menu [label]="'Actions for ' + a.title">
+                @if (a.status === 'DRAFT') { <button type="button" class="row-menu-item" (click)="setStatus(a, 'OPEN')">Publish</button> }
+                @if (a.status === 'OPEN') { <button type="button" class="row-menu-item" (click)="setStatus(a, 'CLOSED')">Close submissions</button> }
+                @if (a.status === 'CLOSED') { <button type="button" class="row-menu-item" (click)="setStatus(a, 'OPEN')">Reopen</button> }
+                @if (a.status !== 'DRAFT') {
+                  <a class="row-menu-item" [routerLink]="['/app/grading']" [queryParams]="{ assignment: a.id }">View submissions</a>
+                }
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item" (click)="openEdit(a)">Edit</button>
+                <button type="button" class="row-menu-item" (click)="briefInput.click()">{{ a.briefFileName ? 'Replace brief…' : 'Upload brief…' }}</button>
+                @if (!a.submittedCount) {
+                  <div class="row-menu-sep"></div>
+                  <button type="button" class="row-menu-item danger" (click)="remove(a)">Delete</button>
+                }
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
-          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">No assignments match these filters.</td></tr>
+          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">
+            @if (activeFilterCount()) {
+              No assignments match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+            } @else {
+              No assignments yet.
+            }
+          </td></tr>
         }
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
+  <app-pager [page]="page()" [totalPages]="totalPages()" [totalElements]="totalElements()" [pageSize]="pageSize()"
+    itemLabel="assignment" (pageChange)="goToPage($event)" (pageSizeChange)="onPageSizeChange($event)"></app-pager>
 }
 
 @if (editing(); as e) {

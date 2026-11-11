@@ -99,6 +99,13 @@ export interface CreateProgramCourseRequest {
   creditValue: number;
 }
 
+export interface UpdateProgramCourseRequest {
+  requirementType: RequirementType;
+  recommendedYear: number;
+  recommendedSemester: number;
+  creditValue: number;
+}
+
 export interface CourseCatalogResponse {
   id: string;
   code: string;
@@ -150,6 +157,7 @@ export interface UpdateCourseRequest {
 export interface CourseAcademicYearResponse {
   id: string;
   courseId: string;
+  catalogCourseId: string;
   catalogCourseCode: string;
   catalogCourseName: string;
   degreeProgramId: string;
@@ -190,6 +198,7 @@ export interface DegreeProgramAcademicYearResponse {
   academicYearName: string;
   durationYears: number;
   totalCredits: number;
+  courseCount: number;
   status: DegreeProgramYearStatus;
 }
 

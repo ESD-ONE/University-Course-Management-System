@@ -14,8 +14,9 @@
 } @else {
   <div class="card" style="margin-bottom:20px;">
     <h3 style="margin:0 0 16px;font-size:15px;">Report Library</h3>
+    <div class="table-scroll">
     <table>
-      <thead><tr><th>Report</th><th>Description</th><th>Last Generated</th><th>Format</th><th style="text-align:right;">Actions</th></tr></thead>
+      <thead><tr><th>Report</th><th>Description</th><th>Last Generated</th><th>Format</th><th></th></tr></thead>
       <tbody>
         @for (r of reports(); track r.id) {
           <tr>
@@ -31,12 +32,14 @@
         }
       </tbody>
     </table>
+    </div>
   </div>
 
   <div class="card">
     <h3 style="margin:0 0 16px;font-size:15px;">Scheduled Reports</h3>
+    <div class="table-scroll">
     <table>
-      <thead><tr><th>Report</th><th>Frequency</th><th>Recipients</th><th>Next Run</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+      <thead><tr><th>Report</th><th>Frequency</th><th>Recipients</th><th>Next Run</th><th>Status</th><th></th></tr></thead>
       <tbody>
         @for (s of schedules(); track s.id) {
           <tr>
@@ -45,9 +48,12 @@
             <td class="cell-soft">{{ s.recipients }}</td>
             <td class="cell-faint">{{ s.status === 'ACTIVE' && s.nextRunAt ? (s.nextRunAt | date: 'dd MMM, HH:mm') : '—' }}</td>
             <td><span class="badge" [class.b-success]="s.status === 'ACTIVE'" [class.b-ink]="s.status === 'PAUSED'">{{ s.status | titlecase }}</span></td>
-            <td style="text-align:right;white-space:nowrap;">
-              <button class="btn btn-secondary btn-sm" (click)="toggle(s)">{{ s.status === 'ACTIVE' ? '⏸ Pause' : '▶ Resume' }}</button>
-              <button class="btn btn-secondary btn-sm" style="margin-left:6px;color:var(--danger);" (click)="remove(s)">Delete</button>
+            <td class="row-actions">
+              <app-row-menu [label]="'Actions for ' + s.reportName">
+                <button type="button" class="row-menu-item" (click)="toggle(s)">{{ s.status === 'ACTIVE' ? 'Pause schedule' : 'Resume schedule' }}</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="remove(s)">Delete schedule</button>
+              </app-row-menu>
             </td>
           </tr>
         } @empty {
@@ -55,6 +61,7 @@
         }
       </tbody>
     </table>
+    </div>
   </div>
 }
 

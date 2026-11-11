@@ -8,6 +8,14 @@ import { AcademicStructureService } from '../../core/services/academic-structure
 import { AuthService } from '../../core/services/auth.service';
 import { GradingService } from '../../core/services/grading.service';
 import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
+import { SearchableSelectComponent, SearchableSelectOption } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { PagerComponent } from '../../shared/pager.component';
+import { countActive, matchesText, statusOptions } from '../../shared/filters';
+
+const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * Wireframe lecturerAssignments: every assignment across the lecturer's course
@@ -17,7 +25,7 @@ import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
 @Component({
   selector: 'app-lecturer-assignments',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
   templateUrl: './lecturer-assignments.component.html',
 })
 export class LecturerAssignmentsComponent {
@@ -25,6 +33,7 @@ export class LecturerAssignmentsComponent {
   private grading = inject(GradingService);
   private academic = inject(AcademicStructureService);
   private auth = inject(AuthService);
+  private loadRequestId = 0;
 
   readonly assignments = signal<AssignmentResponse[]>([]);
   readonly offerings = signal<CourseOfferingResponse[]>([]);
@@ -32,17 +41,60 @@ export class LecturerAssignmentsComponent {
   readonly loadError = signal<string | null>(null);
   readonly courseFilter = signal('');
   readonly statusFilter = signal<AssignmentStatus | ''>('');
+  readonly titleFilter = signal('');
+  readonly courseFilterOptions = computed<SearchableSelectOption[]>(() =>
+    this.offerings().map((o) => ({ value: o.id, label: `${o.code} — ${o.name}`, sublabel: o.academicYearName })),
+  );
+  readonly statusFilterOptions = statusOptions(['DRAFT', 'OPEN', 'CLOSED']);
   readonly editing = signal<AssignmentResponse | 'new' | null>(null);
   readonly dialogError = signal<string | null>(null);
   readonly submitting = signal(false);
   readonly toast = signal<{ message: string; error: boolean } | null>(null);
   private toaster = new Toaster((t) => this.toast.set(t));
 
-  readonly filtered = computed(() =>
-    this.assignments().filter(
-      (a) => (!this.courseFilter() || a.offeringId === this.courseFilter()) && (!this.statusFilter() || a.status === this.statusFilter()),
-    ),
-  );
+  readonly page = signal(0);
+  readonly pageSize = signal(DEFAULT_PAGE_SIZE);
+  readonly totalElements = signal(0);
+  readonly totalPages = signal(0);
+
+  /** The current page, further narrowed by title search — title isn't a server-filterable
+   * field on this endpoint, so it applies only within the loaded page (course/status are
+   * native fields and are sent to the server instead). */
+  readonly filtered = computed(() => this.assignments().filter((a) => matchesText(this.titleFilter(), a.title, a.courseCode)));
+
+  readonly activeFilterCount = computed(() => countActive(this.courseFilter(), this.statusFilter(), this.titleFilter().trim()));
+  readonly filterSummary = computed(() => `${this.totalElements()} assignment${this.totalElements() === 1 ? '' : 's'}${this.activeFilterCount() ? ' match' : ' in total'}`);
+
+  clearFilters(): void {
+    this.courseFilter.set('');
+    this.statusFilter.set('');
+    this.titleFilter.set('');
+    this.page.set(0);
+    this.load();
+  }
+
+  onCourseFilterChange(value: string): void {
+    this.courseFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onStatusFilterChange(value: AssignmentStatus | ''): void {
+    this.statusFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.page.set(0);
+    this.load();
+  }
+
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
+  }
 
   readonly form = this.fb.group({
     offeringId: ['', Validators.required],
@@ -62,16 +114,23 @@ export class LecturerAssignmentsComponent {
 
   load(): void {
     this.loading.set(true);
-    this.grading.list().subscribe({
-      next: (v) => {
-        this.assignments.set(v);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.loadError.set(errorMessage(err, 'Could not load assignments.'));
-        this.loading.set(false);
-      },
-    });
+    const requestId = ++this.loadRequestId;
+    this.grading
+      .list({ offeringId: this.courseFilter() || undefined, status: this.statusFilter(), page: this.page(), size: this.pageSize() })
+      .subscribe({
+        next: (p) => {
+          if (requestId !== this.loadRequestId) return; // a newer filter/page change already superseded this request
+          this.assignments.set(p.content);
+          this.totalElements.set(p.totalElements);
+          this.totalPages.set(p.totalPages);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          if (requestId !== this.loadRequestId) return;
+          this.loadError.set(errorMessage(err, 'Could not load assignments.'));
+          this.loading.set(false);
+        },
+      });
   }
 
   openNew(): void {
@@ -108,6 +167,7 @@ export class LecturerAssignmentsComponent {
     };
     const editing = this.editing();
     this.submitting.set(true);
+    this.form.disable();
     const call = editing === 'new' ? this.grading.create(body) : this.grading.update((editing as AssignmentResponse).id, body);
     call.subscribe({
       next: (saved) => {
@@ -118,6 +178,9 @@ export class LecturerAssignmentsComponent {
       },
       error: (err) => {
         this.submitting.set(false);
+        this.form.enable();
+        // offeringId is permanently locked once editing an existing assignment (see openEdit).
+        if (editing !== 'new') this.form.controls.offeringId.disable();
         this.dialogError.set(errorMessage(err, 'Could not save this assignment.'));
       },
     });

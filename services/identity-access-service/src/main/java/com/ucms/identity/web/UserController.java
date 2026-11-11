@@ -51,13 +51,14 @@ public class UserController {
      */
     @GetMapping("/users")
     public Page<UserResponse> listUsers(@RequestParam(name = "role", required = false) RoleKind role,
+                                         @RequestParam(name = "roleId", required = false) UUID roleId,
                                          @RequestParam(name = "status", required = false) UserStatus status,
                                          @RequestParam(name = "q", required = false) String q,
                                          @RequestParam(name = "page", defaultValue = "0") int page,
                                          @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by("name").ascending());
-        return userService.search(role, status, q, pageable);
+        return userService.search(role, roleId, status, q, pageable);
     }
 
     @GetMapping("/users/summary")
@@ -111,7 +112,7 @@ public class UserController {
     public UserResponse updateRole(@PathVariable("id") UUID id,
                                     @Valid @RequestBody UpdateUserRoleRequest request,
                                     @AuthenticationPrincipal UUID currentUserId) {
-        return userService.updateRole(id, request.role(), currentUserId);
+        return userService.updateRole(id, request.roleId(), currentUserId);
     }
 
     /** G-12: soft-deletes the user via the existing deletedAt/deletedBy plumbing. ADMIN-only,

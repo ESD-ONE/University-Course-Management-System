@@ -97,6 +97,14 @@ export interface RegistrationResponse {
   createdAt: string;
 }
 
+export interface RegistrationListQuery {
+  studentId?: string;
+  targetType?: 'PROGRAM' | 'COURSE' | '';
+  action?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface MyStudentResponse {
   studentId: string;
   name: string | null;

@@ -14,6 +14,14 @@ import { AuthService } from '../../core/services/auth.service';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { PagerComponent } from '../../shared/pager.component';
+import { countActive, plural, statusOptions } from '../../shared/filters';
+
+const DEFAULT_PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * "Reference Degree Details" — the catalog of degree templates (name, department,
@@ -21,11 +29,13 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
  * Admins see every reference degree with a department filter; lecturers (e.g.
  * Department Heads) see only degrees in a department they're scoped to — the backend
  * (DegreeProgramService) already enforces this, this page just exposes the filter.
+ * The list is paginated and searched server-side rather than loading every reference
+ * degree and filtering it in the browser.
  */
 @Component({
   selector: 'app-reference-degree-details',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
   templateUrl: './reference-degree-details.component.html',
 })
 export class ReferenceDegreeDetailsComponent implements OnInit {
@@ -35,27 +45,38 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
   readonly auth = inject(AuthService);
   private loadRequestId = 0;
 
+  readonly pageSize = signal(DEFAULT_PAGE_SIZE);
   readonly programs = signal<DegreeProgramResponse[]>([]);
+  readonly page = signal(0);
+  readonly totalElements = signal(0);
+  readonly totalPages = signal(0);
   readonly departments = signal<DepartmentResponse[]>([]);
   readonly catalog = signal<CourseCatalogResponse[]>([]);
   readonly curriculum = signal<ProgramCourseResponse[]>([]);
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
-  readonly selectedProgramId = signal<string | null>(null);
+  /** The program shown in the curriculum panel — held directly rather than looked up
+   * from the current page, so it stays correct even when a just-created or just-edited
+   * program doesn't land on the page currently in view. */
+  readonly selectedProgram = signal<DegreeProgramResponse | null>(null);
   readonly curriculumLoading = signal(false);
   readonly departmentFilter = signal<string>('');
 
-  readonly selectedProgram = computed(
-    () => this.programs().find((p) => p.id === this.selectedProgramId()) ?? this.programs().at(0) ?? null,
-  );
+  readonly searchFilter = signal('');
+  readonly statusFilter = signal<ProgramStatus | ''>('');
+  readonly statusFilterOptions = statusOptions(['ACTIVE', 'INACTIVE']);
+  private searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  readonly activeFilterCount = computed(() => countActive(this.searchFilter().trim(), this.departmentFilter(), this.statusFilter()));
+  readonly filterSummary = computed(() => {
+    if (this.loading() || this.loadError()) return '';
+    return `${plural(this.totalElements(), 'degree')}${this.activeFilterCount() ? ' match' : ' in total'}`;
+  });
 
   readonly totalCore = computed(() => this.curriculum().filter((c) => c.requirementType === 'CORE').length);
   readonly totalElective = computed(() => this.curriculum().filter((c) => c.requirementType === 'ELECTIVE').length);
 
-  readonly departmentFilterOptions = computed(() => [
-    { value: '', label: 'All Departments' },
-    ...this.departments().map((d) => ({ value: d.id, label: `${d.name} (${d.facultyName})` })),
-  ]);
+  readonly departmentFilterOptions = computed(() => this.departments().map((d) => ({ value: d.id, label: d.name, sublabel: d.facultyName })));
   readonly departmentFieldOptions = computed(() => this.departments().map((d) => ({ value: d.id, label: `${d.name} (${d.facultyName})` })));
   readonly catalogCourseOptions = computed(() => this.catalog().map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` })));
 
@@ -84,8 +105,8 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.referenceDataService.listDepartments().subscribe({ next: (v) => this.departments.set(v) });
-    this.academicStructureService.listCourseCatalog().subscribe({ next: (v) => this.catalog.set(v) });
+    this.referenceDataService.listDepartments(undefined, { size: 100 }).subscribe({ next: (p) => this.departments.set(p.content) });
+    this.academicStructureService.listCourseCatalog({ size: 200 }).subscribe({ next: (p) => this.catalog.set(p.content) });
     this.load();
   }
 
@@ -93,38 +114,89 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
     this.loading.set(true);
     this.loadError.set(null);
     const requestId = ++this.loadRequestId;
-    this.academicStructureService.listDegreePrograms(this.departmentFilter() || null).subscribe({
-      next: (programs) => {
-        if (requestId !== this.loadRequestId) return; // a newer filter change already superseded this request
-        this.programs.set(programs);
-        this.loading.set(false);
-        if (programs.length) this.selectProgram(programs[0].id);
-        else this.selectedProgramId.set(null);
-      },
-      error: () => {
-        if (requestId !== this.loadRequestId) return;
-        this.loadError.set('Could not load reference degrees.');
-        this.loading.set(false);
-      },
-    });
+    this.academicStructureService
+      .listDegreePrograms({
+        departmentId: this.departmentFilter() || null,
+        status: this.statusFilter() || undefined,
+        q: this.searchFilter().trim() || undefined,
+        page: this.page(),
+        size: this.pageSize(),
+      })
+      .subscribe({
+        next: (result) => {
+          if (requestId !== this.loadRequestId) return; // a newer filter change already superseded this request
+          this.programs.set(result.content);
+          this.page.set(result.number);
+          this.totalElements.set(result.totalElements);
+          this.totalPages.set(result.totalPages);
+          this.loading.set(false);
+
+          // Keep showing the same program's curriculum if it's still on this page
+          // (a benign reload, e.g. after editing it); otherwise fall back to the
+          // page's first entry, same as a fresh load.
+          const stillVisible = result.content.find((p) => p.id === this.selectedProgram()?.id);
+          if (stillVisible) this.selectProgram(stillVisible);
+          else if (result.content.length) this.selectProgram(result.content[0]);
+          else this.selectedProgram.set(null);
+        },
+        error: () => {
+          if (requestId !== this.loadRequestId) return;
+          this.loadError.set('Could not load reference degrees.');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.page.set(0);
+    this.load();
+  }
+
+  onSearchInput(value: string): void {
+    this.searchFilter.set(value);
+    clearTimeout(this.searchDebounce);
+    this.searchDebounce = setTimeout(() => { this.page.set(0); this.load(); }, SEARCH_DEBOUNCE_MS);
+  }
+
+  onStatusFilterChange(value: ProgramStatus | ''): void {
+    this.statusFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  clearFilters(): void {
+    clearTimeout(this.searchDebounce);
+    this.searchFilter.set('');
+    this.statusFilter.set('');
+    this.departmentFilter.set('');
+    this.page.set(0);
+    this.load();
   }
 
   onDepartmentFilterChange(value: string): void {
     this.departmentFilter.set(value);
+    this.page.set(0);
     this.load();
   }
 
-  selectProgram(id: string): void {
-    this.selectedProgramId.set(id);
+  selectProgram(program: DegreeProgramResponse): void {
+    this.selectedProgram.set(program);
     this.curriculumLoading.set(true);
+    const id = program.id;
     this.academicStructureService.listCurriculum(id).subscribe({
       next: (v) => {
-        if (this.selectedProgramId() !== id) return; // the user already switched to a different program
+        if (this.selectedProgram()?.id !== id) return; // the user already switched to a different program
         this.curriculum.set(v);
         this.curriculumLoading.set(false);
       },
       error: () => {
-        if (this.selectedProgramId() !== id) return;
+        if (this.selectedProgram()?.id !== id) return;
         this.curriculumLoading.set(false);
       },
     });
@@ -174,6 +246,7 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.programForm.disable();
     const { code, name, departmentId, durationYears, totalCredits, status } = this.programForm.getRawValue();
     const editingId = this.editingProgramId();
 
@@ -182,13 +255,15 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
         .updateDegreeProgram(editingId, { name: name!, durationYears: durationYears!, totalCredits: totalCredits!, status: status! })
         .subscribe({
           next: (updated) => {
-            this.programs.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
             this.submitting.set(false);
+            this.unlockProgramForm();
             this.showProgramDialog.set(false);
             this.showToast(`"${updated.name}" updated.`, false);
+            this.load();
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.unlockProgramForm();
             this.dialogError.set(err.error?.message ?? 'Could not update this reference degree.');
           },
         });
@@ -206,26 +281,39 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
       })
       .subscribe({
         next: (created) => {
-          this.programs.update((list) => [created, ...list]);
           this.submitting.set(false);
+          this.unlockProgramForm();
           this.showProgramDialog.set(false);
           this.showToast(`Reference degree "${created.name}" created.`, false);
-          this.selectProgram(created.id);
+          this.selectProgram(created);
+          this.page.set(0);
+          this.load();
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.unlockProgramForm();
           this.dialogError.set(err.error?.message ?? 'Could not create the reference degree.');
         },
       });
+  }
+
+  /** code/departmentId are permanently locked once editing an existing degree (see
+   * openEditProgramDialog) — re-enabling the whole form after a submit must not undo
+   * that lock. */
+  private unlockProgramForm(): void {
+    this.programForm.enable();
+    if (this.editingProgramId()) {
+      this.programForm.get('code')?.disable();
+      this.programForm.get('departmentId')?.disable();
+    }
   }
 
   deleteProgram(program: DegreeProgramResponse): void {
     if (!confirm(`Delete reference degree "${program.name}"? This cannot be undone.`)) return;
     this.academicStructureService.deleteDegreeProgram(program.id).subscribe({
       next: () => {
-        this.programs.update((list) => list.filter((p) => p.id !== program.id));
-        if (this.selectedProgramId() === program.id) this.selectedProgramId.set(null);
         this.showToast(`"${program.name}" deleted.`, false);
+        this.load();
       },
       error: (err: HttpErrorResponse) => this.showToast(err.error?.message ?? 'Could not delete this reference degree.', true),
     });
@@ -257,6 +345,7 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.curriculumForm.disable();
     const { catalogCourseId, requirementType, recommendedYear, recommendedSemester, creditValue } =
       this.curriculumForm.getRawValue();
     this.academicStructureService
@@ -271,11 +360,13 @@ export class ReferenceDegreeDetailsComponent implements OnInit {
         next: (created) => {
           this.curriculum.update((list) => [...list, created]);
           this.submitting.set(false);
+          this.curriculumForm.enable();
           this.showCurriculumDialog.set(false);
           this.showToast(`${created.catalogCourseCode} added to curriculum.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.curriculumForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not add this course to the curriculum.');
         },
       });

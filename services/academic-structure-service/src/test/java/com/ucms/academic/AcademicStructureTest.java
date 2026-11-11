@@ -323,8 +323,8 @@ class AcademicStructureTest {
         mockMvc.perform(get("/courses").param("degreeProgramId", otherProgram.getId().toString())
                         .header("Authorization", "Bearer " + tokenFor("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].degreeProgramId").value(otherProgram.getId().toString()));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].degreeProgramId").value(otherProgram.getId().toString()));
     }
 
     @Test
@@ -361,8 +361,36 @@ class AcademicStructureTest {
     void listDegreePrograms_isReachableByAnyAuthenticatedRole() throws Exception {
         mockMvc.perform(get("/degree-programs").header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("BSc-CS"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("BSc-CS"));
+    }
+
+    @Test
+    void listDegreePrograms_pagination_respectsPageAndSize() throws Exception {
+        DegreeProgram extra = new DegreeProgram();
+        extra.setCode("BSc-DS");
+        extra.setName("BSc in Data Science");
+        extra.setDepartmentId(program.getDepartmentId());
+        extra.setDurationYears(4);
+        extra.setTotalCredits(120);
+        extra.setStatus(ProgramStatus.ACTIVE);
+        degreeProgramRepository.save(extra);
+
+        mockMvc.perform(get("/degree-programs").param("page", "0").param("size", "1")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void listDegreePrograms_searchByQ_matchesNameOrCode() throws Exception {
+        mockMvc.perform(get("/degree-programs").param("q", "bsc-cs")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("BSc-CS"));
     }
 
     // ---- Phase 3: Department Head scoping (docs/SYSTEM_ARCHITECTURE_REPORT.md section 5/7.2, TC-P3-*) ----
@@ -381,8 +409,8 @@ class AcademicStructureTest {
         String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, program.getDepartmentId());
         mockMvc.perform(get("/degree-programs").header("Authorization", "Bearer " + deptHeadToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("BSc-CS"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("BSc-CS"));
     }
 
     @Test
@@ -390,7 +418,7 @@ class AcademicStructureTest {
         String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, UUID.randomUUID());
         mockMvc.perform(get("/degree-programs").header("Authorization", "Bearer " + deptHeadToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     // ---- Keycloak tokens carry no assignments: they're loaded from AssignmentCache ----
@@ -404,8 +432,8 @@ class AcademicStructureTest {
         mockMvc.perform(get("/degree-programs")
                         .header("Authorization", "Bearer " + KeycloakTestTokens.user(deptHead, "LECTURER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("BSc-CS"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("BSc-CS"));
     }
 
     @Test
@@ -424,7 +452,7 @@ class AcademicStructureTest {
         mockMvc.perform(get("/degree-programs").param("departmentId", program.getDepartmentId().toString())
                         .header("Authorization", "Bearer " + KeycloakTestTokens.service("svc:academic")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     @Test
@@ -493,7 +521,7 @@ class AcademicStructureTest {
         String deptHeadToken = tokenWithDepartmentAssignment("LECTURER", UUID.randomUUID(), DEPT_HEAD_ROLE_ID, program.getDepartmentId());
         mockMvc.perform(get("/courses").param("mine", "true").header("Authorization", "Bearer " + deptHeadToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     @Test
@@ -605,8 +633,8 @@ class AcademicStructureTest {
         mockMvc.perform(get("/degree-programs").param("departmentId", program.getDepartmentId().toString())
                         .header("Authorization", "Bearer " + tokenFor("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("BSc-CS"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("BSc-CS"));
     }
 
     @Test
@@ -655,8 +683,21 @@ class AcademicStructureTest {
     void listCourseCatalog_returnsSeededSubject() throws Exception {
         mockMvc.perform(get("/course-catalog").header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("COSC5105"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("COSC5105"));
+    }
+
+    @Test
+    void listCourseCatalog_searchByQ_matchesNameOrCode() throws Exception {
+        mockMvc.perform(get("/course-catalog").param("q", "cosc5105")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+
+        mockMvc.perform(get("/course-catalog").param("q", "nonexistent-subject")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     @Test
@@ -694,8 +735,8 @@ class AcademicStructureTest {
         mockMvc.perform(get("/course-catalog").param("departmentId", catalogCourse.getOwningDepartmentId().toString())
                         .header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("COSC5105"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("COSC5105"));
     }
 
     @Test
@@ -741,7 +782,7 @@ class AcademicStructureTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/course-catalog").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     // ---- Course Offerings ----
@@ -761,7 +802,7 @@ class AcademicStructureTest {
 
         mockMvc.perform(get("/courses?mine=true").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     @Test
@@ -814,8 +855,8 @@ class AcademicStructureTest {
 
         mockMvc.perform(get("/courses").header("Authorization", "Bearer " + tokenFor("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].degreeProgramCode").value("BSc-CS"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].degreeProgramCode").value("BSc-CS"));
     }
 
     @Test
@@ -832,7 +873,7 @@ class AcademicStructureTest {
 
         mockMvc.perform(get("/courses?mine=true").header("Authorization", "Bearer " + tokenFor("LECTURER", UUID.randomUUID())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     // ---- Course academic-year assignment ----

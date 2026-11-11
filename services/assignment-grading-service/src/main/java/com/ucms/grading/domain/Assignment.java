@@ -46,7 +46,23 @@ public class Assignment extends Auditable {
     @Column(name = "brief_object_key")
     private String briefObjectKey;
 
+    @Column(name = "week_id")
+    private UUID weekId;
+
+    @Column(name = "weight_percent", precision = 5, scale = 2)
+    private java.math.BigDecimal weightPercent;
+
+    /** While true, students don't see marks or feedback for this assignment. */
+    @Column(name = "grades_hidden", nullable = false)
+    private boolean gradesHidden;
+
     public UUID getId() { return id; }
+    public UUID getWeekId() { return weekId; }
+    public void setWeekId(UUID weekId) { this.weekId = weekId; }
+    public java.math.BigDecimal getWeightPercent() { return weightPercent; }
+    public void setWeightPercent(java.math.BigDecimal weightPercent) { this.weightPercent = weightPercent; }
+    public boolean isGradesHidden() { return gradesHidden; }
+    public void setGradesHidden(boolean gradesHidden) { this.gradesHidden = gradesHidden; }
     public UUID getCourseOfferingId() { return courseOfferingId; }
     public void setCourseOfferingId(UUID courseOfferingId) { this.courseOfferingId = courseOfferingId; }
     public String getTitle() { return title; }

@@ -1,0 +1,62 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Learning Hub</div>
+    <div class="breadcrumb"><a routerLink="/app/learning">Academic Years</a> <span>›</span> <span class="current">{{ year()?.academicYearName ?? '…' }}</span></div>
+    <h1 class="page-title">{{ year()?.academicYearName ?? 'Academic Year' }}</h1>
+    <p class="page-sub">Degree programs you're assigned to in this academic year.</p>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="grid g3">
+    @for (i of [1,2,3,4,5,6]; track i) {
+      <div class="card"><span class="skeleton" style="width:50%;height:16px;margin-bottom:10px;"></span><span class="skeleton" style="width:70%;height:12px;"></span></div>
+    }
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <app-filter-bar [activeCount]="activeFilterCount()" [summary]="filterSummary()" (clear)="clearFilters()">
+    <div class="filter-field wide">
+      <label for="yearProgramSearch">Search</label>
+      <app-search-input inputId="yearProgramSearch" placeholder="Search by name or code…" [value]="q()" (valueChange)="onSearchInput($event)"></app-search-input>
+    </div>
+  </app-filter-bar>
+
+  @if (pagedPrograms().length) {
+    <div class="card" style="padding:16px;overflow:hidden;">
+      <div class="table-scroll">
+        <div class="grid g3">
+          @for (p of pagedPrograms(); track p.degreeProgramId) {
+            <button type="button" class="tile-card" (click)="openProgram(p)">
+              <div class="tile-card-title">{{ p.degreeProgramCode }}</div>
+              <div class="tile-card-sub">{{ p.degreeProgramName }}</div>
+              <div class="tile-card-meta">
+                <span style="font-size:11.5px;color:var(--ink-faint);">{{ p.offerings.length }} course{{ p.offerings.length === 1 ? '' : 's' }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+    <app-pager
+      [page]="page()"
+      [totalPages]="totalPages()"
+      [totalElements]="totalElements()"
+      [pageSize]="pageSize()"
+      itemLabel="degree programs"
+      (pageChange)="goToPage($event)"
+      (pageSizeChange)="onPageSizeChange($event)"
+    />
+  } @else {
+    <div class="card">
+      <p style="color:var(--ink-faint);font-size:13px;margin:0;">
+        @if (activeFilterCount()) {
+          No degree programs match this search. <button type="button" class="btn-link" (click)="clearFilters()">Clear</button>
+        } @else {
+          You're not assigned to any degree program in this academic year.
+        }
+      </p>
+    </div>
+  }
+}

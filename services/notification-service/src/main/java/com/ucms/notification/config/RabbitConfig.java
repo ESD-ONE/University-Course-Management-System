@@ -38,7 +38,9 @@ public class RabbitConfig {
         Binding grading = BindingBuilder.bind(queue).to(exchange).with("grading.#");
         Binding identity = BindingBuilder.bind(queue).to(exchange).with("identity.#");
         Binding analytics = BindingBuilder.bind(queue).to(exchange).with("analytics.#");
+        Binding content = BindingBuilder.bind(queue).to(exchange).with("content.#");
+        Binding lecture = BindingBuilder.bind(queue).to(exchange).with("lecture.#");
         Binding dead = BindingBuilder.bind(dlq).to(dlx).with(DLQ);
-        return new Declarables(exchange, dlx, queue, dlq, enrollment, grading, identity, analytics, dead);
+        return new Declarables(exchange, dlx, queue, dlq, enrollment, grading, identity, analytics, content, lecture, dead);
     }
 }

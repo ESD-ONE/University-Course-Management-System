@@ -2,11 +2,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ACADEMIC_API_BASE_URL } from '../config/api.config';
+import { PagedResponse } from '../models/pagination.model';
 import {
   AcademicYearResponse,
   CourseAcademicYearResponse,
   CourseCatalogResponse,
   CourseResponse,
+  CourseStatus,
   CreateAcademicYearRequest,
   CreateCourseAcademicYearRequest,
   CreateCourseCatalogRequest,
@@ -18,15 +20,42 @@ import {
   DegreeProgramAcademicYearResponse,
   DegreeProgramResponse,
   ProgramCourseResponse,
+  ProgramStatus,
   SemesterResponse,
   UpdateAcademicYearRequest,
   UpdateCourseAcademicYearRequest,
   UpdateCourseRequest,
   UpdateDegreeProgramAcademicYearRequest,
   UpdateDegreeProgramRequest,
+  UpdateProgramCourseRequest,
   UpdateSemesterRequest,
   CourseOfferingResponse,
 } from '../models/academic-structure.model';
+
+export interface DegreeProgramListQuery {
+  departmentId?: string | null;
+  status?: ProgramStatus | '';
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface CourseListQuery {
+  degreeProgramId?: string | null;
+  yearOfStudy?: number | '';
+  status?: CourseStatus | '';
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface CourseCatalogListQuery {
+  departmentId?: string | null;
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
 
 @Injectable({ providedIn: 'root' })
 export class AcademicStructureService {
@@ -60,10 +89,14 @@ export class AcademicStructureService {
     return this.http.delete<void>(`${ACADEMIC_API_BASE_URL}/academic-years/${yearId}/semesters/${semesterId}`);
   }
 
-  /** departmentId: the "Reference Degree Details" page's admin department filter. */
-  listDegreePrograms(departmentId?: string | null): Observable<DegreeProgramResponse[]> {
-    const params: Record<string, string> = departmentId ? { departmentId } : {};
-    return this.http.get<DegreeProgramResponse[]>(`${ACADEMIC_API_BASE_URL}/degree-programs`, { params });
+  /** departmentId/status/q are optional and combinable — departmentId is the "Reference
+   * Degree Details" page's admin department filter, q a case-insensitive name/code search. */
+  listDegreePrograms(query: DegreeProgramListQuery = {}): Observable<PagedResponse<DegreeProgramResponse>> {
+    let params = new HttpParams().set('page', query.page ?? 0).set('size', query.size ?? 20);
+    if (query.departmentId) params = params.set('departmentId', query.departmentId);
+    if (query.status) params = params.set('status', query.status);
+    if (query.q) params = params.set('q', query.q);
+    return this.http.get<PagedResponse<DegreeProgramResponse>>(`${ACADEMIC_API_BASE_URL}/degree-programs`, { params });
   }
 
   createDegreeProgram(request: CreateDegreeProgramRequest): Observable<DegreeProgramResponse> {
@@ -85,6 +118,13 @@ export class AcademicStructureService {
   addCurriculumEntry(programId: string, request: CreateProgramCourseRequest): Observable<ProgramCourseResponse> {
     return this.http.post<ProgramCourseResponse>(
       `${ACADEMIC_API_BASE_URL}/degree-programs/${programId}/curriculum`,
+      request,
+    );
+  }
+
+  updateCurriculumEntry(programId: string, programCourseId: string, request: UpdateProgramCourseRequest): Observable<ProgramCourseResponse> {
+    return this.http.put<ProgramCourseResponse>(
+      `${ACADEMIC_API_BASE_URL}/degree-programs/${programId}/curriculum/${programCourseId}`,
       request,
     );
   }
@@ -140,23 +180,35 @@ export class AcademicStructureService {
     return this.http.get<CourseOfferingResponse[]>(`${ACADEMIC_API_BASE_URL}/course-offerings`, { params });
   }
 
+  getCourseOffering(offeringId: string): Observable<CourseOfferingResponse> {
+    return this.http.get<CourseOfferingResponse>(`${ACADEMIC_API_BASE_URL}/course-offerings/${offeringId}`);
+  }
+
   getDegreeProgram(programId: string): Observable<DegreeProgramResponse> {
     return this.http.get<DegreeProgramResponse>(`${ACADEMIC_API_BASE_URL}/degree-programs/${programId}`);
   }
 
-  listCourseCatalog(): Observable<CourseCatalogResponse[]> {
-    return this.http.get<CourseCatalogResponse[]>(`${ACADEMIC_API_BASE_URL}/course-catalog`);
+  /** departmentId/q are optional and combinable — q is a case-insensitive name/code search. */
+  listCourseCatalog(query: CourseCatalogListQuery = {}): Observable<PagedResponse<CourseCatalogResponse>> {
+    let params = new HttpParams().set('page', query.page ?? 0).set('size', query.size ?? 20);
+    if (query.departmentId) params = params.set('departmentId', query.departmentId);
+    if (query.q) params = params.set('q', query.q);
+    return this.http.get<PagedResponse<CourseCatalogResponse>>(`${ACADEMIC_API_BASE_URL}/course-catalog`, { params });
   }
 
   createCourseCatalogEntry(request: CreateCourseCatalogRequest): Observable<CourseCatalogResponse> {
     return this.http.post<CourseCatalogResponse>(`${ACADEMIC_API_BASE_URL}/course-catalog`, request);
   }
 
-  /** degreeProgramId: the Courses page's admin filter. */
-  listCourses(mine = false, degreeProgramId?: string | null): Observable<CourseResponse[]> {
-    const params: Record<string, string> = { mine: String(mine) };
-    if (degreeProgramId) params['degreeProgramId'] = degreeProgramId;
-    return this.http.get<CourseResponse[]>(`${ACADEMIC_API_BASE_URL}/courses`, { params });
+  /** degreeProgramId/yearOfStudy/status/q are all optional and combinable — q is a
+   * case-insensitive catalog code/name search. */
+  listCourses(mine: boolean, query: CourseListQuery = {}): Observable<PagedResponse<CourseResponse>> {
+    let params = new HttpParams().set('mine', String(mine)).set('page', query.page ?? 0).set('size', query.size ?? 20);
+    if (query.degreeProgramId) params = params.set('degreeProgramId', query.degreeProgramId);
+    if (query.yearOfStudy) params = params.set('yearOfStudy', query.yearOfStudy);
+    if (query.status) params = params.set('status', query.status);
+    if (query.q) params = params.set('q', query.q);
+    return this.http.get<PagedResponse<CourseResponse>>(`${ACADEMIC_API_BASE_URL}/courses`, { params });
   }
 
   createCourse(request: CreateCourseRequest): Observable<CourseResponse> {

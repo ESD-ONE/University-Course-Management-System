@@ -69,4 +69,18 @@ public final class Dtos {
     public record StatsResponse(long activeProgramEnrollments, long activeCourseEnrollments, long waitlisted,
                                 List<ProgramCount> byProgram, List<OfferingCount> byOffering,
                                 List<MonthCount> enrollmentsByMonth) {}
+
+    // --- Learning Hub tree (student side) — mirrors academic-structure-service's
+    // LearningTreeResponse so the frontend uses one component for both. See
+    // docs/LEARNING_HUB_COURSE_CONTENT_ARCHITECTURE.md section 4.4.
+    public record LearningOfferingNode(UUID offeringId, String code, String name, int credits, String requirementType,
+                                       int yearOfStudy, String status, UUID lecturerId, String myStatus) {}
+
+    public record LearningProgramNode(UUID degreeProgramId, String degreeProgramCode, String degreeProgramName,
+                                      List<LearningOfferingNode> offerings) {}
+
+    public record LearningYearNode(UUID academicYearId, String academicYearName, String academicYearStatus,
+                                   List<LearningProgramNode> programs) {}
+
+    public record LearningTreeResponse(List<LearningYearNode> years) {}
 }

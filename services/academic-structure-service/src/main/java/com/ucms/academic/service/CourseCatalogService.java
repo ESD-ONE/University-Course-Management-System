@@ -4,17 +4,19 @@ import com.ucms.academic.domain.CourseCatalog;
 import com.ucms.academic.exception.DuplicateEntityException;
 import com.ucms.academic.exception.HasDependentsException;
 import com.ucms.academic.repository.CourseCatalogRepository;
+import com.ucms.academic.repository.CourseCatalogSpecifications;
 import com.ucms.academic.repository.CourseRepository;
 import com.ucms.academic.repository.ProgramCourseRepository;
 import com.ucms.academic.web.dto.CourseCatalogResponse;
 import com.ucms.academic.web.dto.CreateCourseCatalogRequest;
 import com.ucms.academic.web.dto.UpdateCourseCatalogRequest;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -36,11 +38,9 @@ public class CourseCatalogService {
      * base-service's GET /course-catalog?departmentId= call (G-05's parallel
      * fix there). Omitted => every entry, unchanged from before. */
     @Transactional(readOnly = true)
-    public List<CourseCatalogResponse> list(UUID departmentId) {
-        List<CourseCatalog> all = departmentId == null
-                ? courseCatalogRepository.findByDeletedAtIsNullOrderByCodeAsc()
-                : courseCatalogRepository.findByOwningDepartmentIdAndDeletedAtIsNullOrderByCodeAsc(departmentId);
-        return all.stream().map(CourseCatalogResponse::from).toList();
+    public Page<CourseCatalogResponse> list(UUID departmentId, String q, Pageable pageable) {
+        return courseCatalogRepository.findAll(CourseCatalogSpecifications.filter(departmentId, q), pageable)
+                .map(CourseCatalogResponse::from);
     }
 
     @Transactional

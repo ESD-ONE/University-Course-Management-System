@@ -12,6 +12,14 @@ import {
 } from '../../core/models/academic-structure.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
+import { SearchInputComponent } from '../../shared/search-input.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { PagerComponent } from '../../shared/pager.component';
+import { countActive, statusOptions } from '../../shared/filters';
+
+const DEFAULT_PAGE_SIZE = 20;
+const YEAR_OF_STUDY_OPTIONS = [1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: `Year ${n}` }));
 
 /**
  * University-wide course oversight. Courses are reusable templates (not tied to one
@@ -22,7 +30,7 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 @Component({
   selector: 'app-admin-courses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
   templateUrl: './admin-courses.component.html',
 })
 export class AdminCoursesComponent {
@@ -37,10 +45,26 @@ export class AdminCoursesComponent {
   readonly loadError = signal<string | null>(null);
   readonly degreeProgramFilter = signal<string>('');
 
-  readonly degreeProgramFilterOptions = computed(() => [
-    { value: '', label: 'All Degree Programs' },
-    ...this.degreePrograms().map((d) => ({ value: d.id, label: `${d.code} - ${d.name}` })),
-  ]);
+  readonly searchFilter = signal('');
+  readonly yearOfStudyFilter = signal('');
+  readonly statusFilter = signal('');
+
+  readonly page = signal(0);
+  readonly pageSize = signal(DEFAULT_PAGE_SIZE);
+  readonly totalElements = signal(0);
+  readonly totalPages = signal(0);
+
+  private searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  readonly degreeProgramFilterOptions = computed(() =>
+    this.degreePrograms().map((d) => ({ value: d.id, label: d.name, sublabel: d.code })),
+  );
+  readonly yearOfStudyOptions = YEAR_OF_STUDY_OPTIONS;
+  readonly statusFilterOptions = statusOptions(['DRAFT', 'PUBLISHED', 'CANCELLED']);
+  readonly activeFilterCount = computed(() =>
+    countActive(this.searchFilter().trim(), this.degreeProgramFilter(), this.yearOfStudyFilter(), this.statusFilter()),
+  );
+  readonly filterSummary = computed(() => `${this.totalElements()} course${this.totalElements() === 1 ? '' : 's'}${this.activeFilterCount() ? ' match' : ' in total'}`);
 
   readonly editingCourse = signal<CourseResponse | null>(null);
   readonly managingCourse = signal<CourseResponse | null>(null);
@@ -66,7 +90,7 @@ export class AdminCoursesComponent {
   });
 
   constructor() {
-    this.academicStructureService.listDegreePrograms().subscribe({ next: (v) => this.degreePrograms.set(v) });
+    this.academicStructureService.listDegreePrograms({ size: 200 }).subscribe({ next: (p) => this.degreePrograms.set(p.content) });
     this.academicStructureService.listAcademicYears().subscribe({ next: (v) => this.academicYears.set(v) });
     this.load();
   }
@@ -75,22 +99,74 @@ export class AdminCoursesComponent {
     this.loading.set(true);
     this.loadError.set(null);
     const requestId = ++this.loadRequestId;
-    this.academicStructureService.listCourses(false, this.degreeProgramFilter() || null).subscribe({
-      next: (v) => {
-        if (requestId !== this.loadRequestId) return; // a newer filter change already superseded this request
-        this.courses.set(v);
-        this.loading.set(false);
-      },
-      error: () => {
-        if (requestId !== this.loadRequestId) return;
-        this.loadError.set('Could not load courses.');
-        this.loading.set(false);
-      },
-    });
+    this.academicStructureService
+      .listCourses(false, {
+        degreeProgramId: this.degreeProgramFilter() || null,
+        yearOfStudy: this.yearOfStudyFilter() ? Number(this.yearOfStudyFilter()) : '',
+        status: (this.statusFilter() as CourseStatus) || '',
+        q: this.searchFilter().trim(),
+        page: this.page(),
+        size: this.pageSize(),
+      })
+      .subscribe({
+        next: (p) => {
+          if (requestId !== this.loadRequestId) return; // a newer filter change already superseded this request
+          this.courses.set(p.content);
+          this.totalElements.set(p.totalElements);
+          this.totalPages.set(p.totalPages);
+          this.loading.set(false);
+        },
+        error: () => {
+          if (requestId !== this.loadRequestId) return;
+          this.loadError.set('Could not load courses.');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  onSearchInput(value: string): void {
+    this.searchFilter.set(value);
+    this.page.set(0);
+    clearTimeout(this.searchDebounce);
+    this.searchDebounce = setTimeout(() => this.load(), 300);
   }
 
   onDegreeProgramFilterChange(value: string): void {
     this.degreeProgramFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onYearOfStudyFilterChange(value: string): void {
+    this.yearOfStudyFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onStatusFilterChange(value: string): void {
+    this.statusFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.page.set(0);
+    this.load();
+  }
+
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
+  }
+
+  clearFilters(): void {
+    clearTimeout(this.searchDebounce);
+    this.searchFilter.set('');
+    this.yearOfStudyFilter.set('');
+    this.statusFilter.set('');
+    this.degreeProgramFilter.set('');
+    this.page.set(0);
     this.load();
   }
 
@@ -117,18 +193,21 @@ export class AdminCoursesComponent {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.editCourseForm.disable();
     const { beginDate, yearOfStudy, capacity, status } = this.editCourseForm.getRawValue();
     this.academicStructureService
       .updateCourse(course.id, { beginDate: beginDate!, yearOfStudy: yearOfStudy!, capacity: capacity!, status: status! })
       .subscribe({
         next: (updated) => {
-          this.courses.update((list) => list.map((c) => (c.id === updated.id ? updated : c)));
+          this.load(); // the edit may move this row off the current filtered page (e.g. status change)
           this.submitting.set(false);
+          this.editCourseForm.enable();
           this.editingCourse.set(null);
           this.showToast(`${updated.catalogCourseCode} updated.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.editCourseForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not update this course.');
         },
       });
@@ -138,7 +217,7 @@ export class AdminCoursesComponent {
     if (!confirm(`Delete course "${course.catalogCourseName}"? This also removes its academic-year assignments.`)) return;
     this.academicStructureService.deleteCourse(course.id).subscribe({
       next: () => {
-        this.courses.update((list) => list.filter((c) => c.id !== course.id));
+        this.load(); // re-fetch so totalElements/totalPages stay correct
         this.showToast(`${course.catalogCourseCode} deleted.`, false);
       },
       error: (err: HttpErrorResponse) => this.showToast(err.error?.message ?? 'Could not delete this course.', true),
@@ -194,6 +273,7 @@ export class AdminCoursesComponent {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.assignForm.disable();
     const { semesterId, capacity, status } = this.assignForm.getRawValue();
     const editingId = this.editingAssignmentId();
 
@@ -204,11 +284,13 @@ export class AdminCoursesComponent {
           next: (updated) => {
             this.yearAssignments.update((list) => list.map((a) => (a.id === updated.id ? updated : a)));
             this.submitting.set(false);
+            this.assignForm.enable();
             this.editingAssignmentId.set(null);
             this.showToast(`Updated assignment for ${updated.academicYearName}.`, false);
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.assignForm.enable();
             this.dialogError.set(err.error?.message ?? 'Could not update this assignment.');
           },
         });
@@ -227,10 +309,12 @@ export class AdminCoursesComponent {
         next: (created) => {
           this.yearAssignments.update((list) => [...list, created]);
           this.submitting.set(false);
+          this.assignForm.enable();
           this.showToast(`Assigned to ${created.academicYearName}.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.assignForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not assign this course to the selected year.');
         },
       });

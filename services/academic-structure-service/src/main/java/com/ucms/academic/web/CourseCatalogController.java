@@ -5,17 +5,23 @@ import com.ucms.academic.web.dto.CourseCatalogResponse;
 import com.ucms.academic.web.dto.CreateCourseCatalogRequest;
 import com.ucms.academic.web.dto.UpdateCourseCatalogRequest;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/course-catalog")
 public class CourseCatalogController {
+
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final CourseCatalogService courseCatalogService;
 
@@ -23,12 +29,16 @@ public class CourseCatalogController {
         this.courseCatalogService = courseCatalogService;
     }
 
-    /** departmentId: optional filter on owningDepartmentId, mirroring
-     * GET /degree-programs?departmentId= — used by base-service's parallel
-     * G-05 fix. Omitted => every entry, same as before. */
+    /** departmentId/q are optional and combinable — departmentId mirrors
+     * GET /degree-programs?departmentId= (used by base-service's parallel G-05 fix),
+     * q is a case-insensitive name/code search. Omitted => every entry, paginated. */
     @GetMapping
-    public List<CourseCatalogResponse> list(@RequestParam(name = "departmentId", required = false) UUID departmentId) {
-        return courseCatalogService.list(departmentId);
+    public Page<CourseCatalogResponse> list(@RequestParam(name = "departmentId", required = false) UUID departmentId,
+                                             @RequestParam(name = "q", required = false) String q,
+                                             @RequestParam(name = "page", defaultValue = "0") int page,
+                                             @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), Sort.by("code").ascending());
+        return courseCatalogService.list(departmentId, q, pageable);
     }
 
     @PostMapping

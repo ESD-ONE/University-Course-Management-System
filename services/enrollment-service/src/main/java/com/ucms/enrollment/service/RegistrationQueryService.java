@@ -10,6 +10,7 @@ import com.ucms.enrollment.domain.StudentProgramEnrollment;
 import com.ucms.enrollment.domain.TargetType;
 import com.ucms.enrollment.repository.CourseEnrollmentRepository;
 import com.ucms.enrollment.repository.RegistrationLogRepository;
+import com.ucms.enrollment.repository.RegistrationLogSpecifications;
 import com.ucms.enrollment.repository.StudentProgramEnrollmentRepository;
 import com.ucms.enrollment.security.Caller;
 import com.ucms.enrollment.web.dto.Dtos.MonthCount;
@@ -18,7 +19,12 @@ import com.ucms.enrollment.web.dto.Dtos.ProgramCount;
 import com.ucms.enrollment.web.dto.Dtos.RegistrationResponse;
 import com.ucms.enrollment.web.dto.Dtos.StatsResponse;
 import com.ucms.enrollment.web.dto.Dtos.StudentOption;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,13 +60,13 @@ public class RegistrationQueryService {
 
     /** Recent Registrations: an admin sees everything; a lecturer sees what they did. */
     @Transactional(readOnly = true)
-    public List<RegistrationResponse> recent(int limit, UUID studentId, Caller caller) {
-        var page = PageRequest.of(0, Math.min(Math.max(limit, 1), 200));
-        List<RegistrationLog> rows;
-        if (studentId != null) rows = logRepository.findByStudentIdOrderByCreatedAtDesc(studentId, page);
-        else if (caller.isAdmin()) rows = logRepository.findAllByOrderByCreatedAtDesc(page);
-        else rows = logRepository.findByActorIdOrderByCreatedAtDesc(caller.id(), page);
-        if (rows.isEmpty()) return List.of();
+    public Page<RegistrationResponse> recent(int page, int size, UUID studentId, TargetType targetType,
+                                              String action, Caller caller) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), Sort.by("createdAt").descending());
+        UUID actorIdIfNotAdmin = (studentId == null && !caller.isAdmin()) ? caller.id() : null;
+        Page<RegistrationLog> rows = logRepository.findAll(
+                RegistrationLogSpecifications.filter(studentId, actorIdIfNotAdmin, targetType, action), pageable);
+        if (rows.isEmpty()) return rows.map(r -> null);
 
         Set<UUID> people = new HashSet<>();
         rows.forEach(r -> { people.add(r.getStudentId()); people.add(r.getActorId()); });
@@ -74,14 +80,28 @@ public class RegistrationQueryService {
                 : academic.searchOfferings(null, null, null, offeringIds).stream()
                 .collect(Collectors.toMap(AcademicClient.Offering::id, o -> o.code() + " — " + o.name(), (a, b) -> a));
 
-        return rows.stream().map(r -> {
+        return rows.map(r -> {
             IdentityClient.User s = users.get(r.getStudentId());
             IdentityClient.User a = users.get(r.getActorId());
             String label = r.getTargetType() == TargetType.PROGRAM ? programLabels.get(r.getTargetId()) : offeringLabels.get(r.getTargetId());
             return new RegistrationResponse(r.getId(), r.getStudentId(), s == null ? null : s.name(),
                     s == null ? null : s.studentId(), r.getTargetType().name(), r.getTargetId(), label,
                     r.getActorId(), a == null ? "System" : a.name(), r.getActorRole(), r.getAction(), r.getCreatedAt());
-        }).toList();
+        });
+    }
+
+    /** Deletes one entry from the registration history (the "Recent Registrations"
+     * table), e.g. after the UI has already ended the live enrollment/program
+     * registration it refers to. Admins can delete any entry; a lecturer only the ones
+     * they personally made — same ownership rule "recent" already applies to reading. */
+    @Transactional
+    public void delete(UUID id, Caller caller) {
+        RegistrationLog row = logRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Registration not found"));
+        if (!caller.isAdmin() && !caller.id().equals(row.getActorId())) {
+            throw new AccessDeniedException("Not your registration");
+        }
+        logRepository.delete(row);
     }
 
     /**

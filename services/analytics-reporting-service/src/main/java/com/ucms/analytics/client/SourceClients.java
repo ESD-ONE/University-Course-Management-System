@@ -33,6 +33,8 @@ public class SourceClients {
                            String academicYearName, String academicYearStatus, String semesterName, int capacity,
                            UUID lecturerId, String status) {}
     public record Program(UUID id, String code, String name, int totalCredits, String status) {}
+    /** /degree-programs is paginated (page/size/content/...); only content is needed here. */
+    public record ProgramPage(List<Program> content) {}
 
     // Enrollment
     public record ProgramCount(UUID degreeProgramId, String degreeProgramName, long activeStudents) {}
@@ -60,6 +62,8 @@ public class SourceClients {
     public record GradeHistory(List<CourseGrade> courses, Double gpa, int creditsGraded) {}
     public record StudentAssignment(UUID id, String courseCode, String title, OffsetDateTime dueDate, String status,
                                     String mySubmissionStatus) {}
+    /** /assignments is paginated (page/size/content/...); only content is needed here. */
+    public record StudentAssignmentPage(List<StudentAssignment> content) {}
 
     private final RestClient identity;
     private final RestClient academic;
@@ -125,10 +129,13 @@ public class SourceClients {
         return offerings == null ? List.of() : offerings;
     }
 
+    /** Every program — a small, slow-growing reference catalog, so this requests
+     * /degree-programs' own max page size (100) rather than its default of 20. */
     public List<Program> programs() {
-        List<Program> programs = Upstream.call("Academic Structure", null, () -> academic.get().uri("/degree-programs")
-                .header("Authorization", service()).retrieve().body(new ParameterizedTypeReference<List<Program>>() {}));
-        return programs == null ? List.of() : programs;
+        ProgramPage page = Upstream.call("Academic Structure", null, () -> academic.get()
+                .uri(b -> b.path("/degree-programs").queryParam("size", 100).build())
+                .header("Authorization", service()).retrieve().body(ProgramPage.class));
+        return page == null ? List.of() : page.content();
     }
 
     public EnrollmentStats enrollmentStats() {
@@ -177,10 +184,13 @@ public class SourceClients {
                 .header("Authorization", "Bearer " + userToken).retrieve().body(GradeHistory.class));
     }
 
+    /** A student's own assignments — a bounded set (every course they're in), so this
+     * requests a page large enough to cover it in one go rather than the default size. */
     public List<StudentAssignment> myAssignments(String userToken) {
-        List<StudentAssignment> rows = Upstream.call("Assignment & Grading", null, () -> grading.get().uri("/assignments")
+        StudentAssignmentPage page = Upstream.call("Assignment & Grading", null, () -> grading.get()
+                .uri(b -> b.path("/assignments").queryParam("size", 100).build())
                 .header("Authorization", "Bearer " + userToken).retrieve()
-                .body(new ParameterizedTypeReference<List<StudentAssignment>>() {}));
-        return rows == null ? List.of() : rows;
+                .body(StudentAssignmentPage.class));
+        return page == null ? List.of() : page.content();
     }
 }

@@ -4,7 +4,9 @@ import { Router } from '@angular/router';
 import Keycloak from 'keycloak-js';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, KEYCLOAK_URL } from '../config/api.config';
+import { EffectivePermission } from '../models/roles.model';
 import { ProfileResponse } from '../models/user.model';
+import { RolesService } from './roles.service';
 import { UserService } from './user.service';
 
 /**
@@ -31,14 +33,33 @@ export class AuthService {
     (this.currentUserSignal()?.assignments ?? []).some((a) => a.scopeType === 'DEPARTMENT'),
   );
 
+  /** Every (module, action) the signed-in user is granted, across all of their scope
+   * assignments — what PermissionService-style UI checks read. The server is still the
+   * real gate; this only decides what the UI shows. */
+  private readonly permissionsSignal = signal<EffectivePermission[]>([]);
+  readonly permissions = this.permissionsSignal.asReadonly();
+
   private readonly keycloak = new Keycloak({ url: KEYCLOAK_URL, realm: 'ucms', clientId: 'ucms-web' });
   private expiredNotice = false;
 
   constructor(
     private http: HttpClient,
     private userService: UserService,
+    private rolesService: RolesService,
     private router: Router,
   ) {}
+
+  /** True if the user is granted (module, action) somewhere — GLOBAL, or any scope at
+   * all when scopeId is omitted, or specifically at scopeId when given. Admins hold a
+   * GLOBAL grant on everything by default, so this naturally covers them too. */
+  can(module: string, actionKey: string, scopeId?: string): boolean {
+    return this.permissionsSignal().some(
+      (p) =>
+        p.module === module &&
+        p.actionKey === actionKey &&
+        (p.scopeType === 'GLOBAL' || scopeId === undefined || p.scopeId === scopeId),
+    );
+  }
 
   /**
    * Called once at app start: completes the redirect back from Keycloak's login page, or
@@ -49,14 +70,26 @@ export class AuthService {
     this.keycloak.onTokenExpired = () => {
       this.keycloak.updateToken(30).catch(() => this.sessionExpired());
     };
+    // The silent-check-sso iframe only works when Keycloak and the app share an origin
+    // (true in production, via the nginx /auth proxy): Keycloak's own clickjacking
+    // defenses put X-Frame-Options: SAMEORIGIN on its 3p-cookies probe page too, so a
+    // cross-origin dev server (e.g. ng serve against the real Keycloak) gets that iframe
+    // silently blocked and init() never resolves. Falls back to a full-page silent
+    // redirect there instead — same effect, just visible for an instant.
+    const sameOriginAsKeycloak = new URL(KEYCLOAK_URL, location.href).origin === location.origin;
     const authenticated = await this.keycloak.init({
       onLoad: 'check-sso',
       pkceMethod: 'S256',
-      silentCheckSsoRedirectUri: `${location.origin}/silent-check-sso.html`,
+      ...(sameOriginAsKeycloak ? { silentCheckSsoRedirectUri: `${location.origin}/silent-check-sso.html` } : {}),
       checkLoginIframe: false,
     });
     if (authenticated) {
-      this.currentUserSignal.set(await firstValueFrom(this.userService.me()));
+      const [profile, permissions] = await Promise.all([
+        firstValueFrom(this.userService.me()),
+        firstValueFrom(this.rolesService.myPermissions()).catch(() => []),
+      ]);
+      this.currentUserSignal.set(profile);
+      this.permissionsSignal.set(permissions);
     }
   }
 
@@ -94,6 +127,7 @@ export class AuthService {
       ).catch(() => undefined);
     }
     this.currentUserSignal.set(null);
+    this.permissionsSignal.set([]);
     await this.keycloak.logout({ redirectUri: `${location.origin}/login` });
   }
 
@@ -102,6 +136,7 @@ export class AuthService {
   sessionExpired(): void {
     if (!this.currentUserSignal() && !this.keycloak.token) return;
     this.currentUserSignal.set(null);
+    this.permissionsSignal.set([]);
     this.keycloak.clearToken();
     // At app start the router hasn't navigated yet and would override this redirect;
     // authGuard picks up expiredNotice instead.

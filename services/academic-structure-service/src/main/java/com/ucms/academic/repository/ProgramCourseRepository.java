@@ -4,6 +4,7 @@ import com.ucms.academic.domain.ProgramCourse;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, UUID> {
@@ -11,4 +12,5 @@ public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, UU
     boolean existsByDegreeProgramId(UUID degreeProgramId);
     boolean existsByCatalogCourseId(UUID catalogCourseId);
     List<ProgramCourse> findByDegreeProgramIdOrderByRecommendedYearAscRecommendedSemesterAsc(UUID degreeProgramId);
+    Optional<ProgramCourse> findByIdAndDegreeProgramId(UUID id, UUID degreeProgramId);
 }

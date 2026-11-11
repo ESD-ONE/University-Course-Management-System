@@ -20,10 +20,12 @@ public final class Dtos {
 
     public record CreateAssignmentRequest(@NotNull UUID offeringId, @NotBlank @Size(max = 200) String title,
                                           @Size(max = 10000) String description, @NotNull OffsetDateTime dueDate,
-                                          @NotNull @Min(1) @Max(1000) Integer maxMarks) {}
+                                          @NotNull @Min(1) @Max(1000) Integer maxMarks, UUID weekId,
+                                          @DecimalMin("0.01") @Max(100) BigDecimal weightPercent) {}
 
     public record UpdateAssignmentRequest(@NotBlank @Size(max = 200) String title, @Size(max = 10000) String description,
-                                          @NotNull OffsetDateTime dueDate, @NotNull @Min(1) @Max(1000) Integer maxMarks) {}
+                                          @NotNull OffsetDateTime dueDate, @NotNull @Min(1) @Max(1000) Integer maxMarks,
+                                          UUID weekId, @DecimalMin("0.01") @Max(100) BigDecimal weightPercent) {}
 
     public record StatusRequest(@NotNull Assignment.Status status) {}
 
@@ -32,7 +34,8 @@ public final class Dtos {
                                      String description, OffsetDateTime dueDate, int maxMarks, String status,
                                      String briefFileName, long totalStudents, long submittedCount, long gradedCount,
                                      String mySubmissionStatus, OffsetDateTime mySubmittedAt, String myFileName,
-                                     BigDecimal myMarks, String myFeedback) {}
+                                     BigDecimal myMarks, String myFeedback, UUID weekId, BigDecimal weightPercent,
+                                     boolean gradesHidden) {}
 
     /** One row per enrolled student — including those who haven't submitted. */
     public record SubmissionRow(UUID studentId, String studentName, String studentNumber, UUID submissionId,
@@ -63,4 +66,21 @@ public final class Dtos {
                                           Double classAverage) {}
 
     public record CourseResultRow(UUID offeringId, UUID studentId, double percentage, int gradedAssignments) {}
+
+    public record GradesVisibilityRequest(@NotNull boolean hidden) {}
+
+    public record StudentScoreRow(UUID studentId, String studentName, BigDecimal marks, double percentage) {}
+
+    public record AssignmentAnalyticsResponse(long totalStudents, long submitted, long onTime, long late, long graded,
+                                               Double average, Double median, Double min, Double max,
+                                               List<Integer> histogram, List<StudentScoreRow> topPerformers,
+                                               List<StudentScoreRow> needsAttention) {}
+
+    public record AssignmentTrendPoint(UUID assignmentId, String title, OffsetDateTime dueDate, Double classAverage,
+                                       long submitted, long graded, long totalStudents, BigDecimal weightPercent) {}
+
+    public record AtRiskRow(UUID studentId, String studentName, double averagePercentage, long missingSubmissions) {}
+
+    public record OfferingAnalyticsResponse(List<AssignmentTrendPoint> assignments, Double weightedCourseAverage,
+                                            Double classAverage, List<AtRiskRow> atRisk) {}
 }

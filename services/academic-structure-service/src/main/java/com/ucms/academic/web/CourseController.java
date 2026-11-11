@@ -1,5 +1,6 @@
 package com.ucms.academic.web;
 
+import com.ucms.academic.domain.CourseStatus;
 import com.ucms.academic.service.CourseOfferingService;
 import com.ucms.academic.web.dto.CourseAcademicYearResponse;
 import com.ucms.academic.web.dto.CourseResponse;
@@ -8,6 +9,10 @@ import com.ucms.academic.web.dto.CreateCourseRequest;
 import com.ucms.academic.web.dto.UpdateCourseAcademicYearRequest;
 import com.ucms.academic.web.dto.UpdateCourseRequest;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,6 +25,9 @@ import java.util.UUID;
 @RequestMapping("/courses")
 public class CourseController {
 
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final CourseOfferingService courseOfferingService;
 
     public CourseController(CourseOfferingService courseOfferingService) {
@@ -27,13 +35,20 @@ public class CourseController {
     }
 
     /** mine=true scopes to the caller's own courses (lecturer's "My Courses").
-     * degreeProgramId narrows by program — the Courses page's admin filter. */
+     * degreeProgramId/yearOfStudy/status/q are all optional and combinable — q is a
+     * case-insensitive catalog code/name search. */
     @GetMapping
-    public List<CourseResponse> list(@RequestParam(name = "mine", required = false, defaultValue = "false") boolean mine,
+    public Page<CourseResponse> list(@RequestParam(name = "mine", required = false, defaultValue = "false") boolean mine,
                                       @RequestParam(name = "degreeProgramId", required = false) UUID degreeProgramId,
+                                      @RequestParam(name = "yearOfStudy", required = false) Integer yearOfStudy,
+                                      @RequestParam(name = "status", required = false) CourseStatus status,
+                                      @RequestParam(name = "q", required = false) String q,
+                                      @RequestParam(name = "page", defaultValue = "0") int page,
+                                      @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
                                       @AuthenticationPrincipal UUID currentUserId) {
-        return mine ? courseOfferingService.listForLecturer(currentUserId, degreeProgramId)
-                    : courseOfferingService.list(degreeProgramId);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), Sort.by("createdAt").descending());
+        return mine ? courseOfferingService.listForLecturer(currentUserId, degreeProgramId, yearOfStudy, status, q, pageable)
+                    : courseOfferingService.list(degreeProgramId, yearOfStudy, status, q, pageable);
     }
 
     @PostMapping

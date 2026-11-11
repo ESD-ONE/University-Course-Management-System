@@ -4,13 +4,14 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ReportResponse, ScheduleResponse } from '../../core/models/analytics.model';
 import { AnalyticsService } from '../../core/services/analytics.service';
 import { errorMessage, saveBlob, Toaster } from '../../shared/ui';
+import { RowMenuComponent } from '../../shared/row-menu.component';
 
 /** Wireframe adminReports: on-demand reports (Generate stores a fresh file, Download
  *  fetches the latest) and scheduled reports emailed to recipients. */
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RowMenuComponent],
   templateUrl: './reports.component.html',
 })
 export class ReportsComponent {
@@ -92,6 +93,7 @@ export class ReportsComponent {
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
     this.submitting.set(true);
+    this.form.disable();
     this.analytics
       .createSchedule({
         reportId: v.reportId ?? '',
@@ -104,12 +106,14 @@ export class ReportsComponent {
       .subscribe({
         next: (s) => {
           this.submitting.set(false);
+          this.form.enable();
           this.scheduling.set(false);
           this.toaster.show(`${s.reportName} scheduled — ${s.frequencyLabel}.`);
           this.load();
         },
         error: (err) => {
           this.submitting.set(false);
+          this.form.enable();
           this.dialogError.set(errorMessage(err, 'Could not create this schedule.'));
         },
       });

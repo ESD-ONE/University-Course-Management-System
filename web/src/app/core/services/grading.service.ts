@@ -2,25 +2,35 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { GRADING_API_BASE_URL } from '../config/api.config';
+import { PagedResponse } from '../models/pagination.model';
 import {
+  AssignmentAnalyticsResponse,
   AssignmentRequest,
   AssignmentResponse,
   AssignmentStatus,
   GradeHistoryResponse,
   GradeResponse,
   MySubmissionResponse,
+  OfferingAnalyticsResponse,
   SubmissionRow,
 } from '../models/grading.model';
+
+export interface AssignmentListQuery {
+  offeringId?: string;
+  status?: AssignmentStatus | '';
+  page?: number;
+  size?: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class GradingService {
   constructor(private http: HttpClient) {}
 
-  list(offeringId?: string, status?: AssignmentStatus): Observable<AssignmentResponse[]> {
-    let params = new HttpParams();
-    if (offeringId) params = params.set('offeringId', offeringId);
-    if (status) params = params.set('status', status);
-    return this.http.get<AssignmentResponse[]>(`${GRADING_API_BASE_URL}/assignments`, { params });
+  list(query: AssignmentListQuery = {}): Observable<PagedResponse<AssignmentResponse>> {
+    let params = new HttpParams().set('page', query.page ?? 0).set('size', query.size ?? 20);
+    if (query.offeringId) params = params.set('offeringId', query.offeringId);
+    if (query.status) params = params.set('status', query.status);
+    return this.http.get<PagedResponse<AssignmentResponse>>(`${GRADING_API_BASE_URL}/assignments`, { params });
   }
 
   get(id: string): Observable<AssignmentResponse> {
@@ -84,5 +94,23 @@ export class GradingService {
 
   myGrades(): Observable<GradeHistoryResponse> {
     return this.http.get<GradeHistoryResponse>(`${GRADING_API_BASE_URL}/grades/me`);
+  }
+
+  setGradesHidden(id: string, hidden: boolean): Observable<AssignmentResponse> {
+    return this.http.patch<AssignmentResponse>(`${GRADING_API_BASE_URL}/assignments/${id}/grades-visibility`, { hidden });
+  }
+
+  releaseGrades(id: string): Observable<void> {
+    return this.http.patch<void>(`${GRADING_API_BASE_URL}/assignments/${id}/grades/release`, {});
+  }
+
+  assignmentAnalytics(id: string): Observable<AssignmentAnalyticsResponse> {
+    return this.http.get<AssignmentAnalyticsResponse>(`${GRADING_API_BASE_URL}/assignments/${id}/analytics`);
+  }
+
+  offeringAnalytics(offeringId: string): Observable<OfferingAnalyticsResponse> {
+    return this.http.get<OfferingAnalyticsResponse>(`${GRADING_API_BASE_URL}/stats/offering-analytics`, {
+      params: new HttpParams().set('offeringId', offeringId),
+    });
   }
 }

@@ -59,6 +59,18 @@ public class PermissionResolver {
         return false;
     }
 
+    /** A genuinely scoped (never GLOBAL) grant covering a degree program: held on the
+     * program itself (e.g. its Program Head) or on the department that owns it. */
+    public boolean isScopedToProgram(List<AssignmentClaim> assignments, UUID departmentId, UUID degreeProgramId,
+                                     String module, String actionKey) {
+        for (AssignmentClaim a : assignments) {
+            boolean matches = ("DEPARTMENT".equals(a.scopeType()) && a.scopeId() != null && a.scopeId().equals(departmentId))
+                    || ("DEGREE_PROGRAM".equals(a.scopeType()) && a.scopeId() != null && a.scopeId().equals(degreeProgramId));
+            if (matches && effectiveGrant(a, module, actionKey)) return true;
+        }
+        return false;
+    }
+
     public boolean isGlobal(List<AssignmentClaim> assignments, String module, String actionKey) {
         for (AssignmentClaim a : assignments) {
             if ("GLOBAL".equals(a.scopeType()) && effectiveGrant(a, module, actionKey)) return true;

@@ -106,6 +106,16 @@ class EnrollmentServiceTest {
                 .andExpect(status().isCreated());
     }
 
+    /** Registers a student into the fixture's degree program (programId) as ACTIVE —
+     * Browse Courses only shows offerings within the caller's own registered program. */
+    private void registerInProgram(UUID student) throws Exception {
+        String body = "{\"studentId\":\"" + student + "\",\"degreeProgramId\":\"" + programId
+                + "\",\"intakeAcademicYearId\":\"" + yearId + "\",\"currentYearOfStudy\":1}";
+        mockMvc.perform(post("/program-enrollments").header("Authorization", "Bearer " + token("ADMIN", adminId))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+    }
+
     @Test
     void studentEnrollsSelf_isEnrolled_logged_andEventPublished() throws Exception {
         mockMvc.perform(post("/course-enrollments").header("Authorization", "Bearer " + token("STUDENT", studentA))
@@ -253,15 +263,29 @@ class EnrollmentServiceTest {
         mockMvc.perform(get("/course-enrollments").param("offeringId", offering.id().toString())
                         .header("Authorization", "Bearer " + token("LECTURER", lecturerId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].studentName").value("K. Perera"))
-                .andExpect(jsonPath("$[0].studentNumber").value("STU-2025-0001"));
+                .andExpect(jsonPath("$.content[0].studentName").value("K. Perera"))
+                .andExpect(jsonPath("$.content[0].studentNumber").value("STU-2025-0001"));
         mockMvc.perform(get("/course-enrollments").param("offeringId", offering.id().toString())
                         .header("Authorization", "Bearer " + token("LECTURER", otherLecturerId)))
                 .andExpect(status().isForbidden());
     }
 
     @Test
+    void roster_filteredByStatus_narrowsResults() throws Exception {
+        enrollAs(studentA);
+        mockMvc.perform(get("/course-enrollments").param("offeringId", offering.id().toString()).param("status", "ENROLLED")
+                        .header("Authorization", "Bearer " + token("LECTURER", lecturerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+        mockMvc.perform(get("/course-enrollments").param("offeringId", offering.id().toString()).param("status", "DROPPED")
+                        .header("Authorization", "Bearer " + token("LECTURER", lecturerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
+    }
+
+    @Test
     void catalog_showsLiveSeatsAndTheCallersOwnStatus() throws Exception {
+        registerInProgram(studentA);
         enrollAs(studentA);
         mockMvc.perform(get("/catalog").header("Authorization", "Bearer " + token("STUDENT", studentA)))
                 .andExpect(status().isOk())
@@ -269,6 +293,15 @@ class EnrollmentServiceTest {
                 .andExpect(jsonPath("$[0].seatsLeft").value(1))
                 .andExpect(jsonPath("$[0].myStatus").value("ENROLLED"))
                 .andExpect(jsonPath("$[0].lecturerName").value("Dr. N. Silva"));
+    }
+
+    @Test
+    void catalog_isEmptyForAStudentNotRegisteredInAnyProgram() throws Exception {
+        // studentB never registers into a degree program — Browse Courses must show
+        // nothing, never every published offering university-wide.
+        mockMvc.perform(get("/catalog").header("Authorization", "Bearer " + token("STUDENT", studentB)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test
@@ -291,10 +324,35 @@ class EnrollmentServiceTest {
                 .contentType(MediaType.APPLICATION_JSON).content(enrollBody(offering.id(), studentA, false)));
         mockMvc.perform(get("/registrations").header("Authorization", "Bearer " + token("ADMIN", adminId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].studentName").value("K. Perera"))
-                .andExpect(jsonPath("$[0].actorName").value("Dr. N. Silva"))
-                .andExpect(jsonPath("$[0].actorRole").value("LECTURER"))
-                .andExpect(jsonPath("$[0].targetLabel").value("COSC5105 — Intro to Programming"));
+                .andExpect(jsonPath("$.content[0].studentName").value("K. Perera"))
+                .andExpect(jsonPath("$.content[0].actorName").value("Dr. N. Silva"))
+                .andExpect(jsonPath("$.content[0].actorRole").value("LECTURER"))
+                .andExpect(jsonPath("$.content[0].targetLabel").value("COSC5105 — Intro to Programming"));
+    }
+
+    @Test
+    void registrations_pagination_respectsPageAndSize() throws Exception {
+        mockMvc.perform(post("/course-enrollments").header("Authorization", "Bearer " + token("LECTURER", lecturerId))
+                .contentType(MediaType.APPLICATION_JSON).content(enrollBody(offering.id(), studentA, false)));
+        mockMvc.perform(get("/registrations").param("page", "0").param("size", "1")
+                        .header("Authorization", "Bearer " + token("ADMIN", adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void registrations_filteredByTargetType_narrowsResults() throws Exception {
+        mockMvc.perform(post("/course-enrollments").header("Authorization", "Bearer " + token("LECTURER", lecturerId))
+                .contentType(MediaType.APPLICATION_JSON).content(enrollBody(offering.id(), studentA, false)));
+        mockMvc.perform(get("/registrations").param("targetType", "COURSE")
+                        .header("Authorization", "Bearer " + token("ADMIN", adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+        mockMvc.perform(get("/registrations").param("targetType", "PROGRAM")
+                        .header("Authorization", "Bearer " + token("ADMIN", adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     @Test

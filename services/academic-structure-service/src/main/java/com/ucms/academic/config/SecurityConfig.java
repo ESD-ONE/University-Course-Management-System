@@ -49,7 +49,7 @@ public class SecurityConfig {
                 // coarse role-gated — see CourseOfferingService/DegreeProgramService. Academic
                 // Calendar (years/semesters) writes stay ADMIN-only via anyRequest() below.
                 .requestMatchers(HttpMethod.PUT, "/courses/*", "/courses/*/academic-years/*",
-                        "/degree-programs/*", "/degree-programs/*/academic-years/*").authenticated()
+                        "/degree-programs/*", "/degree-programs/*/academic-years/*", "/degree-programs/*/curriculum/*").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/courses/*", "/courses/*/academic-years/*",
                         "/degree-programs/*", "/degree-programs/*/academic-years/*").authenticated()
                 .anyRequest().hasRole("ADMIN")

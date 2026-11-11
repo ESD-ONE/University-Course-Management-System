@@ -11,14 +11,71 @@
   </button>
 </div>
 
-<div class="card" style="margin-bottom:20px;">
-  <div class="field" style="margin-bottom:0;">
+<div class="card" style="margin-bottom:20px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+  <div class="field" style="margin-bottom:0;flex:1;min-width:260px;">
     <label for="grAssignment">Assignment</label>
-    <select id="grAssignment" [ngModel]="assignmentId()" (ngModelChange)="select($event)">
+    <select id="grAssignment" [ngModel]="assignmentId()" [disabled]="saving()" (ngModelChange)="select($event)">
       @for (a of assignments(); track a.id) { <option [value]="a.id">{{ a.courseCode }} — {{ a.title }} ({{ a.status | titlecase }})</option> }
     </select>
   </div>
+  @if (assignment(); as a) {
+    <button type="button" class="btn btn-secondary btn-sm" [disabled]="visibilityBusy()" (click)="toggleGradesHidden()">
+      {{ visibilityBusy() ? 'Saving…' : (a.gradesHidden ? 'Release Grades to Students' : 'Hide Grades From Students') }}
+    </button>
+    <button type="button" class="btn btn-secondary btn-sm" (click)="toggleAnalytics()">{{ showAnalytics() ? 'Hide Analytics' : 'View Analytics' }}</button>
+  }
 </div>
+
+@if (assignment()?.gradesHidden) {
+  <p style="font-size:12px;color:var(--ink-faint);margin:-8px 0 16px;">Grades for this assignment are hidden from students until you release them.</p>
+}
+
+@if (showAnalytics()) {
+  <div class="card" style="margin-bottom:20px;">
+    @if (analyticsLoading()) {
+      <span class="skeleton" style="width:50%;height:16px;"></span>
+    } @else if (analytics()) {
+      @let an = analytics()!;
+      <div class="grid g4" style="margin-bottom:16px;">
+        <div class="stat-tile"><div class="stat-label">Submitted</div><div class="stat-value">{{ an.submitted }} / {{ an.totalStudents }}</div></div>
+        <div class="stat-tile"><div class="stat-label">On Time / Late</div><div class="stat-value">{{ an.onTime }} / {{ an.late }}</div></div>
+        <div class="stat-tile"><div class="stat-label">Average</div><div class="stat-value">{{ an.average === null ? '—' : an.average + '%' }}</div></div>
+        <div class="stat-tile"><div class="stat-label">Median</div><div class="stat-value">{{ an.median === null ? '—' : an.median + '%' }}</div></div>
+      </div>
+      @if (an.graded > 0) {
+        <div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin-bottom:8px;">Mark Distribution</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:20px;">
+          @for (count of an.histogram; track $index) {
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+              <div [style.height]="(count / an.graded) * 100 + '%'" style="width:100%;min-height:2px;background:var(--accent);border-radius:3px 3px 0 0;"></div>
+              <span style="font-size:9.5px;color:var(--ink-faint);margin-top:3px;">{{ $index * 10 }}</span>
+            </div>
+          }
+        </div>
+        <div class="grid g2">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin-bottom:6px;">Top Performers</div>
+            @for (s of an.topPerformers; track s.studentId) {
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;">
+                <span>{{ s.studentName ?? 'Student' }}</span><span class="cell-faint">{{ s.percentage }}%</span>
+              </div>
+            } @empty { <p class="cell-faint" style="font-size:12px;">No graded submissions yet.</p> }
+          </div>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin-bottom:6px;">Needs Attention</div>
+            @for (s of an.needsAttention; track s.studentId) {
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;">
+                <span>{{ s.studentName ?? 'Student' }}</span><span class="cell-faint">{{ s.percentage }}%</span>
+              </div>
+            } @empty { <p class="cell-faint" style="font-size:12px;">No graded submissions yet.</p> }
+          </div>
+        </div>
+      } @else {
+        <p class="cell-faint" style="font-size:12.5px;margin:0;">Nothing is graded yet — the distribution will appear once you save some grades.</p>
+      }
+    }
+  </div>
+}
 
 @if (!assignments().length && !loadError()) {
   <div class="card"><p style="color:var(--ink-faint);font-size:13px;margin:0;">No published assignments yet — publish one from Assignments first.</p></div>
@@ -34,7 +91,8 @@
   @if (loading()) {
     <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:200px;height:14px;"></span></div> }</div>
   } @else {
-    <div class="card">
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Student</th><th>Submitted</th><th>File</th><th>Status</th><th>Marks</th><th>Feedback</th></tr></thead>
         <tbody>
@@ -55,6 +113,7 @@
                   <span class="cell-faint">— / {{ assignment()?.maxMarks }}</span>
                 } @else {
                   <input type="number" min="0" [max]="assignment()?.maxMarks ?? 100" [value]="r.draftMarks ?? ''" placeholder="—"
+                    [disabled]="saving()"
                     (input)="setMarks(r, $any($event.target).value)"
                     style="width:70px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
                   <span class="cell-faint"> / {{ assignment()?.maxMarks }}</span>
@@ -62,7 +121,9 @@
               </td>
               <td>
                 @if (r.status !== 'NOT_SUBMITTED') {
-                  <input type="text" [value]="r.draftFeedback" placeholder="Optional feedback" (input)="setFeedback(r, $any($event.target).value)"
+                  <input type="text" [value]="r.draftFeedback" placeholder="Optional feedback"
+                    [disabled]="saving()"
+                    (input)="setFeedback(r, $any($event.target).value)"
                     style="width:100%;min-width:160px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
                 }
               </td>
@@ -72,6 +133,7 @@
           }
         </tbody>
       </table>
+      </div>
     </div>
   }
 }
