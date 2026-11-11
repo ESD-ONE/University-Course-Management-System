@@ -46,6 +46,10 @@ public class SecurityConfig {
                 // Only other backend services (their Keycloak service-account tokens).
                 .requestMatchers("/internal/**").hasRole("SERVICE")
                 .requestMatchers("/users/me", "/users/me/**").authenticated()
+                // Any signed-in account may read who holds a scoped role (e.g. "who is
+                // this degree program's Program Head") — lists display it everywhere,
+                // not just to admins. Changing a holder/assignment stays admin-only.
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/assignments/scope-holders").authenticated()
                 .requestMatchers("/users/**", "/roles/**", "/permissions/**", "/assignments/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

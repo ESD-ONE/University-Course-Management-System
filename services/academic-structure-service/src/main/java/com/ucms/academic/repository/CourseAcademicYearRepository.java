@@ -25,4 +25,16 @@ public interface CourseAcademicYearRepository extends JpaRepository<CourseAcadem
             + "join fetch c.degreeProgram join fetch cay.academicYear left join fetch cay.semester "
             + "where cay.deletedAt is null and c.deletedAt is null")
     List<CourseAcademicYear> findAllLiveWithDetails();
+
+    /** One grouped query for the "Degree Programs" screen's course-count column —
+     * avoids an N+1 count-per-row lookup across every program/year assignment. */
+    @Query("select cay.academicYear.id as yearId, cay.course.degreeProgram.id as programId, count(cay) as courseCount "
+            + "from CourseAcademicYear cay where cay.deletedAt is null group by cay.academicYear.id, cay.course.degreeProgram.id")
+    List<YearProgramCourseCount> countByAcademicYearAndDegreeProgram();
+
+    interface YearProgramCourseCount {
+        UUID getYearId();
+        UUID getProgramId();
+        long getCourseCount();
+    }
 }

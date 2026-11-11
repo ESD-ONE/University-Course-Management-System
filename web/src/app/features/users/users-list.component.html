@@ -4,7 +4,9 @@
     <h1 class="page-title">Users</h1>
     <p class="page-sub">Create accounts and assign roles - users never choose their own role.</p>
   </div>
-  <button class="btn btn-primary" (click)="showNewUserDialog.set(true)">{{ activeTab().addLabel }}</button>
+  @if (activeTab(); as a) {
+    <button class="btn btn-primary" (click)="showNewUserDialog.set(true)">{{ a.addLabel }}</button>
+  }
 </div>
 
 @if (summary(); as s) {
@@ -26,23 +28,30 @@
 }
 
 <div class="user-tabs" role="tablist" aria-label="Filter users by role">
-  @for (tab of tabs; track tab.role) {
-    <button
-      class="user-tab"
-      role="tab"
-      [attr.aria-selected]="activeTab().role === tab.role"
-      [class.active]="activeTab().role === tab.role"
-      (click)="selectTab(tab)">
-      {{ tab.label }}
-      @if (tabState()[tab.role].totalElements > 0 || !tabState()[tab.role].loading) {
-        <span class="user-tab-count">{{ tabState()[tab.role].totalElements }}</span>
-      } @else {
-        <span class="skeleton" style="display:inline-block;width:16px;height:16px;border-radius:9px;vertical-align:middle;margin-left:6px;"></span>
-      }
-    </button>
+  @if (tabsLoading()) {
+    @for (i of [1,2,3]; track i) {
+      <span class="skeleton" style="display:inline-block;width:100px;height:32px;border-radius:8px;margin-right:8px;"></span>
+    }
+  } @else {
+    @for (tab of tabs(); track tab.id) {
+      <button
+        class="user-tab"
+        role="tab"
+        [attr.aria-selected]="activeTabId() === tab.id"
+        [class.active]="activeTabId() === tab.id"
+        (click)="selectTab(tab)">
+        {{ tab.label }}
+        @if (tabState()[tab.id].totalElements > 0 || !tabState()[tab.id].loading) {
+          <span class="user-tab-count">{{ tabState()[tab.id].totalElements }}</span>
+        } @else {
+          <span class="skeleton" style="display:inline-block;width:16px;height:16px;border-radius:9px;vertical-align:middle;margin-left:6px;"></span>
+        }
+      </button>
+    }
   }
 </div>
 
+@if (activeTab(); as a) {
 <app-filter-bar [activeCount]="activeFilterCount()" [summary]="filterSummary()" (clear)="clearFilters()">
   <div class="filter-field wide">
     <label for="userSearch">Search</label>
@@ -69,11 +78,12 @@
   } @else if (current().error) {
     <p style="padding:24px;color:var(--danger);">{{ current().error }}</p>
   } @else {
+    <div class="table-scroll">
     <table>
       <thead>
         <tr>
           <th>User</th>
-          @if (activeTab().role === 'STUDENT') { <th>Student ID</th> }
+          @if (a.kind === 'STUDENT') { <th>Student ID</th> }
           <th>Status</th>
           <th></th>
         </tr>
@@ -85,7 +95,7 @@
               <div class="cell-name">{{ user.name }}</div>
               <div class="cell-faint">{{ user.email }}</div>
             </td>
-            @if (activeTab().role === 'STUDENT') { <td class="cell-faint">{{ user.studentId }}</td> }
+            @if (a.kind === 'STUDENT') { <td class="cell-faint">{{ user.studentId }}</td> }
             <td>
               <span class="badge" [class.b-success]="user.status === 'ACTIVE'"
                                    [class.b-gold]="user.status === 'INACTIVE'"
@@ -110,34 +120,36 @@
             </td>
           </tr>
         } @empty {
-          <tr><td [attr.colspan]="activeTab().role === 'STUDENT' ? 4 : 3" style="padding:24px;color:var(--ink-faint);">
+          <tr><td [attr.colspan]="a.kind === 'STUDENT' ? 4 : 3" style="padding:24px;color:var(--ink-faint);">
             @if (activeFilterCount()) {
-              No {{ activeTab().label.toLowerCase() }} match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+              No {{ a.label.toLowerCase() }} match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
             } @else {
-              No {{ activeTab().label.toLowerCase() }} yet.
+              No {{ a.label.toLowerCase() }} yet.
             }
           </td></tr>
         }
       </tbody>
     </table>
+    </div>
   }
 </div>
 
-@if (!current().loading && !current().error && current().totalElements > 0) {
-  <div class="pagination-bar">
-    <span class="cell-faint">
-      Showing {{ pageRangeStart() }}–{{ pageRangeEnd() }}
-      of {{ current().totalElements }} {{ activeTab().label.toLowerCase() }}
-    </span>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-secondary btn-sm" [disabled]="current().page === 0" (click)="goToPage(current().page - 1)">Previous</button>
-      <button class="btn btn-secondary btn-sm" [disabled]="current().page + 1 >= current().totalPages" (click)="goToPage(current().page + 1)">Next</button>
-    </div>
-  </div>
+@if (!current().loading && !current().error) {
+  <app-pager
+    [page]="current().page"
+    [totalPages]="current().totalPages"
+    [totalElements]="current().totalElements"
+    [pageSize]="pageSize()"
+    [itemLabel]="a.label.toLowerCase()"
+    (pageChange)="goToPage($event)"
+    (pageSizeChange)="onPageSizeChange($event)"
+  />
 }
 
 @if (showNewUserDialog()) {
-  <app-new-user-dialog [lockedRole]="activeTab().role" (closed)="showNewUserDialog.set(false)" (created)="onUserCreated($event)" />
+  <app-new-user-dialog [lockedRole]="a.kind" [lockedRoleId]="a.id" [lockedRoleName]="a.name"
+    (closed)="showNewUserDialog.set(false)" (created)="onUserCreated($event)" />
+}
 }
 
 @if (roleDialogTarget(); as target) {

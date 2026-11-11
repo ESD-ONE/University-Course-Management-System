@@ -3,8 +3,8 @@
     @if (!result()) {
       <div class="modal-head">
         <div>
-          <h3>New {{ roleLabels[lockedRole] }}</h3>
-          <p>Create a {{ roleLabels[lockedRole].toLowerCase() }} account - the role is fixed to this tab.</p>
+          <h3>New {{ lockedRoleName }}</h3>
+          <p>Create a {{ lockedRoleName.toLowerCase() }} account - the role is fixed to this tab.</p>
         </div>
         <button class="modal-close" (click)="close()">✕</button>
       </div>
@@ -32,14 +32,14 @@
         <div class="modal-foot">
           <button type="button" class="btn btn-secondary" (click)="close()">Cancel</button>
           <button type="submit" class="btn btn-primary" [disabled]="submitting()">
-            {{ submitting() ? 'Creating…' : 'Create ' + roleLabels[lockedRole] }}
+            {{ submitting() ? 'Creating…' : 'Create ' + lockedRoleName }}
           </button>
         </div>
       </form>
     } @else {
       <div class="modal-head">
         <div>
-          <h3>{{ roleLabels[lockedRole] }} Created</h3>
+          <h3>{{ lockedRoleName }} Created</h3>
           <p>{{ result()!.name }} · {{ result()!.email }}</p>
         </div>
         <button class="modal-close" (click)="close()">✕</button>

@@ -30,3 +30,24 @@ export interface AssignmentResponse {
   scopeId: string | null;
   overrides: RolePermissionGrant[];
 }
+
+/** One granted (module, action) at one scope, after overrides — what PermissionService
+ * gates the UI on. Mirrors identity-access-service's EffectivePermission. */
+export interface EffectivePermission {
+  scopeType: ScopeType;
+  scopeId: string | null;
+  module: string;
+  actionKey: string;
+}
+
+/** Who holds a role at a given scope — e.g. a degree program's Program Head. */
+export interface ScopeHolderResponse {
+  assignmentId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  roleId: string;
+  roleName: string;
+  scopeType: ScopeType;
+  scopeId: string | null;
+}

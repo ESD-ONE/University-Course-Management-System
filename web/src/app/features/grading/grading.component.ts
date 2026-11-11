@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AssignmentResponse, SubmissionRow } from '../../core/models/grading.model';
+import { AssignmentAnalyticsResponse, AssignmentResponse, SubmissionRow } from '../../core/models/grading.model';
 import { GradingService } from '../../core/services/grading.service';
 import { errorMessage, initials, saveBlob, Toaster } from '../../shared/ui';
 
@@ -37,6 +37,11 @@ export class GradingComponent {
   private toaster = new Toaster((t) => this.toast.set(t));
   readonly initials = initials;
 
+  readonly showAnalytics = signal(false);
+  readonly analytics = signal<AssignmentAnalyticsResponse | null>(null);
+  readonly analyticsLoading = signal(false);
+  readonly visibilityBusy = signal(false);
+
   readonly assignment = computed(() => this.assignments().find((a) => a.id === this.assignmentId()) ?? null);
   readonly submitted = computed(() => this.rows().filter((r) => r.status !== 'NOT_SUBMITTED').length);
   readonly graded = computed(() => this.rows().filter((r) => r.status === 'GRADED').length);
@@ -55,9 +60,11 @@ export class GradingComponent {
   );
 
   constructor() {
-    this.grading.list().subscribe({
-      next: (v) => {
-        const gradable = v.filter((a) => a.status !== 'DRAFT');
+    // Every gradable assignment across the lecturer's courses — a bounded set, so
+    // request a page large enough to cover it in one go rather than the default size.
+    this.grading.list({ size: 100 }).subscribe({
+      next: (p) => {
+        const gradable = p.content.filter((a) => a.status !== 'DRAFT');
         this.assignments.set(gradable);
         if (!this.assignmentId() && gradable.length) this.assignmentId.set(gradable[0].id);
         if (this.assignmentId()) this.load();
@@ -69,7 +76,51 @@ export class GradingComponent {
   select(id: string): void {
     this.assignmentId.set(id);
     this.router.navigate([], { queryParams: { assignment: id }, replaceUrl: true });
+    this.showAnalytics.set(false);
+    this.analytics.set(null);
     this.load();
+  }
+
+  toggleAnalytics(): void {
+    this.showAnalytics.update((v) => !v);
+    if (this.showAnalytics() && !this.analytics()) {
+      this.analyticsLoading.set(true);
+      this.grading.assignmentAnalytics(this.assignmentId()).subscribe({
+        next: (a) => {
+          this.analytics.set(a);
+          this.analyticsLoading.set(false);
+        },
+        error: (err) => {
+          this.analyticsLoading.set(false);
+          this.toaster.show(errorMessage(err, 'Could not load analytics.'), true);
+        },
+      });
+    }
+  }
+
+  toggleGradesHidden(): void {
+    const a = this.assignment();
+    if (!a) return;
+    this.visibilityBusy.set(true);
+    const onDone = () => {
+      this.visibilityBusy.set(false);
+      this.toaster.show(a.gradesHidden ? 'Grades released — students can now see them.' : 'Grades hidden until you release them.');
+      this.load();
+      this.refreshAssignment();
+    };
+    const onError = (err: unknown) => {
+      this.visibilityBusy.set(false);
+      this.toaster.show(errorMessage(err, 'Could not change grade visibility.'), true);
+    };
+    if (a.gradesHidden) {
+      this.grading.releaseGrades(a.id).subscribe({ next: onDone, error: onError });
+    } else {
+      this.grading.setGradesHidden(a.id, true).subscribe({ next: onDone, error: onError });
+    }
+  }
+
+  private refreshAssignment(): void {
+    this.grading.list({ size: 100 }).subscribe({ next: (p) => this.assignments.set(p.content.filter((a) => a.status !== 'DRAFT')) });
   }
 
   load(): void {

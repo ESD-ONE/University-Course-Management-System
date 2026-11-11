@@ -27,6 +27,7 @@
       <div class="card">
         <h3 style="margin:0 0 4px;font-size:15px;">{{ role.name }}</h3>
         <p style="font-size:12px;color:var(--ink-faint);margin:0 0 14px;">Changes apply to Degree Program / Course decisions within about a minute (role-catalog sync), for every user holding this role.</p>
+        <div class="table-scroll">
         <table>
           <thead><tr><th>Module</th>@for (a of actions(); track a) { <th style="text-align:center;">{{ a | titlecase }}</th> }</tr></thead>
           <tbody>
@@ -45,6 +46,7 @@
             }
           </tbody>
         </table>
+        </div>
       </div>
     }
   </div>
@@ -69,7 +71,8 @@
       <div>
         @if (selectedUser(); as user) {
           <b style="font-size:13.5px;">{{ user.name }}</b>
-          <table style="margin:10px 0 16px;">
+          <div class="table-scroll" style="margin:10px 0 16px;max-height:260px;">
+          <table>
             <thead><tr><th>Role</th><th>Scope</th><th></th></tr></thead>
             <tbody>
               @for (a of assignments(); track a.id) {
@@ -83,16 +86,17 @@
               }
             </tbody>
           </table>
+          </div>
           <div class="field-row">
             <div class="field">
               <label for="rpRole">Role</label>
-              <select id="rpRole" [ngModel]="assignRoleId()" (ngModelChange)="assignRoleId.set($event)">
+              <select id="rpRole" [ngModel]="assignRoleId()" [disabled]="assigning()" (ngModelChange)="assignRoleId.set($event)">
                 @for (r of roles(); track r.id) { <option [value]="r.id">{{ r.name }}</option> }
               </select>
             </div>
             <div class="field">
               <label for="rpScope">Scope</label>
-              <select id="rpScope" [ngModel]="assignScope()" (ngModelChange)="assignScope.set($event)">
+              <select id="rpScope" [ngModel]="assignScope()" [disabled]="assigning()" (ngModelChange)="assignScope.set($event)">
                 <option value="DEPARTMENT">Department</option>
                 <option value="GLOBAL">Global</option>
               </select>
@@ -101,13 +105,13 @@
           @if (assignScope() === 'DEPARTMENT') {
             <div class="field">
               <label for="rpDept">Department</label>
-              <select id="rpDept" [ngModel]="assignDepartmentId()" (ngModelChange)="assignDepartmentId.set($event)">
+              <select id="rpDept" [ngModel]="assignDepartmentId()" [disabled]="assigning()" (ngModelChange)="assignDepartmentId.set($event)">
                 <option value="">Choose a department…</option>
                 @for (d of departments(); track d.id) { <option [value]="d.id">{{ d.name }}</option> }
               </select>
             </div>
           }
-          <button class="btn btn-primary" (click)="assign()">Add Assignment</button>
+          <button class="btn btn-primary" [disabled]="assigning()" (click)="assign()">{{ assigning() ? 'Adding…' : 'Add Assignment' }}</button>
         } @else {
           <p style="font-size:12.5px;color:var(--ink-faint);">Choose a user to see and manage their assignments.</p>
         }
@@ -127,11 +131,11 @@
         @if (newRoleError()) { <div class="modal-error">{{ newRoleError() }}</div> }
         <div class="field">
           <label for="nrName">Name</label>
-          <input id="nrName" type="text" placeholder="e.g. Department Head" [ngModel]="newRoleName()" (ngModelChange)="newRoleName.set($event)" />
+          <input id="nrName" type="text" placeholder="e.g. Department Head" [ngModel]="newRoleName()" [disabled]="creatingRole()" (ngModelChange)="newRoleName.set($event)" />
         </div>
         <div class="field">
           <label for="nrKind">Account type</label>
-          <select id="nrKind" [ngModel]="newRoleKind()" (ngModelChange)="newRoleKind.set($event)">
+          <select id="nrKind" [ngModel]="newRoleKind()" [disabled]="creatingRole()" (ngModelChange)="newRoleKind.set($event)">
             <option value="LECTURER">Lecturer</option>
             <option value="ADMIN">Administrator</option>
             <option value="STUDENT">Student</option>
@@ -139,8 +143,8 @@
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-secondary" (click)="newRoleOpen.set(false)">Cancel</button>
-        <button class="btn btn-primary" [disabled]="!newRoleName().trim()" (click)="createRole()">Create Role</button>
+        <button class="btn btn-secondary" [disabled]="creatingRole()" (click)="newRoleOpen.set(false)">Cancel</button>
+        <button class="btn btn-primary" [disabled]="!newRoleName().trim() || creatingRole()" (click)="createRole()">{{ creatingRole() ? 'Creating…' : 'Create Role' }}</button>
       </div>
     </div>
   </div>

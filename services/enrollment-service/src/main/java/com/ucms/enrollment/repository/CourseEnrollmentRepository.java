@@ -3,18 +3,18 @@ package com.ucms.enrollment.repository;
 import com.ucms.enrollment.domain.CourseEnrollment;
 import com.ucms.enrollment.domain.CourseEnrollmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface CourseEnrollmentRepository extends JpaRepository<CourseEnrollment, UUID> {
+public interface CourseEnrollmentRepository extends JpaRepository<CourseEnrollment, UUID>, JpaSpecificationExecutor<CourseEnrollment> {
     Optional<CourseEnrollment> findByIdAndDeletedAtIsNull(UUID id);
     Optional<CourseEnrollment> findByStudentIdAndCourseOfferingIdAndDeletedAtIsNull(UUID studentId, UUID offeringId);
     long countByCourseOfferingIdAndStatusAndDeletedAtIsNull(UUID offeringId, CourseEnrollmentStatus status);
     List<CourseEnrollment> findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(UUID studentId);
-    List<CourseEnrollment> findByCourseOfferingIdAndDeletedAtIsNullOrderByCreatedAtAsc(UUID offeringId);
     List<CourseEnrollment> findByCourseOfferingIdInAndDeletedAtIsNull(Collection<UUID> offeringIds);
     Optional<CourseEnrollment> findFirstByCourseOfferingIdAndStatusAndDeletedAtIsNullOrderByCreatedAtAsc(
             UUID offeringId, CourseEnrollmentStatus status);

@@ -90,8 +90,12 @@ public class UserService {
                     "A new user can only be created as ACTIVE or INACTIVE — suspend it afterwards if needed");
         }
 
-        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(request.role())
-                .orElseThrow(() -> new IllegalStateException("Role not seeded: " + request.role()));
+        Role role = request.roleId() != null
+                ? roleRepository.findById(request.roleId())
+                        .filter(r -> r.getDeletedAt() == null && r.getKind() == request.role())
+                        .orElseThrow(() -> new IllegalArgumentException("Role not found"))
+                : roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(request.role())
+                        .orElseThrow(() -> new IllegalStateException("Role not seeded: " + request.role()));
 
         String rawPassword = request.password();
         String temporaryPassword = null;
@@ -139,8 +143,8 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> search(RoleKind role, UserStatus status, String q, Pageable pageable) {
-        return userRepository.findAll(UserSpecifications.filter(role, status, q), pageable)
+    public Page<UserResponse> search(RoleKind role, UUID roleId, UserStatus status, String q, Pageable pageable) {
+        return userRepository.findAll(UserSpecifications.filter(role, roleId, status, q), pageable)
                 .map(UserResponse::from);
     }
 
@@ -231,13 +235,14 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateRole(UUID id, RoleKind roleKind, UUID updatedBy) {
+    public UserResponse updateRole(UUID id, UUID roleId, UUID updatedBy) {
         User user = findActiveOrThrow(id);
-        Role role = roleRepository.findFirstByKindAndDeletedAtIsNullOrderByCreatedAtAsc(roleKind)
-                .orElseThrow(() -> new IllegalStateException("Role not seeded: " + roleKind));
+        Role role = roleRepository.findById(roleId)
+                .filter(r -> r.getDeletedAt() == null)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
         user.setRole(role);
         user.setUpdatedBy(updatedBy);
-        if (roleKind == RoleKind.STUDENT && user.getStudentId() == null) {
+        if (role.getKind() == RoleKind.STUDENT && user.getStudentId() == null) {
             user.setStudentId(generateUniqueStudentId());
         }
         User savedUser = userRepository.save(user);

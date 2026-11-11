@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/course-enrollments/check", "/stats").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/course-enrollments/my-students").hasAnyRole("ADMIN", "LECTURER")
                 .requestMatchers(HttpMethod.GET, "/registrations", "/students").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.DELETE, "/registrations/*").hasAnyRole("ADMIN", "LECTURER")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

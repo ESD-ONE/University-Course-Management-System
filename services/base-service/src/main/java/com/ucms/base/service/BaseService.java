@@ -9,16 +9,21 @@ import com.ucms.base.domain.ReferenceStatus;
 import com.ucms.base.exception.CodeAlreadyInUseException;
 import com.ucms.base.exception.HasDependentsException;
 import com.ucms.base.repository.CourseCategoryRepository;
+import com.ucms.base.repository.CourseCategorySpecifications;
 import com.ucms.base.repository.DepartmentRepository;
+import com.ucms.base.repository.DepartmentSpecifications;
 import com.ucms.base.repository.FacultyRepository;
+import com.ucms.base.repository.FacultySpecifications;
 import com.ucms.base.repository.GradingScaleRepository;
+import com.ucms.base.repository.GradingScaleSpecifications;
 import com.ucms.base.web.dto.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -54,8 +59,14 @@ public class BaseService {
     }
 
     @Transactional(readOnly = true)
-    public List<FacultyResponse> listFaculties() {
-        return facultyRepository.findByDeletedAtIsNullOrderByNameAsc().stream().map(FacultyResponse::from).toList();
+    public Page<FacultyResponse> listFaculties(ReferenceStatus status, String q, Pageable pageable) {
+        return facultyRepository.findAll(FacultySpecifications.filter(status, q), pageable).map(FacultyResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ReferenceCounts facultyCounts() {
+        return ReferenceCounts.of(facultyRepository.countByDeletedAtIsNull(),
+                facultyRepository.countByDeletedAtIsNullAndStatus(ReferenceStatus.ACTIVE));
     }
 
     @Transactional
@@ -99,11 +110,15 @@ public class BaseService {
     }
 
     @Transactional(readOnly = true)
-    public List<DepartmentResponse> listDepartments(UUID facultyId) {
-        List<Department> departments = facultyId == null
-                ? departmentRepository.findByDeletedAtIsNullOrderByNameAsc()
-                : departmentRepository.findByFacultyIdAndDeletedAtIsNullOrderByNameAsc(facultyId);
-        return departments.stream().map(DepartmentResponse::from).toList();
+    public Page<DepartmentResponse> listDepartments(UUID facultyId, ReferenceStatus status, String q, Pageable pageable) {
+        return departmentRepository.findAll(DepartmentSpecifications.filter(facultyId, status, q), pageable)
+                .map(DepartmentResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ReferenceCounts departmentCounts() {
+        return ReferenceCounts.of(departmentRepository.countByDeletedAtIsNull(),
+                departmentRepository.countByDeletedAtIsNullAndStatus(ReferenceStatus.ACTIVE));
     }
 
     @Transactional
@@ -158,8 +173,14 @@ public class BaseService {
     }
 
     @Transactional(readOnly = true)
-    public List<GradingScaleResponse> listGradingScales() {
-        return gradingScaleRepository.findByDeletedAtIsNullOrderByNameAsc().stream().map(GradingScaleResponse::from).toList();
+    public Page<GradingScaleResponse> listGradingScales(ReferenceStatus status, String q, Pageable pageable) {
+        return gradingScaleRepository.findAll(GradingScaleSpecifications.filter(status, q), pageable).map(GradingScaleResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ReferenceCounts gradingScaleCounts() {
+        return ReferenceCounts.of(gradingScaleRepository.countByDeletedAtIsNull(),
+                gradingScaleRepository.countByDeletedAtIsNullAndStatus(ReferenceStatus.ACTIVE));
     }
 
     @Transactional
@@ -200,8 +221,15 @@ public class BaseService {
     }
 
     @Transactional(readOnly = true)
-    public List<CourseCategoryResponse> listCourseCategories() {
-        return courseCategoryRepository.findByDeletedAtIsNullOrderByNameAsc().stream().map(CourseCategoryResponse::from).toList();
+    public Page<CourseCategoryResponse> listCourseCategories(ReferenceStatus status, String q, Pageable pageable) {
+        return courseCategoryRepository.findAll(CourseCategorySpecifications.filter(status, q), pageable)
+                .map(CourseCategoryResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ReferenceCounts courseCategoryCounts() {
+        return ReferenceCounts.of(courseCategoryRepository.countByDeletedAtIsNull(),
+                courseCategoryRepository.countByDeletedAtIsNullAndStatus(ReferenceStatus.ACTIVE));
     }
 
     @Transactional

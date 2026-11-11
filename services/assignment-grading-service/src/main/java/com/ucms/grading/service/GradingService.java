@@ -8,16 +8,23 @@ import com.ucms.grading.domain.Submission;
 import com.ucms.grading.exception.ConflictException;
 import com.ucms.grading.messaging.EventPublisher;
 import com.ucms.grading.repository.AssignmentRepository;
+import com.ucms.grading.repository.GradeEventRepository;
 import com.ucms.grading.repository.GradeRepository;
 import com.ucms.grading.repository.SubmissionRepository;
 import com.ucms.grading.security.Caller;
+import com.ucms.grading.domain.GradeEvent;
+import com.ucms.grading.web.dto.Dtos.AssignmentAnalyticsResponse;
+import com.ucms.grading.web.dto.Dtos.AssignmentTrendPoint;
+import com.ucms.grading.web.dto.Dtos.AtRiskRow;
 import com.ucms.grading.web.dto.Dtos.BulkGradeItem;
 import com.ucms.grading.web.dto.Dtos.CourseGradeRow;
 import com.ucms.grading.web.dto.Dtos.CourseResultRow;
 import com.ucms.grading.web.dto.Dtos.GradeHistoryResponse;
 import com.ucms.grading.web.dto.Dtos.GradeRequest;
 import com.ucms.grading.web.dto.Dtos.GradeResponse;
+import com.ucms.grading.web.dto.Dtos.OfferingAnalyticsResponse;
 import com.ucms.grading.web.dto.Dtos.OfferingSummaryResponse;
+import com.ucms.grading.web.dto.Dtos.StudentScoreRow;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -54,10 +62,13 @@ public class GradingService {
     private final EnrollmentClient enrollment;
     private final LetterGrades letters;
     private final EventPublisher events;
+    private final GradeEventRepository gradeEvents;
+    private final com.ucms.grading.security.DeliveryAccess access;
 
     public GradingService(SubmissionRepository submissions, GradeRepository grades, AssignmentRepository assignments,
                           AssignmentService assignmentService, AcademicClient academic, EnrollmentClient enrollment,
-                          LetterGrades letters, EventPublisher events) {
+                          LetterGrades letters, EventPublisher events, GradeEventRepository gradeEvents,
+                          com.ucms.grading.security.DeliveryAccess access) {
         this.submissions = submissions;
         this.grades = grades;
         this.assignments = assignments;
@@ -66,6 +77,8 @@ public class GradingService {
         this.enrollment = enrollment;
         this.letters = letters;
         this.events = events;
+        this.gradeEvents = gradeEvents;
+        this.access = access;
     }
 
     @Transactional
@@ -103,6 +116,7 @@ public class GradingService {
         if (!enrollment.isEnrolled(s.getStudentId(), offering.id())) {
             throw new ConflictException("NOT_ENROLLED", "This student is no longer enrolled in " + offering.code() + ".");
         }
+        boolean regrade = grades.findBySubmissionId(s.getId()).isPresent();
         Grade g = grades.findBySubmissionId(s.getId()).orElseGet(() -> {
             Grade fresh = new Grade();
             fresh.setSubmission(s);
@@ -130,15 +144,165 @@ public class GradingService {
         data.put("marks", marks.toPlainString());
         data.put("maxMarks", a.getMaxMarks());
         events.publish("grading.grade-posted", data);
+        gradeEvents.save(new GradeEvent(s.getId(), regrade ? GradeEvent.Action.REGRADED : GradeEvent.Action.GRADED,
+                marks, feedback, s.getObjectKey(), caller.id()));
 
         return new GradeResponse(g.getId(), s.getId(), g.getMarks(), a.getMaxMarks(), g.getFeedback(), g.getGradedBy(), g.getGradedAt());
     }
+
+    /** Un-hides a batch of grades previously held back with
+     * AssignmentService#setGradesHidden, recording a RELEASED event per existing grade
+     * so there's a record of when students actually got to see their marks. */
+    @Transactional
+    public void releaseGrades(UUID assignmentId, Caller caller) {
+        Assignment a = assignmentService.find(assignmentId);
+        AcademicClient.Offering offering = academic.getOffering(a.getCourseOfferingId());
+        AssignmentService.requireTeaches(offering, caller);
+        boolean wasHidden = a.isGradesHidden();
+        assignmentService.setGradesHidden(assignmentId, false, caller);
+        if (!wasHidden) return;
+        List<Submission> subs = submissions.findByAssignmentId(assignmentId);
+        if (subs.isEmpty()) return;
+        Map<UUID, Grade> bySubmission = grades.findBySubmissionIdIn(subs.stream().map(Submission::getId).toList()).stream()
+                .collect(Collectors.toMap(g -> g.getSubmission().getId(), Function.identity()));
+        for (Submission s : subs) {
+            Grade g = bySubmission.get(s.getId());
+            if (g == null) continue;
+            gradeEvents.save(new GradeEvent(s.getId(), GradeEvent.Action.RELEASED, g.getMarks(), g.getFeedback(), null, caller.id()));
+        }
+    }
+
+    /** One assignment's spread: submission/on-time/graded counts, the mark distribution,
+     * and who's leading or needs attention — the grading screen's "Analytics" tab. */
+    @Transactional(readOnly = true)
+    public AssignmentAnalyticsResponse assignmentAnalytics(UUID assignmentId, Caller caller) {
+        Assignment a = assignmentService.find(assignmentId);
+        AcademicClient.Offering offering = academic.getOffering(a.getCourseOfferingId());
+        access.requireStaffView(offering, caller);
+
+        long totalStudents = enrollment.enrolledStudents(offering.id()).size();
+        List<Submission> subs = submissions.findByAssignmentId(assignmentId);
+        Map<UUID, Grade> gradeBySubmission = subs.isEmpty() ? Map.of()
+                : grades.findBySubmissionIdIn(subs.stream().map(Submission::getId).toList()).stream()
+                .collect(Collectors.toMap(g -> g.getSubmission().getId(), Function.identity()));
+
+        long onTime = subs.stream().filter(s -> !s.getSubmittedAt().isAfter(a.getDueDate())).count();
+        long late = subs.size() - onTime;
+        long graded = subs.stream().filter(s -> gradeBySubmission.containsKey(s.getId())).count();
+
+        List<Double> percentages = new ArrayList<>();
+        List<StudentScoreRow> scored = new ArrayList<>();
+        for (Submission s : subs) {
+            Grade g = gradeBySubmission.get(s.getId());
+            if (g == null) continue;
+            double pct = g.getMarks().doubleValue() / a.getMaxMarks() * 100.0;
+            percentages.add(pct);
+            scored.add(new StudentScoreRow(s.getStudentId(), null, g.getMarks(), Math.round(pct * 10) / 10.0));
+        }
+
+        Double average = null, median = null, min = null, max = null;
+        List<Integer> histogram = new ArrayList<>(List.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        if (!percentages.isEmpty()) {
+            List<Double> sorted = percentages.stream().sorted().toList();
+            average = Math.round(sorted.stream().mapToDouble(d -> d).average().orElse(0) * 10) / 10.0;
+            median = Math.round(percentile(sorted, 0.5) * 10) / 10.0;
+            min = sorted.get(0);
+            max = sorted.get(sorted.size() - 1);
+            for (double pct : percentages) {
+                int bucket = Math.min(9, (int) (pct / 10));
+                histogram.set(bucket, histogram.get(bucket) + 1);
+            }
+        }
+
+        scored.sort(Comparator.comparing(StudentScoreRow::percentage).reversed());
+        List<StudentScoreRow> top = scored.stream().limit(5).toList();
+        List<StudentScoreRow> bottom = scored.stream().sorted(Comparator.comparing(StudentScoreRow::percentage)).limit(5).toList();
+        List<EnrollmentClient.RosterEntry> roster = enrollment.enrolledStudents(offering.id());
+        Map<UUID, String> rosterNames = roster.stream().collect(Collectors.toMap(EnrollmentClient.RosterEntry::studentId, EnrollmentClient.RosterEntry::studentName, (x, y) -> x));
+        top = top.stream().map(r -> new StudentScoreRow(r.studentId(), rosterNames.get(r.studentId()), r.marks(), r.percentage())).toList();
+        bottom = bottom.stream().map(r -> new StudentScoreRow(r.studentId(), rosterNames.get(r.studentId()), r.marks(), r.percentage())).toList();
+
+        return new AssignmentAnalyticsResponse(totalStudents, subs.size(), onTime, late, graded, average, median, min, max,
+                histogram, top, bottom);
+    }
+
+    /** A course offering's assignment-by-assignment trend, its weighted total (where
+     * assignments carry a weight) and students falling behind — the course-level
+     * analytics dashboard. */
+    @Transactional(readOnly = true)
+    public OfferingAnalyticsResponse offeringAnalytics(UUID offeringId, Caller caller) {
+        AcademicClient.Offering offering = academic.getOffering(offeringId);
+        access.requireStaffView(offering, caller);
+
+        List<Assignment> all = assignments.findByCourseOfferingIdInAndDeletedAtIsNullOrderByDueDateDesc(List.of(offeringId));
+        List<EnrollmentClient.RosterEntry> roster = enrollment.enrolledStudents(offeringId);
+        long totalStudents = roster.size();
+        List<Submission> subs = all.isEmpty() ? List.of() : submissions.findByAssignmentIdIn(all.stream().map(Assignment::getId).toList());
+        Map<UUID, Grade> gradeBySubmission = subs.isEmpty() ? Map.of()
+                : grades.findBySubmissionIdIn(subs.stream().map(Submission::getId).toList()).stream()
+                .collect(Collectors.toMap(g -> g.getSubmission().getId(), Function.identity()));
+
+        List<AssignmentTrendPoint> trend = new ArrayList<>();
+        double weightedSum = 0, weightTotal = 0;
+        double classSum = 0; int classCount = 0;
+        Map<UUID, double[]> perStudent = new HashMap<>(); // [earned, possible, missing]
+        for (var studentEntry : roster) perStudent.put(studentEntry.studentId(), new double[]{0, 0, 0});
+
+        for (Assignment a : all) {
+            List<Submission> forA = subs.stream().filter(s -> s.getAssignment().getId().equals(a.getId())).toList();
+            long graded = 0; double earned = 0, possible = 0;
+            for (Submission s : forA) {
+                Grade g = gradeBySubmission.get(s.getId());
+                if (g == null) continue;
+                graded++;
+                earned += g.getMarks().doubleValue();
+                possible += a.getMaxMarks();
+                double[] acc = perStudent.get(s.getStudentId());
+                if (acc != null) { acc[0] += g.getMarks().doubleValue(); acc[1] += a.getMaxMarks(); }
+            }
+            Double avg = possible == 0 ? null : Math.round(earned / possible * 1000.0) / 10.0;
+            trend.add(new AssignmentTrendPoint(a.getId(), a.getTitle(), a.getDueDate(), avg, forA.size(), graded,
+                    totalStudents, a.getWeightPercent()));
+            if (avg != null) { classSum += avg; classCount++; }
+            if (avg != null && a.getWeightPercent() != null) {
+                weightedSum += avg * a.getWeightPercent().doubleValue();
+                weightTotal += a.getWeightPercent().doubleValue();
+            }
+        }
+        Double classAverage = classCount == 0 ? null : Math.round(classSum / classCount * 10) / 10.0;
+        Double weighted = weightTotal == 0 ? null : Math.round(weightedSum / weightTotal * 10) / 10.0;
+
+        Map<UUID, String> namesByStudent = roster.stream()
+                .collect(Collectors.toMap(EnrollmentClient.RosterEntry::studentId, EnrollmentClient.RosterEntry::studentName, (x, y) -> x));
+        List<AtRiskRow> atRisk = new ArrayList<>();
+        for (var e : perStudent.entrySet()) {
+            double[] acc = e.getValue();
+            long missing = all.stream().filter(a -> subs.stream().noneMatch(s -> s.getStudentId().equals(e.getKey()) && s.getAssignment().getId().equals(a.getId()))).count();
+            double pct = acc[1] == 0 ? 0 : acc[0] / acc[1] * 100.0;
+            if (pct < 50 || missing > 0) {
+                atRisk.add(new AtRiskRow(e.getKey(), namesByStudent.get(e.getKey()), Math.round(pct * 10) / 10.0, missing));
+            }
+        }
+        atRisk.sort(Comparator.comparing(AtRiskRow::averagePercentage));
+
+        return new OfferingAnalyticsResponse(trend, weighted, classAverage, atRisk);
+    }
+
+    private static double percentile(List<Double> sorted, double p) {
+        if (sorted.size() == 1) return sorted.get(0);
+        double index = p * (sorted.size() - 1);
+        int lo = (int) Math.floor(index), hi = (int) Math.ceil(index);
+        if (lo == hi) return sorted.get(lo);
+        return sorted.get(lo) + (sorted.get(hi) - sorted.get(lo)) * (index - lo);
+    }
+
+
 
     /** Student "Grades" screen: one row per course they have graded work in, plus GPA. */
     @Transactional(readOnly = true)
     public GradeHistoryResponse history(Caller caller) {
         List<Submission> mine = submissions.findByStudentId(caller.id()).stream()
-                .filter(s -> s.getAssignment().getDeletedAt() == null).toList();
+                .filter(s -> s.getAssignment().getDeletedAt() == null && !s.getAssignment().isGradesHidden()).toList();
         Map<UUID, Grade> gradeBySubmission = mine.isEmpty() ? Map.of()
                 : grades.findBySubmissionIdIn(mine.stream().map(Submission::getId).toList()).stream()
                 .collect(Collectors.toMap(g -> g.getSubmission().getId(), Function.identity()));

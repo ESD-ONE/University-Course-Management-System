@@ -63,19 +63,19 @@
       <p style="font-size:12px;color:var(--ink-faint);margin:0 0 10px;">Choose what you get notified about, in-app and by email.</p>
       <p style="font-size:12px;color:var(--ink-faint);margin:0 0 16px;">Turning a category off stops both its in-app and email alerts. Email delivery also needs the email toggle on.</p>
       <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" [checked]="prefs().email" (change)="togglePref('email')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <input type="checkbox" [checked]="prefs().email" [disabled]="prefsSaving()" (change)="togglePref('email')" style="width:16px;height:16px;accent-color:var(--accent);" />
         Email notifications
       </label>
       <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" [checked]="prefs().assignments" (change)="togglePref('assignments')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <input type="checkbox" [checked]="prefs().assignments" [disabled]="prefsSaving()" (change)="togglePref('assignments')" style="width:16px;height:16px;accent-color:var(--accent);" />
         New assignment &amp; deadline reminders
       </label>
       <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer;">
-        <input type="checkbox" [checked]="prefs().grades" (change)="togglePref('grades')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <input type="checkbox" [checked]="prefs().grades" [disabled]="prefsSaving()" (change)="togglePref('grades')" style="width:16px;height:16px;accent-color:var(--accent);" />
         Grade release alerts
       </label>
       <label style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:20px;cursor:pointer;">
-        <input type="checkbox" [checked]="prefs().registrations" (change)="togglePref('registrations')" style="width:16px;height:16px;accent-color:var(--accent);" />
+        <input type="checkbox" [checked]="prefs().registrations" [disabled]="prefsSaving()" (change)="togglePref('registrations')" style="width:16px;height:16px;accent-color:var(--accent);" />
         Registration confirmations
       </label>
       <button class="btn btn-primary" [disabled]="prefsSaving()" (click)="savePrefs()">

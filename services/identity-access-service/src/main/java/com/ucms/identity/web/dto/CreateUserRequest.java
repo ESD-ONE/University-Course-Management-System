@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
+import java.util.UUID;
+
 /**
  * password is optional, matching the wireframe's "New User" modal (name, email, role,
  * status — no password field): if omitted, the service generates a one-time temporary
@@ -20,5 +22,10 @@ public record CreateUserRequest(
         // Optional (blank → a generated temporary password); Keycloak's policy is 12+.
         @Pattern(regexp = "^$|^.{12,128}$", message = "Password must be 12 to 128 characters") String password,
         @NotNull RoleKind role,
+        // Optional: the Users screen's tabs are now one per active role (not just the
+        // three account kinds), so "+ New X" on a custom role's tab (e.g. "Program Head")
+        // creates the account already holding that exact role, not just its kind's
+        // default seeded role.
+        UUID roleId,
         UserStatus status
 ) {}

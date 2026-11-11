@@ -49,13 +49,15 @@ class UserManagementTest {
     @MockBean KeycloakUserSync keycloakUserSync;
 
     private String adminToken;
+    private UUID adminRoleId;
 
     @BeforeEach
     void seed() throws Exception {
         Role admin = new Role();
         admin.setName("Administrator");
         admin.setKind(RoleKind.ADMIN);
-        roleRepository.save(admin);
+        admin = roleRepository.save(admin);
+        adminRoleId = admin.getId();
 
         Role student = new Role();
         student.setName("Student");
@@ -183,9 +185,37 @@ class UserManagementTest {
         mockMvc.perform(put("/users/" + id + "/role")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType("application/json")
-                        .content("{\"role\":\"ADMIN\"}"))
+                        .content("{\"roleId\":\"" + adminRoleId + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("ADMIN"));
+    }
+
+    @Test
+    void updateRole_canAssignACustomRoleById_notJustOneOfTheThreeSeededKinds() throws Exception {
+        Role programHead = new Role();
+        programHead.setName("Program Head");
+        programHead.setKind(RoleKind.LECTURER);
+        programHead = roleRepository.save(programHead);
+
+        String body = mockMvc.perform(post("/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"name\":\"P. Head\",\"email\":\"p.head@test.local\",\"role\":\"LECTURER\"}"))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+
+        mockMvc.perform(put("/users/" + id + "/role")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType("application/json")
+                        .content("{\"roleId\":\"" + programHead.getId() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("LECTURER"))
+                .andExpect(jsonPath("$.roleId").value(programHead.getId().toString()))
+                .andExpect(jsonPath("$.roleName").value("Program Head"));
+
+        // Keycloak only models the three broad account kinds, so a custom role still
+        // syncs as LECTURER there — no new Keycloak-side concept needed.
+        verify(keycloakUserSync).roleChanged(argThat(u -> u.getRole().getName().equals("Program Head")));
     }
 
     @Test
@@ -313,7 +343,7 @@ class UserManagementTest {
         mockMvc.perform(put("/users/" + id + "/role")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType("application/json")
-                        .content("{\"role\":\"ADMIN\"}"))
+                        .content("{\"roleId\":\"" + adminRoleId + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("ADMIN"));
 

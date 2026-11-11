@@ -28,6 +28,9 @@ public class AcademicClient {
 
     public record AcademicYear(UUID id, String name, String status) {}
 
+    /** /degree-programs is paginated (page/size/content/...); only content is needed here. */
+    private record ProgramPage(List<Program> content) {}
+
     private static final String SERVICE = "Academic Structure";
 
     private final RestClient restClient;
@@ -67,11 +70,16 @@ public class AcademicClient {
                 .retrieve().body(Program.class));
     }
 
+    /** Every program — callers build an id→name/details lookup from this, so this
+     * requests /degree-programs' own max page size (100) rather than its default of 20.
+     * Degree programs are a small, slow-growing reference catalog; this silently drops
+     * anything past the 100th if that assumption is ever outgrown. */
     public List<Program> listPrograms() {
-        return Upstream.call(SERVICE, null, () -> restClient.get()
-                .uri("/degree-programs")
+        ProgramPage page = Upstream.call(SERVICE, null, () -> restClient.get()
+                .uri(b -> b.path("/degree-programs").queryParam("size", 100).build())
                 .header("Authorization", "Bearer " + jwt.mintServiceToken())
-                .retrieve().body(new ParameterizedTypeReference<List<Program>>() {}));
+                .retrieve().body(ProgramPage.class));
+        return page == null ? List.of() : page.content();
     }
 
     public List<AcademicYear> listAcademicYears() {

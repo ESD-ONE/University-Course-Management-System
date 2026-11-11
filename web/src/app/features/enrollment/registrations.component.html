@@ -30,6 +30,7 @@
           [options]="studentOptions()"
           [emptyText]="studentsLoading() ? 'Searching…' : 'No students match'"
           [ngModel]="studentId()"
+          [disabled]="submitting()"
           (ngModelChange)="onStudentChange($event)"
           (queryChange)="onStudentQuery($event)"
         ></app-searchable-select>
@@ -62,11 +63,11 @@
 
       @if (isAdmin()) {
         <div class="segmented" role="tablist" aria-label="Registration type">
-          <button type="button" role="tab" [attr.aria-selected]="tab() === 'program'" [class.active]="tab() === 'program'" (click)="setTab('program')">
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'program'" [class.active]="tab() === 'program'" [disabled]="submitting()" (click)="setTab('program')">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10L12 5 2 10l10 5 10-5z" /><path d="M6 12v5c3 2 9 2 12 0v-5" /></svg>
             Degree Program
           </button>
-          <button type="button" role="tab" [attr.aria-selected]="tab() === 'course'" [class.active]="tab() === 'course'" (click)="setTab('course')">
+          <button type="button" role="tab" [attr.aria-selected]="tab() === 'course'" [class.active]="tab() === 'course'" [disabled]="submitting()" (click)="setTab('course')">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z" /><path d="M20 17v4H6.5A2.5 2.5 0 0 1 4 18.5" /></svg>
             Single Course
           </button>
@@ -82,18 +83,18 @@
         <div class="field">
           <label for="rgProgram">Degree Program</label>
           <app-searchable-select inputId="rgProgram" placeholder="Search degree programs…" [options]="programOptions()"
-            [ngModel]="programId()" (ngModelChange)="onProgramChange($event)"></app-searchable-select>
+            [ngModel]="programId()" [disabled]="submitting()" (ngModelChange)="onProgramChange($event)"></app-searchable-select>
         </div>
         <div class="field-row">
           <div class="field">
             <label for="rgYear">Intake Academic Year</label>
             <app-searchable-select inputId="rgYear" placeholder="Choose a year…" [options]="yearOptions()"
-              [ngModel]="intakeYearId()" (ngModelChange)="intakeYearId.set($event)"></app-searchable-select>
+              [ngModel]="intakeYearId()" [disabled]="submitting()" (ngModelChange)="intakeYearId.set($event)"></app-searchable-select>
           </div>
           <div class="field">
             <label for="rgYos">Current Year of Study</label>
             <app-searchable-select inputId="rgYos" placeholder="Year 1" [options]="yearOfStudyOptions()"
-              [ngModel]="'' + yearOfStudy()" (ngModelChange)="yearOfStudy.set(+$event || 1)"></app-searchable-select>
+              [ngModel]="'' + yearOfStudy()" [disabled]="submitting()" (ngModelChange)="yearOfStudy.set(+$event || 1)"></app-searchable-select>
           </div>
         </div>
       } @else {
@@ -109,12 +110,12 @@
           <app-searchable-select inputId="rgOffering"
             [placeholder]="studentId() ? 'Search by course code or name…' : 'Choose a student first'"
             [options]="offeringOptions()" emptyText="No published courses match"
-            [ngModel]="offeringId()" (ngModelChange)="offeringId.set($event); waitlistOffer.set(false)"></app-searchable-select>
+            [ngModel]="offeringId()" [disabled]="submitting()" (ngModelChange)="offeringId.set($event); waitlistOffer.set(false)"></app-searchable-select>
         </div>
         @if (waitlistOffer()) {
           <div class="info-strip warn">
             This course is full.
-            <button type="button" class="btn-link" (click)="registerCourse(true)">Add {{ selectedStudent()?.name }} to the waitlist instead</button>
+            <button type="button" class="btn-link" [disabled]="submitting()" (click)="registerCourse(true)">Add {{ selectedStudent()?.name }} to the waitlist instead</button>
           </div>
         }
       }
@@ -172,64 +173,116 @@
 <!-- ===== activity ===== -->
 <div class="section-head">
   <h2>Recent Registrations</h2>
+  <button type="button" class="btn btn-secondary btn-sm" (click)="toggleRecent()">
+    {{ recentExpanded() ? 'Hide' : 'View Recent Registrations' }}
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+         [style.transform]="recentExpanded() ? 'rotate(180deg)' : 'none'" style="margin-left:4px;transition:transform .15s var(--ease);">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  </button>
 </div>
 
-<app-filter-bar [activeCount]="recentFilterCount()" [summary]="recentLoading() ? '' : recentSummary()" (clear)="clearRecentFilters()">
-  <div class="filter-field">
-    <label for="rrSearch">Search</label>
-    <app-search-input inputId="rrSearch" placeholder="Student, course or staff…" [value]="recentSearch()" (valueChange)="recentSearch.set($event)"></app-search-input>
-  </div>
-  <div class="filter-field">
-    <label for="rrType">Type</label>
-    <app-searchable-select inputId="rrType" placeholder="Programs & Courses" [options]="recentTypeOptions"
-      [ngModel]="recentType()" (ngModelChange)="recentType.set($event)"></app-searchable-select>
-  </div>
-  <div class="filter-field">
-    <label for="rrAction">Action</label>
-    <app-searchable-select inputId="rrAction" placeholder="All Actions" [options]="recentActionOptions"
-      [ngModel]="recentAction()" (ngModelChange)="recentAction.set($event)"></app-searchable-select>
-  </div>
-</app-filter-bar>
+@if (recentExpanded()) {
+  <app-filter-bar [activeCount]="recentFilterCount()" [summary]="recentLoading() ? '' : recentSummary()" (clear)="clearRecentFilters()">
+    <div class="filter-field">
+      <label for="rrSearch">Search</label>
+      <app-search-input inputId="rrSearch" placeholder="Student, course or staff…" [value]="recentSearch()" (valueChange)="recentSearch.set($event)"></app-search-input>
+    </div>
+    <div class="filter-field">
+      <label for="rrType">Type</label>
+      <app-searchable-select inputId="rrType" placeholder="Programs & Courses" [options]="recentTypeOptions"
+        [ngModel]="recentType()" (ngModelChange)="onRecentTypeChange($event)"></app-searchable-select>
+    </div>
+    <div class="filter-field">
+      <label for="rrAction">Action</label>
+      <app-searchable-select inputId="rrAction" placeholder="All Actions" [options]="recentActionOptions"
+        [ngModel]="recentAction()" (ngModelChange)="onRecentActionChange($event)"></app-searchable-select>
+    </div>
+  </app-filter-bar>
 
-<div class="card" style="padding:0;overflow:hidden;">
-  <table>
-    <thead><tr><th>Student</th><th>Registered Into</th><th>Action</th><th>Registered By</th><th>Date</th></tr></thead>
-    <tbody>
-      @if (recentLoading()) {
-        @for (i of [1,2,3]; track i) {
-          <tr><td colspan="5"><span class="skeleton" style="width:100%;height:14px;"></span></td></tr>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Student</th><th>Registered Into</th><th>Action</th><th>Registered By</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        @if (recentLoading()) {
+          @for (i of [1,2,3]; track i) {
+            <tr><td colspan="6"><span class="skeleton" style="width:100%;height:14px;"></span></td></tr>
+          }
+        } @else {
+          @for (r of filteredRecent(); track r.id) {
+            <tr>
+              <td class="row-avatar">
+                <div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(r.studentName) }}</div>
+                <div>
+                  <div class="cell-name">{{ r.studentName ?? 'Unknown student' }}</div>
+                  @if (r.studentNumber) { <div class="cell-faint" style="font-size:11.5px;">{{ r.studentNumber }}</div> }
+                </div>
+              </td>
+              <td class="cell-soft">
+                <span class="reg-type" [class.course]="r.targetType === 'COURSE'">{{ r.targetType === 'PROGRAM' ? 'Program' : 'Course' }}</span>
+                {{ r.targetLabel ?? '—' }}
+              </td>
+              <td><span class="badge" [class.b-success]="r.action === 'COURSE_ENROLL' || r.action === 'PROGRAM_REGISTER' || r.action === 'WAITLIST_PROMOTED'" [class.b-gold]="r.action === 'COURSE_WAITLIST'" [class.b-ink]="r.action === 'COURSE_DROP' || r.action === 'PROGRAM_UPDATE'">{{ actionLabel(r.action) }}</span></td>
+              <td class="cell-soft">{{ r.actorName }} · {{ r.actorRole | titlecase }}</td>
+              <td class="cell-faint">{{ r.createdAt | date: 'dd MMM y, HH:mm' }}</td>
+              <td class="row-actions">
+                <app-row-menu [label]="'Actions for ' + (r.studentName ?? 'this registration')">
+                  <button type="button" class="row-menu-item danger" (click)="requestDelete(r)">Delete</button>
+                </app-row-menu>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6" style="padding:24px;color:var(--ink-faint);">
+              @if (recentFilterCount()) {
+                No registrations match these filters. <button type="button" class="btn-link" (click)="clearRecentFilters()">Clear filters</button>
+              } @else {
+                No registrations yet.
+              }
+            </td></tr>
+          }
         }
-      } @else {
-        @for (r of filteredRecent(); track r.id) {
-          <tr>
-            <td class="row-avatar">
-              <div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(r.studentName) }}</div>
-              <div>
-                <div class="cell-name">{{ r.studentName ?? 'Unknown student' }}</div>
-                @if (r.studentNumber) { <div class="cell-faint" style="font-size:11.5px;">{{ r.studentNumber }}</div> }
-              </div>
-            </td>
-            <td class="cell-soft">
-              <span class="reg-type" [class.course]="r.targetType === 'COURSE'">{{ r.targetType === 'PROGRAM' ? 'Program' : 'Course' }}</span>
-              {{ r.targetLabel ?? '—' }}
-            </td>
-            <td><span class="badge" [class.b-success]="r.action === 'COURSE_ENROLL' || r.action === 'PROGRAM_REGISTER' || r.action === 'WAITLIST_PROMOTED'" [class.b-gold]="r.action === 'COURSE_WAITLIST'" [class.b-ink]="r.action === 'COURSE_DROP' || r.action === 'PROGRAM_UPDATE'">{{ actionLabel(r.action) }}</span></td>
-            <td class="cell-soft">{{ r.actorName }} · {{ r.actorRole | titlecase }}</td>
-            <td class="cell-faint">{{ r.createdAt | date: 'dd MMM y, HH:mm' }}</td>
-          </tr>
-        } @empty {
-          <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">
-            @if (recentFilterCount()) {
-              No registrations match these filters. <button type="button" class="btn-link" (click)="clearRecentFilters()">Clear filters</button>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  @if (!recentLoading()) {
+    <app-pager
+      [page]="recentPage()"
+      [totalPages]="recentTotalPages()"
+      [totalElements]="recentTotalElements()"
+      [pageSize]="recentPageSize()"
+      itemLabel="registrations"
+      (pageChange)="goToRecentPage($event)"
+      (pageSizeChange)="onRecentPageSizeChange($event)"
+    />
+  }
+}
+
+@if (confirmTarget(); as r) {
+  <div class="modal-overlay" (click)="cancelDelete()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h3>Delete this registration?</h3>
+          <p>
+            @if (r.targetType === 'COURSE') {
+              This unenrolls {{ r.studentName ?? 'this student' }} from {{ r.targetLabel ?? 'the course' }} and removes this entry from Recent Registrations.
             } @else {
-              No registrations yet.
+              This withdraws {{ r.studentName ?? 'this student' }} from {{ r.targetLabel ?? 'the program' }} and removes this entry from Recent Registrations.
             }
-          </td></tr>
-        }
-      }
-    </tbody>
-  </table>
-</div>
+          </p>
+        </div>
+        <button class="modal-close" [disabled]="deleting()" (click)="cancelDelete()">✕</button>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" [disabled]="deleting()" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="btn btn-danger" [disabled]="deleting()" (click)="confirmDelete()">{{ deleting() ? 'Deleting…' : 'Delete' }}</button>
+      </div>
+    </div>
+  </div>
+}
 
 @if (toast(); as t) {
   <div class="toast" [class.error]="t.error">{{ t.message }}</div>

@@ -17,6 +17,9 @@ public class EnrollmentClient {
 
     public record RosterEntry(UUID id, UUID studentId, String studentName, String studentNumber, String status) {}
 
+    /** /course-enrollments is paginated (page/size/content/...); only content is needed here. */
+    private record RosterPage(List<RosterEntry> content) {}
+
     public record MyEnrollment(UUID id, UUID offeringId, String courseCode, String courseName, String status) {}
 
     private static final String SERVICE = "Enrollment";
@@ -38,13 +41,14 @@ public class EnrollmentClient {
         return check != null && check.enrolled();
     }
 
-    /** Enrolled students only (waitlisted students have no seat, so no assignments). */
+    /** Enrolled students only (waitlisted students have no seat, so no assignments).
+     * Requests a page large enough to cover a whole course's capacity in one go. */
     public List<RosterEntry> enrolledStudents(UUID offeringId) {
-        List<RosterEntry> roster = Upstream.call(SERVICE, null, () -> restClient.get()
-                .uri(b -> b.path("/course-enrollments").queryParam("offeringId", offeringId).build())
+        RosterPage page = Upstream.call(SERVICE, null, () -> restClient.get()
+                .uri(b -> b.path("/course-enrollments").queryParam("offeringId", offeringId).queryParam("size", 200).build())
                 .header("Authorization", "Bearer " + jwt.mintServiceToken())
-                .retrieve().body(new ParameterizedTypeReference<List<RosterEntry>>() {}));
-        return roster == null ? List.of() : roster.stream().filter(r -> "ENROLLED".equals(r.status())).toList();
+                .retrieve().body(RosterPage.class));
+        return page == null ? List.of() : page.content().stream().filter(r -> "ENROLLED".equals(r.status())).toList();
     }
 
     public record SeatCount(UUID offeringId, long enrolled, long waitlisted) {}

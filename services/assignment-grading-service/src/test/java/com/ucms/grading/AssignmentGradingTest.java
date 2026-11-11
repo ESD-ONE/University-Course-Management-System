@@ -131,7 +131,7 @@ class AssignmentGradingTest {
     void publishing_emitsEvent_andOnlyThenStudentsSeeIt() throws Exception {
         Assignment a = assignment(Assignment.Status.DRAFT, OffsetDateTime.now().plusDays(3));
         mockMvc.perform(get("/assignments").header("Authorization", token("STUDENT", studentId)))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
 
         mockMvc.perform(patch("/assignments/" + a.getId() + "/status").header("Authorization", token("LECTURER", lecturerId))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"OPEN\"}"))
@@ -139,8 +139,31 @@ class AssignmentGradingTest {
         verify(events).publish(eq("grading.assignment-published"), anyMap());
 
         mockMvc.perform(get("/assignments").header("Authorization", token("STUDENT", studentId)))
-                .andExpect(jsonPath("$[0].title").value("Programming Exercise 2"))
-                .andExpect(jsonPath("$[0].mySubmissionStatus").value("NOT_SUBMITTED"));
+                .andExpect(jsonPath("$.content[0].title").value("Programming Exercise 2"))
+                .andExpect(jsonPath("$.content[0].mySubmissionStatus").value("NOT_SUBMITTED"));
+    }
+
+    @Test
+    void listAssignments_filteredByStatus_narrowsResults() throws Exception {
+        assignment(Assignment.Status.DRAFT, OffsetDateTime.now().plusDays(3));
+        assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(5));
+
+        mockMvc.perform(get("/assignments").param("status", "OPEN").header("Authorization", token("LECTURER", lecturerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].status").value("OPEN"));
+    }
+
+    @Test
+    void listAssignments_pagination_respectsPageAndSize() throws Exception {
+        assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(1));
+        assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(2));
+
+        mockMvc.perform(get("/assignments").param("page", "0").param("size", "1").header("Authorization", token("LECTURER", lecturerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
     }
 
     @Test

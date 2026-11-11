@@ -14,7 +14,11 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { RowMenuComponent } from '../../shared/row-menu.component';
 import { FilterBarComponent } from '../../shared/filter-bar.component';
-import { countActive, matchesText, numberOptions, showingSummary, statusOptions, uniqueOptions } from '../../shared/filters';
+import { PagerComponent } from '../../shared/pager.component';
+import { countActive, statusOptions, uniqueOptions } from '../../shared/filters';
+
+const DEFAULT_PAGE_SIZE = 20;
+const YEAR_OF_STUDY_OPTIONS = [1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: `Year ${n}` }));
 
 /**
  * "My Courses" — the courses a lecturer is assigned, independent of academic year
@@ -24,12 +28,13 @@ import { countActive, matchesText, numberOptions, showingSummary, statusOptions,
 @Component({
   selector: 'app-lecturer-courses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
   templateUrl: './lecturer-courses.component.html',
 })
 export class LecturerCoursesComponent {
   private fb = inject(FormBuilder);
   private academicStructureService = inject(AcademicStructureService);
+  private loadRequestId = 0;
 
   readonly courses = signal<CourseResponse[]>([]);
   readonly academicYears = signal<AcademicYearResponse[]>([]);
@@ -40,24 +45,26 @@ export class LecturerCoursesComponent {
   readonly programFilter = signal('');
   readonly yearOfStudyFilter = signal('');
   readonly statusFilter = signal('');
+
+  readonly page = signal(0);
+  readonly pageSize = signal(DEFAULT_PAGE_SIZE);
+  readonly totalElements = signal(0);
+  readonly totalPages = signal(0);
+
+  private searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  /** All of this lecturer's courses (unpaginated, size=200) purely to build the
+   * Degree Program filter's option list — the main table itself is server-paginated. */
+  readonly allMyCourses = signal<CourseResponse[]>([]);
   readonly programOptions = computed(() =>
-    uniqueOptions(this.courses(), (c) => c.degreeProgramId, (c) => c.degreeProgramName, (c) => c.degreeProgramCode),
+    uniqueOptions(this.allMyCourses(), (c) => c.degreeProgramId, (c) => c.degreeProgramName, (c) => c.degreeProgramCode),
   );
-  readonly yearOfStudyOptions = computed(() => numberOptions(this.courses().map((c) => c.yearOfStudy), (n) => `Year ${n}`));
+  readonly yearOfStudyOptions = YEAR_OF_STUDY_OPTIONS;
   readonly statusFilterOptions = statusOptions(['DRAFT', 'PUBLISHED', 'CANCELLED']);
-  readonly filteredCourses = computed(() =>
-    this.courses().filter(
-      (c) =>
-        matchesText(this.searchFilter(), c.catalogCourseCode, c.catalogCourseName) &&
-        (!this.programFilter() || c.degreeProgramId === this.programFilter()) &&
-        (!this.yearOfStudyFilter() || String(c.yearOfStudy) === this.yearOfStudyFilter()) &&
-        (!this.statusFilter() || c.status === this.statusFilter()),
-    ),
-  );
   readonly activeFilterCount = computed(() =>
     countActive(this.searchFilter().trim(), this.programFilter(), this.yearOfStudyFilter(), this.statusFilter()),
   );
-  readonly filterSummary = computed(() => showingSummary(this.filteredCourses().length, this.courses().length, 'course'));
+  readonly filterSummary = computed(() => `${this.totalElements()} course${this.totalElements() === 1 ? '' : 's'}${this.activeFilterCount() ? ' match' : ' in total'}`);
 
   readonly editingCourse = signal<CourseResponse | null>(null);
   readonly managingCourse = signal<CourseResponse | null>(null);
@@ -84,29 +91,83 @@ export class LecturerCoursesComponent {
 
   constructor() {
     this.academicStructureService.listAcademicYears().subscribe({ next: (v) => this.academicYears.set(v) });
+    this.academicStructureService.listCourses(true, { size: 200 }).subscribe({ next: (p) => this.allMyCourses.set(p.content) });
     this.load();
   }
 
   load(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.academicStructureService.listCourses(true).subscribe({
-      next: (v) => {
-        this.courses.set(v);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loadError.set('Could not load your courses.');
-        this.loading.set(false);
-      },
-    });
+    const requestId = ++this.loadRequestId;
+    this.academicStructureService
+      .listCourses(true, {
+        degreeProgramId: this.programFilter() || null,
+        yearOfStudy: this.yearOfStudyFilter() ? Number(this.yearOfStudyFilter()) : '',
+        status: (this.statusFilter() as CourseStatus) || '',
+        q: this.searchFilter().trim(),
+        page: this.page(),
+        size: this.pageSize(),
+      })
+      .subscribe({
+        next: (p) => {
+          if (requestId !== this.loadRequestId) return; // a newer filter change already superseded this request
+          this.courses.set(p.content);
+          this.totalElements.set(p.totalElements);
+          this.totalPages.set(p.totalPages);
+          this.loading.set(false);
+        },
+        error: () => {
+          if (requestId !== this.loadRequestId) return;
+          this.loadError.set('Could not load your courses.');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  onSearchInput(value: string): void {
+    this.searchFilter.set(value);
+    this.page.set(0);
+    clearTimeout(this.searchDebounce);
+    this.searchDebounce = setTimeout(() => this.load(), 300);
+  }
+
+  onProgramFilterChange(value: string): void {
+    this.programFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onYearOfStudyFilterChange(value: string): void {
+    this.yearOfStudyFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onStatusFilterChange(value: string): void {
+    this.statusFilter.set(value);
+    this.page.set(0);
+    this.load();
+  }
+
+  onPageSizeChange(size: number): void {
+    this.pageSize.set(size);
+    this.page.set(0);
+    this.load();
+  }
+
+  goToPage(page: number): void {
+    this.page.set(page);
+    this.load();
   }
 
   clearFilters(): void {
+    clearTimeout(this.searchDebounce);
     this.searchFilter.set('');
     this.programFilter.set('');
     this.yearOfStudyFilter.set('');
     this.statusFilter.set('');
+    this.page.set(0);
+    this.load();
   }
 
   semestersFor(yearId: string) {
@@ -132,18 +193,21 @@ export class LecturerCoursesComponent {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.editCourseForm.disable();
     const { beginDate, yearOfStudy, capacity, status } = this.editCourseForm.getRawValue();
     this.academicStructureService
       .updateCourse(course.id, { beginDate: beginDate!, yearOfStudy: yearOfStudy!, capacity: capacity!, status: status! })
       .subscribe({
         next: (updated) => {
-          this.courses.update((list) => list.map((c) => (c.id === updated.id ? updated : c)));
+          this.load(); // the edit may move this row off the current filtered page (e.g. status change)
           this.submitting.set(false);
+          this.editCourseForm.enable();
           this.editingCourse.set(null);
           this.showToast(`${updated.catalogCourseCode} updated.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.editCourseForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not update this course.');
         },
       });
@@ -153,7 +217,7 @@ export class LecturerCoursesComponent {
     if (!confirm(`Delete course "${course.catalogCourseName}"? This also removes its academic-year assignments.`)) return;
     this.academicStructureService.deleteCourse(course.id).subscribe({
       next: () => {
-        this.courses.update((list) => list.filter((c) => c.id !== course.id));
+        this.load(); // re-fetch so totalElements/totalPages stay correct
         this.showToast(`${course.catalogCourseCode} deleted.`, false);
       },
       error: (err: HttpErrorResponse) => this.showToast(err.error?.message ?? 'Could not delete this course.', true),
@@ -209,6 +273,7 @@ export class LecturerCoursesComponent {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.assignForm.disable();
     const { semesterId, capacity, status } = this.assignForm.getRawValue();
     const editingId = this.editingAssignmentId();
 
@@ -219,11 +284,13 @@ export class LecturerCoursesComponent {
           next: (updated) => {
             this.yearAssignments.update((list) => list.map((a) => (a.id === updated.id ? updated : a)));
             this.submitting.set(false);
+            this.assignForm.enable();
             this.editingAssignmentId.set(null);
             this.showToast(`Updated assignment for ${updated.academicYearName}.`, false);
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.assignForm.enable();
             this.dialogError.set(err.error?.message ?? 'Could not update this assignment.');
           },
         });
@@ -242,10 +309,12 @@ export class LecturerCoursesComponent {
         next: (created) => {
           this.yearAssignments.update((list) => [...list, created]);
           this.submitting.set(false);
+          this.assignForm.enable();
           this.showToast(`Assigned to ${created.academicYearName}.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.assignForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not assign this course to the selected year.');
         },
       });

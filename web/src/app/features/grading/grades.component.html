@@ -18,8 +18,9 @@
     <div class="card stat-tile"><div class="stat-label">Semesters on Record</div><div class="stat-value">{{ bySemester().length }}</div></div>
   </div>
   @for (s of bySemester(); track s.label) {
-    <div class="card" style="margin-bottom:16px;">
-      <h3 style="margin:0 0 14px;font-size:14px;">{{ s.label }}</h3>
+    <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">
+      <h3 style="margin:14px 0 14px;padding-left:16px;font-size:14px;">{{ s.label }}</h3>
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Code</th><th>Course Name</th><th>Credits</th><th>Graded Work</th><th>Grade</th></tr></thead>
         <tbody>
@@ -34,6 +35,7 @@
           }
         </tbody>
       </table>
+      </div>
     </div>
   } @empty {
     <div class="card"><p style="color:var(--ink-faint);font-size:13px;margin:0;">No graded work yet.</p></div>

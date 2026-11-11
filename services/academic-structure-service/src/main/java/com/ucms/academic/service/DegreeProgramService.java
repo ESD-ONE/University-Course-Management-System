@@ -6,6 +6,7 @@ import com.ucms.academic.domain.CourseCatalog;
 import com.ucms.academic.domain.DegreeProgram;
 import com.ucms.academic.domain.DegreeProgramAcademicYear;
 import com.ucms.academic.domain.ProgramCourse;
+import com.ucms.academic.domain.ProgramStatus;
 import com.ucms.academic.exception.DuplicateEntityException;
 import com.ucms.academic.exception.HasDependentsException;
 import com.ucms.academic.repository.CourseCatalogRepository;
@@ -13,6 +14,7 @@ import com.ucms.academic.repository.AcademicYearRepository;
 import com.ucms.academic.repository.CourseRepository;
 import com.ucms.academic.repository.DegreeProgramAcademicYearRepository;
 import com.ucms.academic.repository.DegreeProgramRepository;
+import com.ucms.academic.repository.DegreeProgramSpecifications;
 import com.ucms.academic.repository.ProgramCourseRepository;
 import com.ucms.academic.security.AssignmentClaim;
 import com.ucms.academic.security.CurrentAssignments;
@@ -26,6 +28,9 @@ import com.ucms.academic.web.dto.ProgramCourseResponse;
 import com.ucms.academic.web.dto.UpdateDegreeProgramAcademicYearRequest;
 import com.ucms.academic.web.dto.UpdateDegreeProgramRequest;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +58,7 @@ public class DegreeProgramService {
     private final AcademicYearRepository academicYearRepository;
     private final PermissionResolver permissionResolver;
     private final CourseOfferingService courseOfferingService;
+    private final com.ucms.academic.repository.CourseAcademicYearRepository courseAcademicYearRepository;
 
     public DegreeProgramService(DegreeProgramRepository degreeProgramRepository,
                                  ProgramCourseRepository programCourseRepository,
@@ -61,7 +67,8 @@ public class DegreeProgramService {
                                  DegreeProgramAcademicYearRepository academicYearAssignmentRepository,
                                  AcademicYearRepository academicYearRepository,
                                  PermissionResolver permissionResolver,
-                                 CourseOfferingService courseOfferingService) {
+                                 CourseOfferingService courseOfferingService,
+                                 com.ucms.academic.repository.CourseAcademicYearRepository courseAcademicYearRepository) {
         this.degreeProgramRepository = degreeProgramRepository;
         this.programCourseRepository = programCourseRepository;
         this.courseCatalogRepository = courseCatalogRepository;
@@ -70,6 +77,7 @@ public class DegreeProgramService {
         this.academicYearRepository = academicYearRepository;
         this.permissionResolver = permissionResolver;
         this.courseOfferingService = courseOfferingService;
+        this.courseAcademicYearRepository = courseAcademicYearRepository;
     }
 
     @Transactional
@@ -116,18 +124,19 @@ public class DegreeProgramService {
      * department they have View access to — e.g. a Department Head's DEPARTMENT-scoped
      * assignment. See docs/SYSTEM_ARCHITECTURE_REPORT.md section 6/7.2. */
     @Transactional(readOnly = true)
-    public List<DegreeProgramResponse> list(UUID departmentId) {
+    public Page<DegreeProgramResponse> list(UUID departmentId, ProgramStatus status, String q, Pageable pageable) {
         List<AssignmentClaim> assignments = CurrentAssignments.get();
-        List<DegreeProgram> all = departmentId == null
-                ? degreeProgramRepository.findByDeletedAtIsNullOrderByNameAsc()
-                : degreeProgramRepository.findByDepartmentIdAndDeletedAtIsNullOrderByNameAsc(departmentId);
-        if (permissionResolver.isGlobal(assignments, MODULE, "View")) {
-            return all.stream().map(DegreeProgramResponse::from).toList();
+        Specification<DegreeProgram> spec = DegreeProgramSpecifications.filter(departmentId, status, q);
+        if (!permissionResolver.isGlobal(assignments, MODULE, "View")) {
+            List<UUID> scopedDepartmentIds = assignments.stream()
+                    .filter(a -> "DEPARTMENT".equals(a.scopeType()))
+                    .map(AssignmentClaim::scopeId)
+                    .filter(id -> permissionResolver.canOnDepartment(assignments, id, MODULE, "View"))
+                    .distinct()
+                    .toList();
+            spec = spec.and(DegreeProgramSpecifications.departmentIn(scopedDepartmentIds));
         }
-        return all.stream()
-                .filter(p -> permissionResolver.canOnDepartment(assignments, p.getDepartmentId(), MODULE, "View"))
-                .map(DegreeProgramResponse::from)
-                .toList();
+        return degreeProgramRepository.findAll(spec, pageable).map(DegreeProgramResponse::from);
     }
 
     /** Same View rule as list(), for a single program — used by enrollment-service to
@@ -202,6 +211,27 @@ public class DegreeProgramService {
         return ProgramCourseResponse.from(programCourseRepository.save(pc));
     }
 
+    /** Editing a curriculum entry's own details (credit value, requirement, recommended
+     * placement) — distinct from a specific year's offering (CourseAcademicYear), which
+     * CourseOfferingService.updateAssignment covers. Reached from the "Degree Programs"
+     * screen's per-course "Edit course details" action, since that's the one place an
+     * admin sees both a course's curriculum entry and its live offerings together. */
+    @Transactional
+    public com.ucms.academic.web.dto.ProgramCourseResponse updateCurriculumEntry(
+            UUID programId, UUID programCourseId, com.ucms.academic.web.dto.UpdateProgramCourseRequest request, UUID actorId) {
+        ProgramCourse pc = programCourseRepository.findByIdAndDegreeProgramId(programCourseId, programId)
+                .orElseThrow(() -> new EntityNotFoundException("Curriculum entry not found"));
+        if (!permissionResolver.canOnDepartment(pc.getDegreeProgram().getDepartmentId(), MODULE, "Edit")) {
+            throw new AccessDeniedException("No permission to edit this program's curriculum");
+        }
+        pc.setRequirementType(request.requirementType());
+        pc.setRecommendedYear(request.recommendedYear());
+        pc.setRecommendedSemester(request.recommendedSemester());
+        pc.setCreditValue(request.creditValue());
+        pc.setUpdatedBy(actorId);
+        return com.ucms.academic.web.dto.ProgramCourseResponse.from(programCourseRepository.save(pc));
+    }
+
     // ---- Per-academic-year assignment ("Degree Programs" screen) ----
 
     /** academicYearId == null returns every assignment across every year (the screen's
@@ -213,11 +243,16 @@ public class DegreeProgramService {
                 ? academicYearAssignmentRepository.findByDeletedAtIsNull()
                 : academicYearAssignmentRepository.findByAcademicYearIdAndDeletedAtIsNull(academicYearId);
         boolean global = permissionResolver.isGlobal(assignments, MODULE, "View");
+        java.util.Map<String, Integer> courseCounts = new java.util.HashMap<>();
+        for (var c : courseAcademicYearRepository.countByAcademicYearAndDegreeProgram()) {
+            courseCounts.put(c.getYearId() + "|" + c.getProgramId(), (int) c.getCourseCount());
+        }
         return all.stream()
                 .filter(a -> global || permissionResolver.canOnDepartment(assignments, a.getDegreeProgram().getDepartmentId(), MODULE, "View"))
                 .sorted(Comparator.comparing((DegreeProgramAcademicYear a) -> a.getAcademicYear().getName()).reversed()
                         .thenComparing(a -> a.getDegreeProgram().getName()))
-                .map(DegreeProgramAcademicYearResponse::from)
+                .map(a -> DegreeProgramAcademicYearResponse.from(a,
+                        courseCounts.getOrDefault(a.getAcademicYear().getId() + "|" + a.getDegreeProgram().getId(), 0)))
                 .toList();
     }
 
@@ -246,15 +281,15 @@ public class DegreeProgramService {
         a.setStatus(request.status());
         a.setCreatedBy(actorId);
         a.setUpdatedBy(actorId);
-        DegreeProgramAcademicYearResponse response = DegreeProgramAcademicYearResponse.from(academicYearAssignmentRepository.save(a));
+        DegreeProgramAcademicYear saved = academicYearAssignmentRepository.save(a);
 
         List<UUID> courseIds = request.courseIds() != null
                 ? request.courseIds()
-                : courseRepository.findByDegreeProgramIdAndDeletedAtIsNullOrderByCreatedAtDesc(programId).stream().map(Course::getId).toList();
+                : courseRepository.findByDegreeProgramIdAndDeletedAtIsNull(programId).stream().map(Course::getId).toList();
         for (UUID courseId : courseIds) {
             courseOfferingService.assignCourseToYearIfAbsent(courseId, year, actorId);
         }
-        return response;
+        return DegreeProgramAcademicYearResponse.from(saved, courseIds.size());
     }
 
     @Transactional
@@ -269,7 +304,11 @@ public class DegreeProgramService {
         a.setTotalCredits(request.totalCredits());
         a.setStatus(request.status());
         a.setUpdatedBy(actorId);
-        return DegreeProgramAcademicYearResponse.from(academicYearAssignmentRepository.save(a));
+        DegreeProgramAcademicYear saved = academicYearAssignmentRepository.save(a);
+        int courseCount = courseAcademicYearRepository
+                .findByAcademicYearIdAndCourseDegreeProgramIdAndDeletedAtIsNull(saved.getAcademicYear().getId(), programId)
+                .size();
+        return DegreeProgramAcademicYearResponse.from(saved, courseCount);
     }
 
     @Transactional

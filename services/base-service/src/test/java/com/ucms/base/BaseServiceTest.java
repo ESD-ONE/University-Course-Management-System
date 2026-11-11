@@ -108,8 +108,8 @@ class BaseServiceTest {
     void listFaculties_isReachableByAnyAuthenticatedRole() throws Exception {
         mockMvc.perform(get("/faculties").header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[?(@.code=='FOC')]").exists());
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[?(@.code=='FOC')]").exists());
     }
 
     @Test
@@ -128,7 +128,7 @@ class BaseServiceTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
         mockMvc.perform(get("/faculties").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(jsonPath("$.content.length()").value(3));
     }
 
     @Test
@@ -149,15 +149,54 @@ class BaseServiceTest {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    void listFaculties_pagination_respectsPageAndSize() throws Exception {
+        Faculty extra = new Faculty();
+        extra.setName("Faculty of Arts");
+        extra.setCode("FOA");
+        extra.setStatus(ReferenceStatus.ACTIVE);
+        facultyRepository.save(extra);
+
+        mockMvc.perform(get("/faculties").param("page", "0").param("size", "2")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+
+        mockMvc.perform(get("/faculties").param("page", "1").param("size", "2")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+    }
+
+    @Test
+    void listFaculties_searchByQ_matchesNameOrCode() throws Exception {
+        mockMvc.perform(get("/faculties").param("q", "foc")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("FOC"));
+    }
+
+    @Test
+    void facultyCounts_reflectsAllFacultiesRegardlessOfFilter() throws Exception {
+        mockMvc.perform(get("/faculties/counts").header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.active").value(2))
+                .andExpect(jsonPath("$.inactive").value(0));
+    }
+
     // ---- Departments (docs/SYSTEM_ARCHITECTURE_REPORT.md Phase 1 / TC-P1-006..011) ----
 
     @Test
     void listDepartments_isReachableByAnyAuthenticatedRole() throws Exception {
         mockMvc.perform(get("/departments").header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].code").value("DOCS"))
-                .andExpect(jsonPath("$[0].facultyName").value("Faculty of Computing"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].code").value("DOCS"))
+                .andExpect(jsonPath("$.content[0].facultyName").value("Faculty of Computing"));
     }
 
     @Test
@@ -166,13 +205,31 @@ class BaseServiceTest {
                         .param("facultyId", computing.getId().toString())
                         .header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
 
         mockMvc.perform(get("/departments")
                         .param("facultyId", java.util.UUID.randomUUID().toString())
                         .header("Authorization", "Bearer " + tokenFor("STUDENT")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
+    }
+
+    @Test
+    void listDepartments_combinesFacultyIdStatusAndSearch() throws Exception {
+        mockMvc.perform(get("/departments")
+                        .param("facultyId", computing.getId().toString())
+                        .param("status", "ACTIVE")
+                        .param("q", "computer")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1));
+
+        mockMvc.perform(get("/departments")
+                        .param("facultyId", computing.getId().toString())
+                        .param("status", "INACTIVE")
+                        .header("Authorization", "Bearer " + tokenFor("STUDENT")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     @Test
@@ -241,8 +298,8 @@ class BaseServiceTest {
     void listGradingScales_returnsSeededScale() throws Exception {
         mockMvc.perform(get("/grading-scales").header("Authorization", "Bearer " + tokenFor("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].name").value("Pass / Fail"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Pass / Fail"));
     }
 
     @Test
@@ -283,8 +340,8 @@ class BaseServiceTest {
     void listCourseCategories_returnsSeededCategory() throws Exception {
         mockMvc.perform(get("/course-categories").header("Authorization", "Bearer " + tokenFor("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].name").value("Core"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Core"));
     }
 
     @Test
@@ -332,7 +389,7 @@ class BaseServiceTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/faculties").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     // ---- Department: update / delete ----
@@ -355,7 +412,7 @@ class BaseServiceTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/departments").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     // ---- Department delete: cross-service dependents guard (gap-analysis-report.md G-05) ----
@@ -369,7 +426,7 @@ class BaseServiceTest {
                 .andExpect(status().isConflict());
 
         mockMvc.perform(get("/departments").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1));
     }
 
     @Test
@@ -381,7 +438,7 @@ class BaseServiceTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/departments").header("Authorization", "Bearer " + tokenFor("STUDENT")))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     @Test
@@ -425,7 +482,7 @@ class BaseServiceTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/grading-scales").header("Authorization", "Bearer " + tokenFor("ADMIN")))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 
     // ---- Course Category: update / delete ----
@@ -447,6 +504,6 @@ class BaseServiceTest {
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/course-categories").header("Authorization", "Bearer " + tokenFor("ADMIN")))
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
     }
 }

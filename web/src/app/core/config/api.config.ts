@@ -4,7 +4,12 @@
  * `ng serve` (port 4200) the browser talks to the local Keycloak container directly.
  */
 export const KEYCLOAK_URL =
-  location.port === '4200' ? 'http://localhost:8180/auth' : `${location.origin}/auth`;
+  // TEMP local-dev-against-prod change, not for commit: localhost:8180 is plain HTTP, but
+  // production Keycloak's KC_HOSTNAME is https:// so it marks its session cookie Secure,
+  // which the browser then drops over HTTP ("Cookie not found" / stuck re-showing the
+  // login form). Using the real HTTPS public URL instead avoids the mismatch; revert to
+  // the 8180 tunnel for a fully local stack.
+  location.port === '4200' ? 'https://esd.azhosting.fun/auth' : `${location.origin}/auth`;
 
 /**
  * Base URL for the Gateway's Identity & Access routes. The Gateway strips the first

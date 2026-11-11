@@ -1,0 +1,213 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Learning Hub</div>
+    <h1 class="page-title">{{ offering()?.code }} — {{ offering()?.name }}</h1>
+    <p class="page-sub">
+      @if (offering(); as o) { {{ o.academicYearName }}{{ o.semesterName ? ' · ' + o.semesterName : '' }} · {{ o.degreeProgramCode }} }
+    </p>
+  </div>
+  <a class="btn btn-secondary" routerLink="/app/learning">← Academic Years</a>
+</div>
+
+@if (loading()) {
+  <div class="card">@for (i of [1,2,3]; track i) { <div class="skeleton-row"><span class="skeleton" style="width:220px;height:14px;"></span></div> }</div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  @if (canManage()) {
+    <div style="margin-bottom:14px;">
+      <button class="btn btn-primary btn-sm" (click)="openAddWeek()">+ Add Week</button>
+    </div>
+  }
+
+  @if (addingWeek()) {
+    <div class="card" style="margin-bottom:14px;">
+      <div class="field-row">
+        <div class="field"><label>Week #</label><input type="number" min="1" [(ngModel)]="weekForm.weekNumber" /></div>
+        <div class="field"><label>Title (optional)</label><input type="text" [(ngModel)]="weekForm.title" placeholder="e.g. Introduction" /></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Start Date</label><input type="date" [(ngModel)]="weekForm.startDate" /></div>
+        <div class="field"><label>End Date</label><input type="date" [(ngModel)]="weekForm.endDate" /></div>
+      </div>
+      <div class="modal-foot" style="padding:12px 0 0;">
+        <button type="button" class="btn btn-secondary" (click)="addingWeek.set(false)">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="submitWeek()">Save Week</button>
+      </div>
+    </div>
+  }
+
+  @for (group of groupedByMonth(); track group.month) {
+    <div style="font-size:13px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;margin:18px 0 8px;">{{ group.month }}</div>
+
+    @for (w of group.weeks; track w.id) {
+      <div class="card" style="margin-bottom:12px;">
+        <button type="button" (click)="toggleWeek(w.id)"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;padding:0;text-align:left;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:13px;color:var(--ink-faint);">{{ isExpanded(w.id) ? '▾' : '▸' }}</span>
+            <b style="font-size:15px;">Week {{ w.weekNumber }}{{ w.title ? ' — ' + w.title : '' }}</b>
+            <span class="badge" [class.b-success]="w.status === 'PUBLISHED'" [class.b-ink]="w.status === 'DRAFT'">{{ w.status }}</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink-faint);">{{ w.startDate }} – {{ w.endDate }}</span>
+        </button>
+
+        @if (isExpanded(w.id)) {
+          <div style="margin-top:16px;">
+            @if (canManage()) {
+              <div style="display:flex;gap:16px;margin-bottom:14px;font-size:12px;">
+                <button type="button" class="btn-link" (click)="openAddSession(w.id)">+ Add Lecture</button>
+                <button type="button" class="btn-link" (click)="openAddItem(w.id)">+ Add Material</button>
+                <button type="button" class="btn-link" (click)="publishWeek(w)">{{ w.status === 'DRAFT' ? 'Publish Week' : 'Unpublish Week' }}</button>
+                <button type="button" class="btn-link" style="color:var(--danger);" (click)="deleteWeek(w)">Delete Week</button>
+              </div>
+            }
+
+            @if (addingSessionForWeek() === w.id) {
+              <div class="card" style="margin-bottom:14px;background:var(--surface2);">
+                <div class="field"><label>Title</label><input type="text" [(ngModel)]="sessionForm.title" placeholder="e.g. Lecture 3 — Arrays" /></div>
+                <div class="field-row">
+                  <div class="field"><label>Starts</label><input type="datetime-local" [(ngModel)]="sessionForm.startsAt" /></div>
+                  <div class="field"><label>Ends</label><input type="datetime-local" [(ngModel)]="sessionForm.endsAt" /></div>
+                </div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Delivery</label>
+                    <select [(ngModel)]="sessionForm.deliveryMode">
+                      <option value="ONLINE">Online</option>
+                      <option value="PHYSICAL">In Person</option>
+                      <option value="HYBRID">Hybrid</option>
+                    </select>
+                  </div>
+                  <div class="field"><label>Location (optional)</label><input type="text" [(ngModel)]="sessionForm.location" /></div>
+                </div>
+                <div class="field"><label>Meeting Link (optional, https://…)</label><input type="text" [(ngModel)]="sessionForm.meetingUrl" placeholder="https://meet…" /></div>
+                <div class="field"><label>Description (optional)</label><textarea rows="2" [(ngModel)]="sessionForm.description"></textarea></div>
+                <div class="modal-foot" style="padding:12px 0 0;">
+                  <button type="button" class="btn btn-secondary" (click)="addingSessionForWeek.set(null)">Cancel</button>
+                  <button type="button" class="btn btn-primary" (click)="submitSession()">Save Lecture</button>
+                </div>
+              </div>
+            }
+
+            @if (addingItemForWeek() === w.id) {
+              <div class="card" style="margin-bottom:14px;background:var(--surface2);">
+                <div class="field-row">
+                  <div class="field">
+                    <label>Type</label>
+                    <select [(ngModel)]="itemForm.type">
+                      <option value="NOTE">Note</option>
+                      <option value="SLIDES">Slides</option>
+                      <option value="READING">Reading</option>
+                      <option value="VIDEO">Video</option>
+                      <option value="LINK">Link</option>
+                    </select>
+                  </div>
+                  <div class="field"><label>Title</label><input type="text" [(ngModel)]="itemForm.title" /></div>
+                </div>
+                <div class="field" style="display:flex;gap:16px;">
+                  <label style="font-size:12.5px;"><input type="radio" name="itemMode" value="link" [(ngModel)]="itemForm.mode" /> Link</label>
+                  <label style="font-size:12.5px;"><input type="radio" name="itemMode" value="file" [(ngModel)]="itemForm.mode" /> Upload file</label>
+                </div>
+                @if (itemForm.mode === 'link') {
+                  <div class="field"><label>URL (https://…)</label><input type="text" [(ngModel)]="itemForm.externalUrl" placeholder="https://…" /></div>
+                } @else {
+                  <div class="field"><label>File</label><input type="file" (change)="onItemFileChange($event)" /></div>
+                }
+                <div class="field"><label>Description (optional)</label><textarea rows="2" [(ngModel)]="itemForm.description"></textarea></div>
+                <div class="modal-foot" style="padding:12px 0 0;">
+                  <button type="button" class="btn btn-secondary" (click)="addingItemForWeek.set(null)">Cancel</button>
+                  <button type="button" class="btn btn-primary" (click)="submitItem()">Save Material</button>
+                </div>
+              </div>
+            }
+
+            @for (s of w.sessions; track s.id) {
+              <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <b style="font-size:13.5px;">🎓 {{ s.title }}</b>
+                  <span class="badge" [class.b-success]="s.status === 'PUBLISHED'" [class.b-ink]="s.status === 'DRAFT'" [class.b-danger]="s.status === 'CANCELLED'">{{ s.status }}</span>
+                </div>
+                <div style="font-size:12px;color:var(--ink-soft);margin-top:4px;">{{ s.startsAt | date: 'EEE dd MMM y, HH:mm' }} – {{ s.endsAt | date: 'HH:mm' }} · {{ s.deliveryMode }}{{ s.location ? ' · ' + s.location : '' }}</div>
+                @if (s.description) { <p style="font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;">{{ s.description }}</p> }
+                <div style="display:flex;gap:14px;margin-top:8px;font-size:12px;">
+                  @if (s.meetingUrl) { <a [href]="s.meetingUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Join Lecture ›</a> }
+                  @if (s.recordingUrl) { <a [href]="s.recordingUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Watch Recording ›</a> }
+                  @if (canManage()) {
+                    <button type="button" class="btn-link" (click)="publishSession(s)">{{ s.status === 'PUBLISHED' ? 'Unpublish' : 'Publish' }}</button>
+                    <button type="button" class="btn-link" (click)="setRecordingUrl(s)">{{ s.recordingUrl ? 'Edit' : 'Add' }} Recording Link</button>
+                    <button type="button" class="btn-link" style="color:var(--danger);" (click)="deleteSession(s)">Delete</button>
+                  }
+                </div>
+              </div>
+            }
+
+            @if (w.items.length) {
+              <div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin:10px 0 6px;">Materials</div>
+              @for (item of w.items; track item.id) {
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
+                  <div>
+                    <span style="font-size:12.5px;font-weight:600;">{{ item.title }}</span>
+                    <span class="badge" style="margin-left:8px;">{{ item.type }}</span>
+                    @if (item.status === 'DRAFT') { <span class="badge b-ink" style="margin-left:4px;">DRAFT</span> }
+                  </div>
+                  <div style="display:flex;gap:12px;font-size:12px;">
+                    @if (item.externalUrl) { <a [href]="item.externalUrl" target="_blank" rel="noopener noreferrer" class="btn-link">Open ›</a> }
+                    @if (item.fileName) { <button type="button" class="btn-link" (click)="downloadItem(item)">Download</button> }
+                    @if (canManage()) {
+                      <button type="button" class="btn-link" (click)="publishItem(item)">{{ item.status === 'PUBLISHED' ? 'Unpublish' : 'Publish' }}</button>
+                      <button type="button" class="btn-link" style="color:var(--danger);" (click)="deleteItem(item)">Delete</button>
+                    }
+                  </div>
+                </div>
+              }
+            }
+
+            @if (w.assignments.length) {
+              <div style="font-size:12px;font-weight:700;color:var(--ink-faint);margin:10px 0 6px;">Assignments</div>
+              @for (a of w.assignments; track a.id) {
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
+                  <span style="font-size:12.5px;font-weight:600;">{{ a.title }}</span>
+                  <div style="display:flex;align-items:center;gap:10px;font-size:12px;">
+                    <span class="cell-faint">Due {{ a.dueDate | date: 'dd MMM, HH:mm' }}</span>
+                    <span class="badge" [class.b-success]="a.status === 'OPEN'" [class.b-ink]="a.status === 'CLOSED' || a.status === 'DRAFT'">{{ a.status }}</span>
+                    @if (isStudent()) {
+                      <a class="btn-link" routerLink="/app/my-assignments">View ›</a>
+                    } @else {
+                      <a class="btn-link" routerLink="/app/grading" [queryParams]="{ assignment: a.id }">Grade ›</a>
+                    }
+                  </div>
+                </div>
+              }
+            }
+
+            @if (!w.sessions.length && !w.items.length && !w.assignments.length) {
+              <p style="color:var(--ink-faint);font-size:12.5px;margin:0;">Nothing has been added to this week yet.</p>
+            }
+          </div>
+        }
+      </div>
+    }
+  } @empty {
+    <div class="card"><p style="color:var(--ink-faint);font-size:13px;margin:0;">This course has no weeks yet.</p></div>
+  }
+
+  @if (unscheduledAssignments().length) {
+    <div style="font-size:13px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;margin:18px 0 8px;">Unscheduled Assignments</div>
+    <div class="card">
+      @for (a of unscheduledAssignments(); track a.id) {
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);">
+          <span style="font-size:12.5px;font-weight:600;">{{ a.title }}</span>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px;">
+            <span class="cell-faint">Due {{ a.dueDate | date: 'dd MMM, HH:mm' }}</span>
+            <span class="badge" [class.b-success]="a.status === 'OPEN'" [class.b-ink]="a.status === 'CLOSED' || a.status === 'DRAFT'">{{ a.status }}</span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+}
+
+@if (toast(); as t) {
+  <div class="toast" [class.error]="t.error">{{ t.message }}</div>
+}

@@ -62,11 +62,11 @@ export class CreateCourseComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.academicStructureService.listCourseCatalog().subscribe({ next: (v) => this.catalog.set(v) });
-    this.academicStructureService.listDegreePrograms().subscribe({
-      next: (v) => {
-        this.degreePrograms.set(v);
-        if (v.length) this.form.patchValue({ degreeProgramId: v[0].id });
+    this.academicStructureService.listCourseCatalog({ size: 200 }).subscribe({ next: (p) => this.catalog.set(p.content) });
+    this.academicStructureService.listDegreePrograms({ size: 200 }).subscribe({
+      next: (p) => {
+        this.degreePrograms.set(p.content);
+        if (p.content.length) this.form.patchValue({ degreeProgramId: p.content[0].id });
         this.loadingOptions.set(false);
       },
       error: () => this.loadingOptions.set(false),
@@ -97,6 +97,7 @@ export class CreateCourseComponent implements OnInit {
     }
     this.error.set(null);
     this.submitting.set(true);
+    this.form.disable();
     const { courseCode, courseName, defaultCredits, degreeProgramId, beginDate, yearOfStudy, capacity } =
       this.form.getRawValue();
     const status: CourseStatus = publish ? 'PUBLISHED' : 'DRAFT';
@@ -118,6 +119,7 @@ export class CreateCourseComponent implements OnInit {
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.form.enable();
             this.error.set(err.error?.message ?? 'Could not create this course.');
           },
         });
@@ -144,6 +146,7 @@ export class CreateCourseComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.form.enable();
           this.error.set(err.error?.message ?? 'Could not create this subject.');
         },
       });

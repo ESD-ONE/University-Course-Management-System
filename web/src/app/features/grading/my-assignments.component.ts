@@ -42,8 +42,11 @@ export class MyAssignmentsComponent {
 
   load(): void {
     this.loading.set(true);
-    this.grading.list().subscribe({
-      next: (v) => {
+    // A student's own assignments across their courses — a bounded set, so request a
+    // page large enough to cover it in one go rather than the default page size.
+    this.grading.list({ size: 100 }).subscribe({
+      next: (p) => {
+        const v = p.content;
         this.assignments.set(v);
         if (!this.selectedId() && v.length) {
           const next = v.find((a) => a.status === 'OPEN' && a.mySubmissionStatus === 'NOT_SUBMITTED') ?? v[0];

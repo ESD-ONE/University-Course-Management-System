@@ -71,14 +71,19 @@ export class ProfileComponent {
     if (this.nameForm.invalid) return;
     this.nameSaving.set(true);
     this.nameSaved.set(false);
+    this.nameForm.disable();
     this.userService.updateOwnName(this.nameForm.getRawValue().name!).subscribe({
       next: (user) => {
         this.auth.setCurrentUser(user);
         this.nameSaving.set(false);
+        this.nameForm.enable();
         this.nameSaved.set(true);
         setTimeout(() => this.nameSaved.set(false), 2500);
       },
-      error: () => this.nameSaving.set(false),
+      error: () => {
+        this.nameSaving.set(false);
+        this.nameForm.enable();
+      },
     });
   }
 
@@ -95,15 +100,18 @@ export class ProfileComponent {
     }
     this.passwordSaving.set(true);
     this.passwordSaved.set(false);
+    this.passwordForm.disable();
     this.userService.updateOwnPassword(currentPassword!, newPassword!).subscribe({
       next: () => {
         this.passwordSaving.set(false);
+        this.passwordForm.enable();
         this.passwordSaved.set(true);
         this.passwordForm.reset();
         setTimeout(() => this.passwordSaved.set(false), 2500);
       },
       error: (err: HttpErrorResponse) => {
         this.passwordSaving.set(false);
+        this.passwordForm.enable();
         this.passwordError.set(err.error?.message ?? 'Could not update your password. Please try again.');
       },
     });

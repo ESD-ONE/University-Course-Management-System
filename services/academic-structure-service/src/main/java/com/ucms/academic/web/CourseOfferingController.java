@@ -2,6 +2,8 @@ package com.ucms.academic.web;
 
 import com.ucms.academic.service.CourseOfferingQueryService;
 import com.ucms.academic.web.dto.CourseOfferingResponse;
+import com.ucms.academic.web.dto.LearningTreeResponse;
+import com.ucms.academic.web.dto.OfferingAccessResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +34,22 @@ public class CourseOfferingController {
                                                 @RequestParam(name = "mine", defaultValue = "false") boolean mine,
                                                 @AuthenticationPrincipal UUID currentUserId) {
         return queryService.search(academicYearId, status, mine ? currentUserId : lecturerId, degreeProgramId, ids);
+    }
+
+    @GetMapping("/learning-tree")
+    public LearningTreeResponse learningTree(@AuthenticationPrincipal UUID currentUserId) {
+        return queryService.learningTree(currentUserId);
+    }
+
+    @GetMapping("/accessible")
+    public List<CourseOfferingResponse> accessible(@AuthenticationPrincipal UUID currentUserId) {
+        return queryService.accessible(currentUserId);
+    }
+
+    @GetMapping("/{offeringId}/access")
+    public OfferingAccessResponse access(@PathVariable("offeringId") UUID offeringId,
+                                         @AuthenticationPrincipal UUID currentUserId) {
+        return queryService.access(offeringId, currentUserId);
     }
 
     @GetMapping("/{offeringId}")

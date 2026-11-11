@@ -10,7 +10,7 @@
 <app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
   <div class="filter-field">
     <label for="degSearch">Degree</label>
-    <app-search-input inputId="degSearch" placeholder="Search name or code…" [value]="searchFilter()" (valueChange)="searchFilter.set($event)"></app-search-input>
+    <app-search-input inputId="degSearch" placeholder="Search name or code…" [value]="searchFilter()" (valueChange)="onSearchInput($event)"></app-search-input>
   </div>
   @if (auth.currentUser()?.role === 'ADMIN') {
     <div class="filter-field">
@@ -22,7 +22,7 @@
   <div class="filter-field">
     <label for="degStatus">Status</label>
     <app-searchable-select inputId="degStatus" placeholder="All Statuses" [options]="statusFilterOptions"
-      [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+      [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)"></app-searchable-select>
   </div>
 </app-filter-bar>
 
@@ -53,29 +53,40 @@
 } @else {
   <div class="grid g2">
     <div>
-      @for (p of filteredPrograms(); track p.id) {
-        <div class="list-card" [class.selected]="p.id === selectedProgram()?.id" (click)="selectProgram(p.id)">
-          <b style="font-size:14px;">{{ p.name }}</b>
-          <div style="font-size:11.5px;color:var(--accent);font-weight:600;margin-top:4px;">{{ departmentName(p.departmentId) }}</div>
-          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">{{ p.durationYears }} Years (default) · {{ p.totalCredits }} Credits (default)</div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-            <span class="badge" [class.b-success]="p.status === 'ACTIVE'" [class.b-ink]="p.status === 'INACTIVE'">{{ p.status }}</span>
-            <app-row-menu [label]="'Actions for ' + p.name">
-              <button type="button" class="row-menu-item" (click)="openEditProgramDialog(p)">Edit degree</button>
-              <div class="row-menu-sep"></div>
-              <button type="button" class="row-menu-item danger" (click)="deleteProgram(p)">Delete degree</button>
-            </app-row-menu>
+      <div class="scroll-list">
+        @for (p of programs(); track p.id) {
+          <div class="list-card" [class.selected]="p.id === selectedProgram()?.id" (click)="selectProgram(p)">
+            <b style="font-size:14px;">{{ p.name }}</b>
+            <div style="font-size:11.5px;color:var(--accent);font-weight:600;margin-top:4px;">{{ departmentName(p.departmentId) }}</div>
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;">{{ p.durationYears }} Years (default) · {{ p.totalCredits }} Credits (default)</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <span class="badge" [class.b-success]="p.status === 'ACTIVE'" [class.b-ink]="p.status === 'INACTIVE'">{{ p.status }}</span>
+              <app-row-menu [label]="'Actions for ' + p.name">
+                <button type="button" class="row-menu-item" (click)="openEditProgramDialog(p)">Edit degree</button>
+                <div class="row-menu-sep"></div>
+                <button type="button" class="row-menu-item danger" (click)="deleteProgram(p)">Delete degree</button>
+              </app-row-menu>
+            </div>
           </div>
-        </div>
-      } @empty {
-        <p style="color:var(--ink-faint);font-size:13px;">
-          @if (activeFilterCount()) {
-            No degrees match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
-          } @else {
-            No reference degrees yet.
-          }
-        </p>
-      }
+        } @empty {
+          <p style="color:var(--ink-faint);font-size:13px;">
+            @if (activeFilterCount()) {
+              No degrees match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+            } @else {
+              No reference degrees yet.
+            }
+          </p>
+        }
+      </div>
+      <app-pager
+        [page]="page()"
+        [totalPages]="totalPages()"
+        [totalElements]="totalElements()"
+        [pageSize]="pageSize()"
+        itemLabel="degrees"
+        (pageChange)="goToPage($event)"
+        (pageSizeChange)="onPageSizeChange($event)"
+      />
     </div>
 
     @if (selectedProgram(); as p) {
@@ -93,6 +104,7 @@
           @if (curriculumLoading()) {
             <p style="color:var(--ink-faint);font-size:13px;">Loading curriculum…</p>
           } @else if (curriculum().length) {
+            <div class="table-scroll">
             <table>
               <thead><tr><th>Year</th><th>Semester</th><th>Catalog Course</th><th>Type</th><th style="text-align:right;">Credits</th></tr></thead>
               <tbody>
@@ -107,6 +119,7 @@
                 }
               </tbody>
             </table>
+            </div>
           } @else {
             <p style="color:var(--ink-faint);font-size:13px;">No curriculum defined yet. Use "+ Add to Curriculum" to add catalog courses.</p>
           }

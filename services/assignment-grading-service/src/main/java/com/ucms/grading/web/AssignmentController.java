@@ -11,12 +11,17 @@ import com.ucms.grading.web.dto.Dtos.BulkGradeRequest;
 import com.ucms.grading.web.dto.Dtos.CreateAssignmentRequest;
 import com.ucms.grading.web.dto.Dtos.GradeRequest;
 import com.ucms.grading.web.dto.Dtos.GradeResponse;
+import com.ucms.grading.web.dto.Dtos.GradesVisibilityRequest;
 import com.ucms.grading.web.dto.Dtos.MySubmissionResponse;
 import com.ucms.grading.web.dto.Dtos.StatusRequest;
 import com.ucms.grading.web.dto.Dtos.SubmissionRow;
 import com.ucms.grading.web.dto.Dtos.UpdateAssignmentRequest;
 import jakarta.validation.Valid;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -40,6 +45,9 @@ import java.util.UUID;
 @RestController
 public class AssignmentController {
 
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final AssignmentService assignments;
     private final SubmissionService submissions;
     private final GradingService grading;
@@ -51,9 +59,12 @@ public class AssignmentController {
     }
 
     @GetMapping("/assignments")
-    public List<AssignmentResponse> list(@RequestParam(name = "offeringId", required = false) UUID offeringId,
-                                         @RequestParam(name = "status", required = false) Assignment.Status status) {
-        return assignments.list(offeringId, status, Caller.current());
+    public Page<AssignmentResponse> list(@RequestParam(name = "offeringId", required = false) UUID offeringId,
+                                          @RequestParam(name = "status", required = false) Assignment.Status status,
+                                          @RequestParam(name = "page", defaultValue = "0") int page,
+                                          @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), Sort.by("dueDate").descending());
+        return assignments.list(offeringId, status, pageable, Caller.current());
     }
 
     @GetMapping("/assignments/{id}")
@@ -74,6 +85,13 @@ public class AssignmentController {
     @PatchMapping("/assignments/{id}/status")
     public AssignmentResponse changeStatus(@PathVariable("id") UUID id, @Valid @RequestBody StatusRequest request) {
         return assignments.changeStatus(id, request.status(), Caller.current());
+    }
+
+    /** Hides or reveals this assignment's marks/feedback from its own students — lets a
+     * lecturer finish grading a whole batch before anyone sees a result. */
+    @PatchMapping("/assignments/{id}/grades-visibility")
+    public AssignmentResponse setGradesVisibility(@PathVariable("id") UUID id, @Valid @RequestBody GradesVisibilityRequest request) {
+        return assignments.setGradesHidden(id, request.hidden(), Caller.current());
     }
 
     @DeleteMapping("/assignments/{id}")

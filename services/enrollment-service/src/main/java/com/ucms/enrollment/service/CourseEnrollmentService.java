@@ -11,6 +11,7 @@ import com.ucms.enrollment.domain.TargetType;
 import com.ucms.enrollment.exception.ConflictException;
 import com.ucms.enrollment.messaging.EventPublisher;
 import com.ucms.enrollment.repository.CourseEnrollmentRepository;
+import com.ucms.enrollment.repository.CourseEnrollmentSpecifications;
 import com.ucms.enrollment.repository.RegistrationLogRepository;
 import com.ucms.enrollment.repository.StudentProgramEnrollmentRepository;
 import com.ucms.enrollment.security.Caller;
@@ -18,9 +19,15 @@ import com.ucms.enrollment.web.dto.Dtos.CatalogEntryResponse;
 import com.ucms.enrollment.web.dto.Dtos.CourseEnrollmentResponse;
 import com.ucms.enrollment.web.dto.Dtos.EnrollRequest;
 import com.ucms.enrollment.web.dto.Dtos.EnrollmentCheckResponse;
+import com.ucms.enrollment.web.dto.Dtos.LearningOfferingNode;
+import com.ucms.enrollment.web.dto.Dtos.LearningProgramNode;
+import com.ucms.enrollment.web.dto.Dtos.LearningTreeResponse;
+import com.ucms.enrollment.web.dto.Dtos.LearningYearNode;
 import com.ucms.enrollment.web.dto.Dtos.MyStudentResponse;
 import com.ucms.enrollment.web.dto.Dtos.SeatCountResponse;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +36,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -180,11 +188,68 @@ public class CourseEnrollmentService {
         throw new AccessDeniedException("You can only register students into courses you teach");
     }
 
+    /** The Learning Hub tree for a student: every academic year / degree program that
+     * leads to at least one course they're enrolled in or waitlisted for — never a
+     * program they're merely registered in with no course here, by design (see
+     * docs/LEARNING_HUB_COURSE_CONTENT_ARCHITECTURE.md section 4.3). */
     @Transactional(readOnly = true)
+    public LearningTreeResponse learningTree(Caller caller) {
+        List<CourseEnrollment> rows = repository.findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(caller.id()).stream()
+                .filter(e -> e.getStatus() == CourseEnrollmentStatus.ENROLLED || e.getStatus() == CourseEnrollmentStatus.WAITLISTED
+                        || e.getStatus() == CourseEnrollmentStatus.COMPLETED)
+                .toList();
+        if (rows.isEmpty()) return new LearningTreeResponse(List.of());
+        List<AcademicClient.Offering> offerings = academic.searchOfferings(null, null, null,
+                rows.stream().map(CourseEnrollment::getCourseOfferingId).distinct().toList());
+        Map<UUID, String> myStatusByOffering = rows.stream()
+                .collect(Collectors.toMap(CourseEnrollment::getCourseOfferingId, e -> e.getStatus().name(), (x, y) -> x));
+
+        Map<UUID, List<AcademicClient.Offering>> byYear = offerings.stream()
+                .collect(Collectors.groupingBy(AcademicClient.Offering::academicYearId, LinkedHashMap::new, Collectors.toList()));
+        List<LearningYearNode> years = new ArrayList<>();
+        for (var yearEntry : byYear.entrySet()) {
+            List<AcademicClient.Offering> inYear = yearEntry.getValue();
+            AcademicClient.Offering anyInYear = inYear.get(0);
+            Map<UUID, List<AcademicClient.Offering>> byProgram = inYear.stream()
+                    .collect(Collectors.groupingBy(AcademicClient.Offering::degreeProgramId, LinkedHashMap::new, Collectors.toList()));
+            List<LearningProgramNode> programs = byProgram.values().stream()
+                    .map(list -> {
+                        AcademicClient.Offering p = list.get(0);
+                        List<LearningOfferingNode> nodes = list.stream()
+                                .sorted(Comparator.comparing(AcademicClient.Offering::code))
+                                .map(o -> new LearningOfferingNode(o.id(), o.code(), o.name(), o.credits(), o.requirementType(),
+                                        o.yearOfStudy(), o.status(), o.lecturerId(), myStatusByOffering.get(o.id())))
+                                .toList();
+                        return new LearningProgramNode(p.degreeProgramId(), p.degreeProgramCode(), p.degreeProgramName(), nodes);
+                    })
+                    .sorted(Comparator.comparing(LearningProgramNode::degreeProgramName))
+                    .toList();
+            years.add(new LearningYearNode(anyInYear.academicYearId(), anyInYear.academicYearName(), anyInYear.academicYearStatus(), programs));
+        }
+        years.sort(Comparator.comparing(LearningYearNode::academicYearName).reversed());
+        return new LearningTreeResponse(years);
+    }
+
+    /** Not read-only: an enrollment whose offering no longer exists (the course was
+     * deleted from its degree program) is stale and gets quietly cleaned up here rather
+     * than shown as a blank-fielded "ghost" row — self-healing on the one read path that
+     * joins from the student's own rows outward, instead of from live offerings inward
+     * like learningTree()/myStudents() already do. */
+    @Transactional
     public List<CourseEnrollmentResponse> mine(Caller caller) {
         List<CourseEnrollment> rows = repository.findByStudentIdAndDeletedAtIsNullOrderByCreatedAtDesc(caller.id());
         if (rows.isEmpty()) return List.of();
         Map<UUID, AcademicClient.Offering> offerings = offeringsById(rows.stream().map(CourseEnrollment::getCourseOfferingId).toList());
+        List<CourseEnrollment> stale = rows.stream().filter(e -> !offerings.containsKey(e.getCourseOfferingId())).toList();
+        if (!stale.isEmpty()) {
+            OffsetDateTime now = OffsetDateTime.now();
+            for (CourseEnrollment e : stale) {
+                e.setDeletedAt(now);
+                e.setDeletedBy(caller.id());
+            }
+            repository.saveAll(stale);
+            rows = rows.stream().filter(e -> !stale.contains(e)).toList();
+        }
         Map<UUID, IdentityClient.User> lecturers = identity.lookup(offerings.values().stream()
                 .map(AcademicClient.Offering::lecturerId).filter(java.util.Objects::nonNull).toList());
         return rows.stream().map(e -> {
@@ -194,20 +259,22 @@ public class CourseEnrollmentService {
         }).toList();
     }
 
-    /** The course roster: the offering's lecturer or an admin. */
+    /** The course roster: the offering's lecturer or an admin. status is an optional
+     * filter, pushed to the query rather than fetched-then-filtered. */
     @Transactional(readOnly = true)
-    public List<CourseEnrollmentResponse> roster(UUID offeringId, Caller caller) {
+    public Page<CourseEnrollmentResponse> roster(UUID offeringId, CourseEnrollmentStatus status, Pageable pageable, Caller caller) {
         AcademicClient.Offering offering = academic.getOffering(offeringId);
         if (!caller.isAdmin() && !caller.id().equals(offering.lecturerId())) {
             throw new AccessDeniedException("Not your course");
         }
-        List<CourseEnrollment> rows = repository.findByCourseOfferingIdAndDeletedAtIsNullOrderByCreatedAtAsc(offeringId);
-        if (rows.isEmpty()) return List.of();
+        Page<CourseEnrollment> page = repository.findAll(CourseEnrollmentSpecifications.roster(offeringId, status), pageable);
+        if (page.isEmpty()) return page.map(e -> null);
+        List<CourseEnrollment> rows = page.getContent();
         List<UUID> studentIds = rows.stream().map(CourseEnrollment::getStudentId).toList();
         Map<UUID, IdentityClient.User> students = identity.lookup(studentIds);
         Map<UUID, StudentProgramEnrollment> programs = activePrograms(studentIds);
         Map<UUID, String> programNames = programNames(programs.values());
-        return rows.stream().map(e -> {
+        return page.map(e -> {
             StudentProgramEnrollment p = programs.get(e.getStudentId());
             String requirement = p != null && p.getDegreeProgramId().equals(offering.degreeProgramId())
                     ? (offering.requirementType() == null ? "ELECTIVE" : offering.requirementType())
@@ -218,7 +285,7 @@ public class CourseEnrollmentService {
                     base.studentYearOfStudy(), base.offeringId(), base.courseCode(), base.courseName(), base.credits(),
                     requirement, base.academicYearName(), base.semesterName(), base.lecturerId(), base.lecturerName(),
                     base.enrolledOn(), base.status());
-        }).toList();
+        });
     }
 
     /** Every student across every offering the calling lecturer teaches (lecturer
@@ -274,12 +341,19 @@ public class CourseEnrollmentService {
         return offeringIds.stream().map(id -> new SeatCountResponse(id, counts.get(id)[0], counts.get(id)[1])).toList();
     }
 
-    /** Browse Courses: every published offering (optionally one academic year), with live
-     *  seat counts and the caller's own status in each. */
+    /** Browse Courses: every published offering in the caller's own degree program
+     *  (optionally one academic year), with live seat counts and the caller's own status
+     *  in each. A student not currently registered in a program has nothing to browse —
+     *  never every offering university-wide. */
     @Transactional(readOnly = true)
     public List<CatalogEntryResponse> catalog(UUID academicYearId, Caller caller) {
+        StudentProgramEnrollment myProgram = programRepository
+                .findFirstByStudentIdAndStatusAndDeletedAtIsNull(caller.id(), ProgramEnrollmentStatus.ACTIVE)
+                .orElse(null);
+        if (myProgram == null) return List.of();
         List<AcademicClient.Offering> offerings = academic.searchOfferings("PUBLISHED", academicYearId, null, null).stream()
                 .filter(o -> !"ARCHIVED".equals(o.academicYearStatus()))
+                .filter(o -> myProgram.getDegreeProgramId().equals(o.degreeProgramId()))
                 .toList();
         if (offerings.isEmpty()) return List.of();
         Map<UUID, SeatCountResponse> seatCounts = seats(offerings.stream().map(AcademicClient.Offering::id).toList()).stream()
