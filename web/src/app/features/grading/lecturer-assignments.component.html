@@ -15,12 +15,12 @@
   <div class="filter-field">
     <label for="laCourse">Course</label>
     <app-searchable-select inputId="laCourse" placeholder="All Courses" [options]="courseFilterOptions()"
-      [ngModel]="courseFilter()" (ngModelChange)="courseFilter.set($event)"></app-searchable-select>
+      [ngModel]="courseFilter()" (ngModelChange)="onCourseFilterChange($event)"></app-searchable-select>
   </div>
   <div class="filter-field">
     <label for="laStatus">Status</label>
     <app-searchable-select inputId="laStatus" placeholder="All Statuses" [options]="statusFilterOptions"
-      [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($any($event))"></app-searchable-select>
+      [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($any($event))"></app-searchable-select>
   </div>
 </app-filter-bar>
 
@@ -29,8 +29,9 @@
 } @else if (loadError()) {
   <p style="color:var(--danger);">{{ loadError() }}</p>
 } @else {
-  <div class="card">
-    <table>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
       <thead><tr><th>Title</th><th>Course</th><th>Due</th><th>Max Marks</th><th>Submissions</th><th>Status</th><th></th></tr></thead>
       <tbody>
         @for (a of filtered(); track a.id) {
@@ -73,8 +74,11 @@
           </td></tr>
         }
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
+  <app-pager [page]="page()" [totalPages]="totalPages()" [totalElements]="totalElements()" [pageSize]="pageSize()"
+    itemLabel="assignment" (pageChange)="goToPage($event)" (pageSizeChange)="onPageSizeChange($event)"></app-pager>
 }
 
 @if (editing(); as e) {

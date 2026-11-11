@@ -93,6 +93,7 @@ export class ReportsComponent {
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
     this.submitting.set(true);
+    this.form.disable();
     this.analytics
       .createSchedule({
         reportId: v.reportId ?? '',
@@ -105,12 +106,14 @@ export class ReportsComponent {
       .subscribe({
         next: (s) => {
           this.submitting.set(false);
+          this.form.enable();
           this.scheduling.set(false);
           this.toaster.show(`${s.reportName} scheduled — ${s.frequencyLabel}.`);
           this.load();
         },
         error: (err) => {
           this.submitting.set(false);
+          this.form.enable();
           this.dialogError.set(errorMessage(err, 'Could not create this schedule.'));
         },
       });

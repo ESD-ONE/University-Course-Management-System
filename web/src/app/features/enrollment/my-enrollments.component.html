@@ -18,6 +18,7 @@
 } @else {
   <div class="card">
     @if (rows().length) {
+      <div class="table-scroll">
       <table>
         <thead><tr><th>Code</th><th>Course Name</th><th>Lecturer</th><th>Requirement</th><th>Credits</th><th>Term</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -37,6 +38,7 @@
           }
         </tbody>
       </table>
+      </div>
       <p style="font-size:12px;color:var(--ink-faint);margin:14px 0 0;">{{ enrolledCredits() }} credits enrolled this term.</p>
     } @else {
       <p style="color:var(--ink-faint);font-size:13px;">You're not enrolled in any courses. <a style="color:var(--accent);" routerLink="/app/browse">Browse courses ›</a></p>

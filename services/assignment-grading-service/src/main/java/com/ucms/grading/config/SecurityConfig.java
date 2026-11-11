@@ -36,11 +36,19 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers(HttpMethod.POST, "/assignments", "/assignments/*/brief").hasAnyRole("ADMIN", "LECTURER")
                 .requestMatchers(HttpMethod.PUT, "/assignments/*", "/assignments/*/grades", "/submissions/*/grade").hasAnyRole("ADMIN", "LECTURER")
-                .requestMatchers(HttpMethod.PATCH, "/assignments/*/status").hasAnyRole("ADMIN", "LECTURER")
-                .requestMatchers(HttpMethod.DELETE, "/assignments/*").hasAnyRole("ADMIN", "LECTURER")
-                .requestMatchers(HttpMethod.GET, "/assignments/*/submissions").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.PATCH, "/assignments/*/status", "/assignments/*/grades-visibility",
+                        "/assignments/*/grades/release", "/content-items/*/status").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.DELETE, "/assignments/*", "/weeks/*", "/sessions/*", "/content-items/*").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.GET, "/assignments/*/submissions", "/assignments/*/analytics").hasAnyRole("ADMIN", "LECTURER")
                 .requestMatchers(HttpMethod.GET, "/grades/offerings/**").hasAnyRole("ADMIN", "LECTURER")
                 .requestMatchers(HttpMethod.POST, "/assignments/*/submissions").hasRole("STUDENT")
+                // Course delivery (weeks, lecture sessions, materials) — ownership/scope
+                // checked in DeliveryAccess; coarse-gated to staff here, same pattern as
+                // assignments above.
+                .requestMatchers(HttpMethod.POST, "/offerings/*/weeks", "/weeks/*/sessions",
+                        "/content-items/link", "/content-items/file").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.PUT, "/weeks/*", "/sessions/*", "/content-items/*").hasAnyRole("ADMIN", "LECTURER")
+                .requestMatchers(HttpMethod.GET, "/stats/offering-analytics").hasAnyRole("ADMIN", "LECTURER")
                 .requestMatchers("/stats/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

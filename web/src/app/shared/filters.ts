@@ -42,6 +42,14 @@ export function statusOptions(statuses: string[]): SearchableSelectOption[] {
 
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** One page's worth of an already-filtered, in-memory array — the client-side
+ * equivalent of a server page, for lists small enough (and already scoped enough) not
+ * to need a round trip per page, e.g. the signed-in user's own Learning Hub tree. */
+export function paginate<T>(items: T[], page: number, pageSize: number): T[] {
+  const start = page * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
 export function showingSummary(shown: number, total: number, noun: string): string {
   return shown === total ? `Showing all ${plural(total, noun)}` : `Showing ${shown} of ${plural(total, noun)}`;
 }

@@ -43,6 +43,8 @@ export class RolesPermissionsComponent {
   readonly newRoleName = signal('');
   readonly newRoleKind = signal<RoleKind>('LECTURER');
   readonly newRoleError = signal<string | null>(null);
+  readonly creatingRole = signal(false);
+  readonly assigning = signal(false);
 
   readonly userQuery = signal('');
   readonly users = signal<UserResponse[]>([]);
@@ -62,7 +64,7 @@ export class RolesPermissionsComponent {
 
   constructor() {
     this.load();
-    this.referenceData.listDepartments().subscribe({ next: (v) => this.departments.set(v.filter((d) => d.status === 'ACTIVE')) });
+    this.referenceData.listDepartments(undefined, { status: 'ACTIVE', size: 100 }).subscribe({ next: (p) => this.departments.set(p.content) });
     this.userSearch$
       .pipe(debounceTime(300), distinctUntilChanged(), switchMap((q) => this.userService.list({ q, size: 10 })))
       .subscribe({ next: (page) => this.users.set(page.content), error: () => this.users.set([]) });
@@ -125,15 +127,20 @@ export class RolesPermissionsComponent {
     const name = this.newRoleName().trim();
     if (!name) return;
     this.newRoleError.set(null);
+    this.creatingRole.set(true);
     this.rolesService.createRole(name, this.newRoleKind()).subscribe({
       next: (role) => {
+        this.creatingRole.set(false);
         this.newRoleOpen.set(false);
         this.newRoleName.set('');
         this.roles.update((rs) => [...rs, role]);
         this.selectedRoleId.set(role.id);
         this.toaster.show(`Role "${role.name}" created — grant it permissions below.`);
       },
-      error: (err) => this.newRoleError.set(errorMessage(err, 'Could not create this role.')),
+      error: (err) => {
+        this.creatingRole.set(false);
+        this.newRoleError.set(errorMessage(err, 'Could not create this role.'));
+      },
     });
   }
 
@@ -155,12 +162,17 @@ export class RolesPermissionsComponent {
       this.toaster.show('Choose a department for a department-scoped assignment.', true);
       return;
     }
+    this.assigning.set(true);
     this.rolesService.assign(user.id, this.assignRoleId(), this.assignScope(), scopeId).subscribe({
       next: () => {
+        this.assigning.set(false);
         this.toaster.show(`Assignment added for ${user.name} — applies at their next sign-in.`);
         this.selectUser(user);
       },
-      error: (err) => this.toaster.show(errorMessage(err, 'Could not add this assignment.'), true),
+      error: (err) => {
+        this.assigning.set(false);
+        this.toaster.show(errorMessage(err, 'Could not add this assignment.'), true);
+      },
     });
   }
 

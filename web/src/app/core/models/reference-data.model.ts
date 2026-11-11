@@ -1,5 +1,20 @@
 export type ReferenceStatus = 'ACTIVE' | 'INACTIVE';
 
+/** The filter/pagination params every reference-data list endpoint accepts. */
+export interface ReferenceListQuery {
+  status?: ReferenceStatus;
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
+/** Total/active/inactive for one tab, independent of its current page/filter. */
+export interface ReferenceCounts {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
 export interface FacultyResponse {
   id: string;
   name: string;

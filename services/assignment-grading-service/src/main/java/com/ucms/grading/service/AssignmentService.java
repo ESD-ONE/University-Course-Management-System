@@ -7,7 +7,10 @@ import com.ucms.grading.domain.Grade;
 import com.ucms.grading.domain.Submission;
 import com.ucms.grading.exception.ConflictException;
 import com.ucms.grading.messaging.EventPublisher;
+import com.ucms.grading.domain.CourseWeek;
 import com.ucms.grading.repository.AssignmentRepository;
+import com.ucms.grading.repository.CourseWeekRepository;
+import com.ucms.grading.repository.AssignmentSpecifications;
 import com.ucms.grading.repository.GradeRepository;
 import com.ucms.grading.repository.SubmissionRepository;
 import com.ucms.grading.security.Caller;
@@ -16,6 +19,9 @@ import com.ucms.grading.web.dto.Dtos.AssignmentResponse;
 import com.ucms.grading.web.dto.Dtos.CreateAssignmentRequest;
 import com.ucms.grading.web.dto.Dtos.UpdateAssignmentRequest;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,9 +48,11 @@ public class AssignmentService {
     private final EnrollmentClient enrollment;
     private final FileStorage storage;
     private final EventPublisher events;
+    private final CourseWeekRepository weeks;
 
     public AssignmentService(AssignmentRepository assignments, SubmissionRepository submissions, GradeRepository grades,
-                             AcademicClient academic, EnrollmentClient enrollment, FileStorage storage, EventPublisher events) {
+                             AcademicClient academic, EnrollmentClient enrollment, FileStorage storage, EventPublisher events,
+                             CourseWeekRepository weeks) {
         this.assignments = assignments;
         this.submissions = submissions;
         this.grades = grades;
@@ -52,6 +60,7 @@ public class AssignmentService {
         this.enrollment = enrollment;
         this.storage = storage;
         this.events = events;
+        this.weeks = weeks;
     }
 
     @Transactional
@@ -64,6 +73,8 @@ public class AssignmentService {
         a.setDescription(request.description());
         a.setDueDate(request.dueDate());
         a.setMaxMarks(request.maxMarks());
+        a.setWeekId(resolveWeekId(request.weekId(), offering.id()));
+        a.setWeightPercent(request.weightPercent());
         a.setStatus(Assignment.Status.DRAFT);
         a.setCreatedBy(caller.id());
         a.setUpdatedBy(caller.id());
@@ -82,8 +93,20 @@ public class AssignmentService {
         a.setDescription(request.description());
         a.setDueDate(request.dueDate());
         a.setMaxMarks(request.maxMarks());
+        a.setWeekId(resolveWeekId(request.weekId(), offering.id()));
+        a.setWeightPercent(request.weightPercent());
         a.setUpdatedBy(caller.id());
         return withCounts(List.of(assignments.save(a)), Map.of(offering.id(), offering), null).get(0);
+    }
+
+    private UUID resolveWeekId(UUID weekId, UUID offeringId) {
+        if (weekId == null) return null;
+        CourseWeek w = weeks.findByIdAndDeletedAtIsNull(weekId)
+                .orElseThrow(() -> new EntityNotFoundException("Week not found"));
+        if (!w.getCourseOfferingId().equals(offeringId)) {
+            throw new IllegalArgumentException("That week belongs to a different course.");
+        }
+        return weekId;
     }
 
     /** DRAFT → OPEN publishes it to enrolled students (grading.assignment-published).
@@ -110,6 +133,19 @@ public class AssignmentService {
             data.put("dueDate", a.getDueDate().toString());
             events.publish("grading.assignment-published", data);
         }
+        return withCounts(List.of(a), Map.of(offering.id(), offering), null).get(0);
+    }
+
+    /** Holding back marks/feedback from the student view while grading is in progress,
+     * then releasing them together — toggled independently of DRAFT/OPEN/CLOSED status. */
+    @Transactional
+    public AssignmentResponse setGradesHidden(UUID id, boolean hidden, Caller caller) {
+        Assignment a = find(id);
+        AcademicClient.Offering offering = academic.getOffering(a.getCourseOfferingId());
+        requireTeaches(offering, caller);
+        a.setGradesHidden(hidden);
+        a.setUpdatedBy(caller.id());
+        a = assignments.save(a);
         return withCounts(List.of(a), Map.of(offering.id(), offering), null).get(0);
     }
 
@@ -158,33 +194,40 @@ public class AssignmentService {
      * submission status.
      */
     @Transactional(readOnly = true)
-    public List<AssignmentResponse> list(UUID offeringId, Assignment.Status status, Caller caller) {
-        List<Assignment> rows;
+    public Page<AssignmentResponse> list(UUID offeringId, Assignment.Status status, Pageable pageable, Caller caller) {
+        Set<UUID> allowedOfferingIds;
         Map<UUID, AcademicClient.Offering> offerings;
+        boolean excludeDraft = false;
         if (caller.isStudent()) {
-            Set<UUID> enrolled = enrollment.myEnrollments(caller.token()).stream()
+            allowedOfferingIds = enrollment.myEnrollments(caller.token()).stream()
                     .filter(e -> "ENROLLED".equals(e.status()))
                     .map(EnrollmentClient.MyEnrollment::offeringId).collect(Collectors.toSet());
-            if (offeringId != null) enrolled.retainAll(Set.of(offeringId));
-            if (enrolled.isEmpty()) return List.of();
-            rows = assignments.findByCourseOfferingIdInAndDeletedAtIsNullOrderByDueDateDesc(enrolled).stream()
-                    .filter(a -> a.getStatus() != Assignment.Status.DRAFT).toList();
-            offerings = offeringsById(enrolled);
+            if (offeringId != null) allowedOfferingIds.retainAll(Set.of(offeringId));
+            excludeDraft = true;
+            offerings = offeringsById(allowedOfferingIds);
         } else if (caller.isLecturer()) {
             offerings = academic.searchOfferings(caller.id(), null).stream()
                     .collect(Collectors.toMap(AcademicClient.Offering::id, Function.identity(), (x, y) -> x));
-            Set<UUID> ids = offeringId == null ? offerings.keySet()
+            allowedOfferingIds = offeringId == null ? offerings.keySet()
                     : offerings.containsKey(offeringId) ? Set.of(offeringId) : Set.of();
-            if (ids.isEmpty()) return List.of();
-            rows = assignments.findByCourseOfferingIdInAndDeletedAtIsNullOrderByDueDateDesc(ids);
         } else {
-            rows = offeringId == null ? assignments.findByDeletedAtIsNullOrderByDueDateDesc()
-                    : assignments.findByCourseOfferingIdInAndDeletedAtIsNullOrderByDueDateDesc(Set.of(offeringId));
-            offerings = rows.isEmpty() ? Map.of()
-                    : offeringsById(rows.stream().map(Assignment::getCourseOfferingId).collect(Collectors.toSet()));
+            // Admin: no restriction beyond an explicit offeringId, if given.
+            allowedOfferingIds = offeringId == null ? null : Set.of(offeringId);
+            offerings = null; // resolved below, once we know which offerings the page actually returned
         }
-        if (status != null) rows = rows.stream().filter(a -> a.getStatus() == status).toList();
-        return withCounts(rows, offerings, caller.isStudent() ? caller.id() : null);
+
+        var spec = AssignmentSpecifications.filter(allowedOfferingIds, status);
+        if (excludeDraft) {
+            spec = spec.and((root, query, cb) -> cb.notEqual(root.get("status"), Assignment.Status.DRAFT));
+        }
+        Page<Assignment> page = assignments.findAll(spec, pageable);
+        if (page.isEmpty()) return page.map(a -> null);
+        if (offerings == null) {
+            offerings = offeringsById(page.getContent().stream().map(Assignment::getCourseOfferingId).collect(Collectors.toSet()));
+        }
+        Map<UUID, AcademicClient.Offering> resolvedOfferings = offerings;
+        List<AssignmentResponse> enriched = withCounts(page.getContent(), resolvedOfferings, caller.isStudent() ? caller.id() : null);
+        return new PageImpl<>(enriched, pageable, page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -254,10 +297,14 @@ public class AssignmentService {
     private static AssignmentResponse toResponse(Assignment a, AcademicClient.Offering o, long total, long submitted,
                                                  long graded, Submission mine, Grade myGrade) {
         String myStatus = mine == null ? "NOT_SUBMITTED" : mine.getStatus().name();
+        // Grades held back from the student view while grades_hidden is set — the
+        // submission/status is still visible, only the mark and feedback are withheld.
+        boolean withhold = a.isGradesHidden() && mine != null;
         return new AssignmentResponse(a.getId(), a.getCourseOfferingId(), o == null ? null : o.code(), o == null ? null : o.name(),
                 a.getTitle(), a.getDescription(), a.getDueDate(), a.getMaxMarks(), a.getStatus().name(), a.getBriefFileName(),
                 total, submitted, graded, myStatus, mine == null ? null : mine.getSubmittedAt(),
-                mine == null ? null : mine.getFileName(), myGrade == null ? null : myGrade.getMarks(),
-                myGrade == null ? null : myGrade.getFeedback());
+                mine == null ? null : mine.getFileName(), withhold ? null : (myGrade == null ? null : myGrade.getMarks()),
+                withhold ? null : (myGrade == null ? null : myGrade.getFeedback()), a.getWeekId(), a.getWeightPercent(),
+                a.isGradesHidden());
     }
 }

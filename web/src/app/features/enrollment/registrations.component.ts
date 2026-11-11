@@ -11,7 +11,13 @@ import { errorCode, errorMessage, initials, Toaster } from '../../shared/ui';
 import { SearchableSelectComponent, SearchableSelectOption } from '../../shared/searchable-select.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { FilterBarComponent } from '../../shared/filter-bar.component';
-import { countActive, matchesText, showingSummary } from '../../shared/filters';
+import { PagerComponent } from '../../shared/pager.component';
+import { RowMenuComponent } from '../../shared/row-menu.component';
+import { countActive, matchesText, plural } from '../../shared/filters';
+
+/** A roster fetch bounded by a typical offering's whole capacity — enough to find one
+ * student's row without a dedicated by-student lookup endpoint. */
+const FULL_ROSTER_SIZE = 200;
 
 /**
  * Wireframe adminRegistrations: register a student into a degree program (admin only)
@@ -22,7 +28,7 @@ import { countActive, matchesText, showingSummary } from '../../shared/filters';
 @Component({
   selector: 'app-registrations',
   standalone: true,
-  imports: [CommonModule, FormsModule, SearchableSelectComponent, SearchInputComponent, FilterBarComponent],
+  imports: [CommonModule, FormsModule, SearchableSelectComponent, SearchInputComponent, FilterBarComponent, PagerComponent, RowMenuComponent],
   templateUrl: './registrations.component.html',
 })
 export class RegistrationsComponent {
@@ -103,26 +109,34 @@ export class RegistrationsComponent {
       : !!this.offeringId();
   });
 
+  /** Collapsed by default — the enrichment this endpoint does (cross-service name/label
+   * lookups) only runs once an admin actually asks to see it. */
+  readonly recentExpanded = signal(false);
+  private recentLoadedOnce = false;
+  readonly recentPageSize = signal(20);
   readonly recent = signal<RegistrationResponse[]>([]);
-  readonly recentLoading = signal(true);
+  readonly recentPage = signal(0);
+  readonly recentTotalElements = signal(0);
+  readonly recentTotalPages = signal(0);
+  readonly recentLoading = signal(false);
   readonly recentSearch = signal('');
-  readonly recentType = signal('');
+  readonly recentType = signal<'PROGRAM' | 'COURSE' | ''>('');
   readonly recentAction = signal('');
   readonly recentTypeOptions: SearchableSelectOption[] = [
     { value: 'PROGRAM', label: 'Program' },
     { value: 'COURSE', label: 'Course' },
   ];
   readonly recentActionOptions: SearchableSelectOption[] = Object.entries(REGISTRATION_ACTION_LABELS).map(([value, label]) => ({ value, label }));
+  /** Server already applies targetType/action; free-text search can't reach the
+   * cross-service names/labels server-side, so it narrows within the loaded page only. */
   readonly filteredRecent = computed(() =>
-    this.recent().filter(
-      (r) =>
-        matchesText(this.recentSearch(), r.studentName, r.studentNumber, r.targetLabel, r.actorName) &&
-        (!this.recentType() || r.targetType === this.recentType()) &&
-        (!this.recentAction() || r.action === this.recentAction()),
-    ),
+    this.recent().filter((r) => matchesText(this.recentSearch(), r.studentName, r.studentNumber, r.targetLabel, r.actorName)),
   );
   readonly recentFilterCount = computed(() => countActive(this.recentSearch().trim(), this.recentType(), this.recentAction()));
-  readonly recentSummary = computed(() => showingSummary(this.filteredRecent().length, this.recent().length, 'registration'));
+  readonly recentSummary = computed(() => {
+    const total = plural(this.recentTotalElements(), 'registration');
+    return this.recentType() || this.recentAction() ? `${total} match` : `${total} in total`;
+  });
   readonly submitting = signal(false);
   readonly formError = signal<string | null>(null);
   readonly waitlistOffer = signal(false);
@@ -153,18 +167,16 @@ export class RegistrationsComponent {
       },
     });
     if (this.isAdmin()) {
-      this.academic.listDegreePrograms().subscribe({
-        next: (v) => {
-          const active = v.filter((p) => p.status === 'ACTIVE');
-          this.programs.set(active);
-          if (active.length) this.programId.set(active[0].id);
+      this.academic.listDegreePrograms({ status: 'ACTIVE', size: 200 }).subscribe({
+        next: (p) => {
+          this.programs.set(p.content);
+          if (p.content.length) this.programId.set(p.content[0].id);
         },
       });
     }
     this.academic.listCourseOfferings({ mine: !this.isAdmin(), status: 'PUBLISHED' }).subscribe({
       next: (v) => this.offerings.set(v.filter((o) => o.academicYearStatus !== 'ARCHIVED')),
     });
-    this.loadRecent();
   }
 
   onStudentQuery(q: string): void {
@@ -201,28 +213,77 @@ export class RegistrationsComponent {
     this.recentSearch.set('');
     this.recentType.set('');
     this.recentAction.set('');
+    this.recentPage.set(0);
+    if (this.recentExpanded()) this.loadRecent();
+  }
+
+  /** Toggles the collapsible "Recent Registrations" panel — loaded lazily, the first
+   * time it's actually expanded, since the enrichment this endpoint does (cross-service
+   * name/label lookups) isn't worth running until someone asks to see it. */
+  toggleRecent(): void {
+    this.recentExpanded.update((v) => !v);
+    if (this.recentExpanded() && !this.recentLoadedOnce) {
+      this.recentLoadedOnce = true;
+      this.loadRecent();
+    }
+  }
+
+  onRecentTypeChange(value: 'PROGRAM' | 'COURSE' | ''): void {
+    this.recentType.set(value);
+    this.recentPage.set(0);
+    this.loadRecent();
+  }
+
+  onRecentActionChange(value: string): void {
+    this.recentAction.set(value);
+    this.recentPage.set(0);
+    this.loadRecent();
+  }
+
+  goToRecentPage(page: number): void {
+    this.recentPage.set(page);
+    this.loadRecent();
+  }
+
+  onRecentPageSizeChange(size: number): void {
+    this.recentPageSize.set(size);
+    this.recentPage.set(0);
+    this.loadRecent();
   }
 
   loadRecent(): void {
-    this.enrollment.registrations(50).subscribe({
-      next: (v) => {
-        this.recent.set(v);
-        this.recentLoading.set(false);
-      },
-      error: () => this.recentLoading.set(false),
-    });
+    this.recentLoading.set(true);
+    this.enrollment
+      .registrations({
+        targetType: this.recentType() || undefined,
+        action: this.recentAction() || undefined,
+        page: this.recentPage(),
+        size: this.recentPageSize(),
+      })
+      .subscribe({
+        next: (p) => {
+          this.recent.set(p.content);
+          this.recentPage.set(p.number);
+          this.recentTotalElements.set(p.totalElements);
+          this.recentTotalPages.set(p.totalPages);
+          this.recentLoading.set(false);
+        },
+        error: () => this.recentLoading.set(false),
+      });
   }
 
-  /** Re-read the picked student (e.g. their program changed after registering). */
-  private refreshSelectedStudent(): void {
-    const sel = this.selectedStudent();
-    if (!sel) return;
-    this.enrollment.searchStudents(sel.email || sel.name).subscribe({
-      next: (v) => {
-        this.students.set(v);
-        this.selectedStudent.set(v.find((s) => s.id === sel.id) ?? sel);
-      },
-    });
+  /** After a successful program registration: the student picked is now registered
+   * (the program tab blocks re-registering them), so clear step 1 and the year-of-study
+   * back to their defaults, ready for the next student — but keep the chosen program and
+   * intake year, since registering a whole cohort into the same program is the common
+   * case. */
+  private resetAfterProgramRegistration(): void {
+    this.studentId.set('');
+    this.selectedStudent.set(null);
+    this.studentQuery.set('');
+    this.yearOfStudy.set(1);
+    this.formError.set(null);
+    this.search$.next('');
   }
 
   registerProgram(): void {
@@ -240,8 +301,8 @@ export class RegistrationsComponent {
         next: (r) => {
           this.submitting.set(false);
           this.toaster.show(`${r.studentName} registered in ${r.degreeProgramName}.`);
-          this.refreshSelectedStudent();
-          this.loadRecent();
+          this.resetAfterProgramRegistration();
+          if (this.recentExpanded()) this.loadRecent();
         },
         error: (err) => {
           this.submitting.set(false);
@@ -264,7 +325,7 @@ export class RegistrationsComponent {
             e.status === 'WAITLISTED' ? `Added to the waitlist for ${e.courseCode}.` : `Registered in ${e.courseCode}.`,
           );
           this.offeringId.set('');
-          this.loadRecent();
+          if (this.recentExpanded()) this.loadRecent();
         },
         error: (err) => {
           this.submitting.set(false);
@@ -272,5 +333,69 @@ export class RegistrationsComponent {
           else this.formError.set(errorMessage(err, 'Could not register this student.'));
         },
       });
+  }
+
+  /** The "Recent Registrations" kebab's "Delete" action, confirmed through an in-app
+   * dialog (see confirmTarget/confirmDelete) rather than the browser's native confirm().
+   * A log row only tells us the student and the target (course offering / degree
+   * program), not the enrollment's own id, so deleting first looks up the student's
+   * current, still-active row for that target — ending it — before removing the log
+   * entry itself. If no active row is found (already dropped/withdrawn since this log
+   * entry was written), it skips straight to removing the log entry. */
+  readonly confirmTarget = signal<RegistrationResponse | null>(null);
+  readonly deleting = signal(false);
+
+  requestDelete(r: RegistrationResponse): void {
+    this.confirmTarget.set(r);
+  }
+
+  cancelDelete(): void {
+    if (this.deleting()) return;
+    this.confirmTarget.set(null);
+  }
+
+  confirmDelete(): void {
+    const r = this.confirmTarget();
+    if (!r || this.deleting()) return;
+    this.deleting.set(true);
+
+    const finish = (message: string, error = false) => {
+      this.deleting.set(false);
+      this.confirmTarget.set(null);
+      this.toaster.show(message, error);
+      this.loadRecent();
+    };
+    const deleteLogEntry = () => {
+      this.enrollment.deleteRegistration(r.id).subscribe({
+        next: () => finish(`Registration removed${r.studentName ? ' for ' + r.studentName : ''}.`),
+        error: (err) => finish(errorMessage(err, 'Could not delete this registration.'), true),
+      });
+    };
+
+    if (r.targetType === 'COURSE') {
+      this.enrollment.roster(r.targetId, { size: FULL_ROSTER_SIZE }).subscribe({
+        next: (page) => {
+          const row = page.content.find((x) => x.studentId === r.studentId && (x.status === 'ENROLLED' || x.status === 'WAITLISTED'));
+          if (!row) { deleteLogEntry(); return; }
+          this.enrollment.drop(row.id).subscribe({
+            next: deleteLogEntry,
+            error: (err) => finish(errorMessage(err, 'Could not unenroll this student.'), true),
+          });
+        },
+        error: (err) => finish(errorMessage(err, 'Could not look up this enrollment.'), true),
+      });
+    } else {
+      this.enrollment.programEnrollments(r.studentId).subscribe({
+        next: (list) => {
+          const row = list.find((x) => x.degreeProgramId === r.targetId && (x.status === 'ACTIVE' || x.status === 'DEFERRED'));
+          if (!row) { deleteLogEntry(); return; }
+          this.enrollment.updateProgramEnrollment(row.id, { status: 'WITHDRAWN' }).subscribe({
+            next: deleteLogEntry,
+            error: (err) => finish(errorMessage(err, 'Could not withdraw this student.'), true),
+          });
+        },
+        error: (err) => finish(errorMessage(err, 'Could not look up this registration.'), true),
+      });
+    }
   }
 }

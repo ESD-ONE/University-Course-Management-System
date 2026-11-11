@@ -101,6 +101,20 @@ public class NotificationService {
                     "Grade posted: " + s(data, "title"),
                     s(data, "courseCode") + " — you scored " + s(data, "marks") + " / " + s(data, "maxMarks") + ".",
                     "/app/grades");
+            case "content.item.published" -> {
+                UUID offeringId = uuid(data, "offeringId");
+                for (UUID studentId : enrollment.enrolledStudentIds(offeringId)) {
+                    deliver(studentId, eventId, type, Category.ASSIGNMENT, "New material: " + s(data, "title"),
+                            s(data, "courseCode") + " · " + s(data, "weekTitle"), "/app/learning/offerings/" + offeringId);
+                }
+            }
+            case "lecture.scheduled" -> {
+                UUID offeringId = uuid(data, "offeringId");
+                for (UUID studentId : enrollment.enrolledStudentIds(offeringId)) {
+                    deliver(studentId, eventId, type, Category.ASSIGNMENT, "Lecture scheduled: " + s(data, "title"),
+                            s(data, "courseCode") + " · " + s(data, "startsAt"), "/app/learning/offerings/" + offeringId);
+                }
+            }
             case "identity.user-created" -> deliver(uuid(data, "userId"), eventId, type, Category.SYSTEM,
                     "Welcome to UCMS", "Hi " + s(data, "name") + ", your account is ready.", "/app/dashboard");
             case "analytics.report-generated" -> emailReport(data);

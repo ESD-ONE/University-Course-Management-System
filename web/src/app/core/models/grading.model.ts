@@ -20,6 +20,10 @@ export interface AssignmentResponse {
   myFileName: string | null;
   myMarks: number | null;
   myFeedback: string | null;
+  weekId: string | null;
+  weightPercent: number | null;
+  /** While true, myMarks/myFeedback are withheld from the student view even if graded. */
+  gradesHidden: boolean;
 }
 
 export interface AssignmentRequest {
@@ -28,6 +32,8 @@ export interface AssignmentRequest {
   description: string | null;
   dueDate: string;
   maxMarks: number;
+  weekId?: string | null;
+  weightPercent?: number | null;
 }
 
 export interface SubmissionRow {
@@ -82,4 +88,52 @@ export interface GradeHistoryResponse {
   courses: CourseGradeRow[];
   gpa: number | null;
   creditsGraded: number;
+}
+
+export interface StudentScoreRow {
+  studentId: string;
+  studentName: string | null;
+  marks: number;
+  percentage: number;
+}
+
+export interface AssignmentAnalyticsResponse {
+  totalStudents: number;
+  submitted: number;
+  onTime: number;
+  late: number;
+  graded: number;
+  average: number | null;
+  median: number | null;
+  min: number | null;
+  max: number | null;
+  /** 10 buckets, 0-10% through 90-100%. */
+  histogram: number[];
+  topPerformers: StudentScoreRow[];
+  needsAttention: StudentScoreRow[];
+}
+
+export interface AssignmentTrendPoint {
+  assignmentId: string;
+  title: string;
+  dueDate: string;
+  classAverage: number | null;
+  submitted: number;
+  graded: number;
+  totalStudents: number;
+  weightPercent: number | null;
+}
+
+export interface AtRiskRow {
+  studentId: string;
+  studentName: string | null;
+  averagePercentage: number;
+  missingSubmissions: number;
+}
+
+export interface OfferingAnalyticsResponse {
+  assignments: AssignmentTrendPoint[];
+  weightedCourseAverage: number | null;
+  classAverage: number | null;
+  atRisk: AtRiskRow[];
 }

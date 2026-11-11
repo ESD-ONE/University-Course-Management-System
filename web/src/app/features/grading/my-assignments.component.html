@@ -15,18 +15,20 @@
 } @else {
   <div class="grid g2" style="align-items:start;grid-template-columns:minmax(260px,1fr) 2fr;">
     <div class="card" style="padding:8px;">
-      @for (a of assignments(); track a.id) {
-        <button class="list-card" style="display:block;width:100%;text-align:left;margin-bottom:6px;cursor:pointer;"
-          [style.border-color]="a.id === selectedId() ? 'var(--accent)' : null" (click)="selectedId.set(a.id); file.set(null)">
-          <div style="display:flex;justify-content:space-between;gap:8px;">
-            <b style="font-size:13px;">{{ a.title }}</b>
-            <span class="badge" [class.b-success]="a.mySubmissionStatus === 'GRADED'" [class.b-gold]="a.mySubmissionStatus === 'SUBMITTED'" [class.b-ink]="a.mySubmissionStatus === 'NOT_SUBMITTED'">
-              {{ a.mySubmissionStatus === 'GRADED' ? 'Graded' : a.mySubmissionStatus === 'SUBMITTED' ? 'Submitted' : 'To do' }}
-            </span>
-          </div>
-          <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">{{ a.courseCode }} · {{ a.dueDate | date: 'dd MMM, HH:mm' }}</div>
-        </button>
-      }
+      <div class="scroll-list">
+        @for (a of assignments(); track a.id) {
+          <button class="list-card" style="display:block;width:100%;text-align:left;margin-bottom:6px;cursor:pointer;"
+            [style.border-color]="a.id === selectedId() ? 'var(--accent)' : null" (click)="selectedId.set(a.id); file.set(null)">
+            <div style="display:flex;justify-content:space-between;gap:8px;">
+              <b style="font-size:13px;">{{ a.title }}</b>
+              <span class="badge" [class.b-success]="a.mySubmissionStatus === 'GRADED'" [class.b-gold]="a.mySubmissionStatus === 'SUBMITTED'" [class.b-ink]="a.mySubmissionStatus === 'NOT_SUBMITTED'">
+                {{ a.mySubmissionStatus === 'GRADED' ? 'Graded' : a.mySubmissionStatus === 'SUBMITTED' ? 'Submitted' : 'To do' }}
+              </span>
+            </div>
+            <div style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;">{{ a.courseCode }} · {{ a.dueDate | date: 'dd MMM, HH:mm' }}</div>
+          </button>
+        }
+      </div>
     </div>
 
     @if (selected(); as a) {
@@ -52,10 +54,14 @@
         <div class="card">
           <h3 style="margin:0 0 10px;font-size:14px;">Your Submission</h3>
           @if (a.mySubmissionStatus === 'GRADED') {
-            <div class="info-strip">
-              <b>{{ a.myMarks }} / {{ a.maxMarks }}</b> — graded.
-              @if (a.myFeedback) { <div style="margin-top:6px;">“{{ a.myFeedback }}”</div> }
-            </div>
+            @if (a.myMarks !== null) {
+              <div class="info-strip">
+                <b>{{ a.myMarks }} / {{ a.maxMarks }}</b> — graded.
+                @if (a.myFeedback) { <div style="margin-top:6px;">“{{ a.myFeedback }}”</div> }
+              </div>
+            } @else {
+              <div class="info-strip">Graded — your lecturer hasn't released the result yet.</div>
+            }
           }
           @if (a.myFileName) {
             <div style="font-size:12.5px;margin-bottom:12px;">Submitted <b>{{ a.myFileName }}</b> on {{ a.mySubmittedAt | date: 'dd MMM y, HH:mm' }}</div>
@@ -65,7 +71,7 @@
               <div style="font-size:22px;">⬆️</div>
               <b>{{ file()?.name ?? 'Choose a file to upload' }}</b>
               <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">Max 20MB</div>
-              <input type="file" style="display:none;" (change)="pick($event)" />
+              <input type="file" style="display:none;" [disabled]="uploading()" (change)="pick($event)" />
             </label>
             <button class="btn btn-primary btn-block" style="margin-top:14px;" [disabled]="!file() || uploading()" (click)="submit()">
               {{ uploading() ? 'Uploading…' : a.myFileName ? 'Replace Submission' : 'Submit Assignment' }}

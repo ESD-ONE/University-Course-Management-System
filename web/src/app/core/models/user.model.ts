@@ -12,6 +12,10 @@ export interface UserResponse {
   role: RoleKind;
   status: UserStatus;
   studentId: string | null;
+  /** The user's account role's own id/name — distinct from any custom role (e.g.
+   * "Program Head") they might separately hold through a scope assignment. */
+  roleId: string;
+  roleName: string;
 }
 
 /** Mirrors CreatedUserResponse — only POST /users returns this (never a later read). */
@@ -25,6 +29,9 @@ export interface CreateUserRequest {
   email: string;
   password?: string;
   role: RoleKind;
+  /** The specific role to create the account with — e.g. a custom role's own id.
+   * Must share role's kind. Omitted falls back to that kind's default seeded role. */
+  roleId?: string;
   status?: 'ACTIVE' | 'INACTIVE';
 }
 
@@ -58,17 +65,11 @@ export interface UpdateNotificationPreferencesRequest {
   registrations: boolean;
 }
 
-/** Mirrors Spring Data's Page<T> JSON shape, as returned by GET /users. */
-export interface PagedResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  number: number; // current page index, 0-based
-  size: number;
-}
-
 export interface UserListQuery {
   role?: RoleKind;
+  /** Any role id, including a custom role like "Program Head" — matches the user's
+   * account role OR a scope assignment of this role, whichever applies. */
+  roleId?: string;
   status?: UserStatus;
   q?: string;
   page?: number;

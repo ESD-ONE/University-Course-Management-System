@@ -26,6 +26,34 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
       },
       {
+        path: 'learning',
+        loadComponent: () =>
+          import('./features/learning/learning-tree.component').then((m) => m.LearningTreeComponent),
+      },
+      {
+        path: 'learning/years/:yearId',
+        loadComponent: () =>
+          import('./features/learning/learning-year.component').then((m) => m.LearningYearComponent),
+      },
+      {
+        path: 'learning/years/:yearId/programs/:programId',
+        loadComponent: () =>
+          import('./features/learning/learning-program-courses.component').then((m) => m.LearningProgramCoursesComponent),
+      },
+      {
+        // The "Degree Programs" card on the Learning Hub's landing page spans every
+        // year the program appears in — this route shows the merged view, no single
+        // year in context (see LearningProgramCoursesComponent's yearId?: null branch).
+        path: 'learning/programs/:programId',
+        loadComponent: () =>
+          import('./features/learning/learning-program-courses.component').then((m) => m.LearningProgramCoursesComponent),
+      },
+      {
+        path: 'learning/offerings/:offeringId',
+        loadComponent: () =>
+          import('./features/learning/course-workspace.component').then((m) => m.CourseWorkspaceComponent),
+      },
+      {
         path: 'users',
         canActivate: [adminGuard],
         loadComponent: () => import('./features/users/users-list.component').then((m) => m.UsersListComponent),

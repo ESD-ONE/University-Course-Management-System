@@ -1,0 +1,88 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Learning Hub</div>
+    <div class="breadcrumb">
+      <a routerLink="/app/learning">Academic Years</a> <span>›</span>
+      @if (yearId) {
+        <a [routerLink]="['/app/learning/years', yearId]">{{ year()?.academicYearName ?? '…' }}</a> <span>›</span>
+      }
+      <span class="current">{{ programName() ?? '…' }}</span>
+    </div>
+    <h1 class="page-title">{{ programCode() ?? '' }} — {{ programName() ?? 'Degree Program' }}</h1>
+    <p class="page-sub">
+      @if (yearId) { Courses you're assigned to in {{ year()?.academicYearName ?? 'this academic year' }}. Choose one to open its workspace. }
+      @else { Every course you're assigned to in this program, across all academic years. Choose one to open its workspace. }
+    </p>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="grid g3">
+    @for (i of [1,2,3]; track i) {
+      <div class="card"><span class="skeleton" style="width:50%;height:16px;margin-bottom:10px;"></span><span class="skeleton" style="width:70%;height:12px;"></span></div>
+    }
+  </div>
+} @else if (loadError()) {
+  <p style="color:var(--danger);">{{ loadError() }}</p>
+} @else {
+  <app-filter-bar [activeCount]="activeFilterCount()" [summary]="filterSummary()" (clear)="clearFilters()">
+    <div class="filter-field wide">
+      <label for="courseSearch">Search</label>
+      <app-search-input inputId="courseSearch" placeholder="Search by name or code…" [value]="q()" (valueChange)="onSearchInput($event)"></app-search-input>
+    </div>
+    <div class="filter-field">
+      <label for="courseStatusFilter">Status</label>
+      <app-searchable-select inputId="courseStatusFilter" placeholder="All Statuses" [options]="statusFilterOptions"
+        [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)"></app-searchable-select>
+    </div>
+    @if (!yearId) {
+      <div class="filter-field">
+        <label for="courseYearFilter">Academic Year</label>
+        <app-searchable-select inputId="courseYearFilter" placeholder="All Years" [options]="yearOptions()"
+          [ngModel]="yearFilter()" (ngModelChange)="onYearFilterChange($event)"></app-searchable-select>
+      </div>
+    }
+  </app-filter-bar>
+
+  @if (pagedCourses().length) {
+    <div class="card" style="padding:16px;overflow:hidden;">
+      <div class="table-scroll">
+        <div class="grid g3">
+          @for (c of pagedCourses(); track c.offeringId) {
+            <button type="button" class="tile-card" (click)="openOffering(c.offeringId)">
+              <div class="tile-card-title">{{ c.code }}</div>
+              <div class="tile-card-sub">{{ c.name }}</div>
+              <div class="tile-card-meta">
+                <span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span>
+                @if (!yearId) { <span class="badge b-violet">{{ c.academicYearName }}</span> }
+                <span style="font-size:11.5px;color:var(--ink-faint);">Year {{ c.yearOfStudy }}</span>
+                @if (c.myStatus) {
+                  <span class="badge" [class.b-success]="c.myStatus === 'ENROLLED'" [class.b-gold]="c.myStatus === 'WAITLISTED'" [class.b-ink]="c.myStatus === 'COMPLETED'">{{ c.myStatus }}</span>
+                }
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+    <app-pager
+      [page]="page()"
+      [totalPages]="totalPages()"
+      [totalElements]="totalElements()"
+      [pageSize]="pageSize()"
+      itemLabel="courses"
+      (pageChange)="goToPage($event)"
+      (pageSizeChange)="onPageSizeChange($event)"
+    />
+  } @else {
+    <div class="card">
+      <p style="color:var(--ink-faint);font-size:13px;margin:0;">
+        @if (activeFilterCount()) {
+          No courses match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+        } @else {
+          You're not assigned to any course in this program yet.
+        }
+      </p>
+    </div>
+  }
+}

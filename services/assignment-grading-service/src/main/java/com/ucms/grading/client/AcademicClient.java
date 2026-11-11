@@ -17,6 +17,8 @@ public class AcademicClient {
                            UUID academicYearId, String academicYearName, String academicYearStatus,
                            String semesterName, int capacity, UUID lecturerId, String status) {}
 
+    public record Access(boolean staffView, boolean manage) {}
+
     private static final String SERVICE = "Academic Structure";
 
     private final RestClient restClient;
@@ -25,6 +27,16 @@ public class AcademicClient {
     public AcademicClient(RestClient.Builder builder, @Value("${ucms.academic-service-uri}") String baseUri, JwtValidator jwt) {
         this.restClient = builder.baseUrl(baseUri).build();
         this.jwt = jwt;
+    }
+
+    /** Whether the caller may view this offering's delivery as staff, and whether they may
+     * manage it (owning lecturer, admin, or a scoped Program/Department Head) — see
+     * CourseOfferingQueryService#access in academic-structure-service. */
+    public Access access(UUID offeringId, String callerToken) {
+        return Upstream.call(SERVICE, "Course offering not found", () -> restClient.get()
+                .uri("/course-offerings/{id}/access", offeringId)
+                .header("Authorization", "Bearer " + callerToken)
+                .retrieve().body(Access.class));
     }
 
     public Offering getOffering(UUID offeringId) {

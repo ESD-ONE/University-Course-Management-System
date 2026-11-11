@@ -10,7 +10,7 @@
 <app-filter-bar [activeCount]="activeFilterCount()" [summary]="loading() ? '' : filterSummary()" (clear)="clearFilters()">
   <div class="filter-field">
     <label for="courseSearch">Course</label>
-    <app-search-input inputId="courseSearch" placeholder="Search code or name…" [value]="searchFilter()" (valueChange)="searchFilter.set($event)"></app-search-input>
+    <app-search-input inputId="courseSearch" placeholder="Search code or name…" [value]="searchFilter()" (valueChange)="onSearchInput($event)"></app-search-input>
   </div>
   <div class="filter-field">
     <label for="degreeFilter">Degree Program</label>
@@ -19,13 +19,13 @@
   </div>
   <div class="filter-field">
     <label for="yosFilter">Year of Study</label>
-    <app-searchable-select inputId="yosFilter" placeholder="All Years of Study" [options]="yearOfStudyOptions()"
-      [ngModel]="yearOfStudyFilter()" (ngModelChange)="yearOfStudyFilter.set($event)"></app-searchable-select>
+    <app-searchable-select inputId="yosFilter" placeholder="All Years of Study" [options]="yearOfStudyOptions"
+      [ngModel]="yearOfStudyFilter()" (ngModelChange)="onYearOfStudyFilterChange($event)"></app-searchable-select>
   </div>
   <div class="filter-field">
     <label for="statusFilter">Status</label>
     <app-searchable-select inputId="statusFilter" placeholder="All Statuses" [options]="statusFilterOptions"
-      [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+      [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)"></app-searchable-select>
   </div>
 </app-filter-bar>
 
@@ -45,39 +45,43 @@
 } @else if (loadError()) {
   <p style="color:var(--danger);">{{ loadError() }}</p>
 } @else {
-  <div class="card">
-    <table>
-      <thead><tr><th>Code</th><th>Name</th><th>Degree Program</th><th>Begin Date</th><th>Year of Study</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        @for (c of filteredCourses(); track c.id) {
-          <tr>
-            <td class="cell-code">{{ c.catalogCourseCode }}</td>
-            <td class="cell-name">{{ c.catalogCourseName }}</td>
-            <td class="cell-soft">{{ c.degreeProgramCode }} - {{ c.degreeProgramName }}</td>
-            <td class="cell-soft">{{ c.beginDate }}</td>
-            <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
-            <td><span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span></td>
-            <td class="row-actions">
-              <app-row-menu [label]="'Actions for ' + c.catalogCourseCode">
-                <button type="button" class="row-menu-item" (click)="openEditCourse(c)">Edit course</button>
-                <button type="button" class="row-menu-item" (click)="openManageYears(c)">Manage years</button>
-                <div class="row-menu-sep"></div>
-                <button type="button" class="row-menu-item danger" (click)="deleteCourse(c)">Delete course</button>
-              </app-row-menu>
-            </td>
-          </tr>
-        } @empty {
-          <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">
-            @if (activeFilterCount()) {
-              No courses match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
-            } @else {
-              No courses have been created yet.
-            }
-          </td></tr>
-        }
-      </tbody>
-    </table>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Code</th><th>Name</th><th>Degree Program</th><th>Begin Date</th><th>Year of Study</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          @for (c of courses(); track c.id) {
+            <tr>
+              <td class="cell-code">{{ c.catalogCourseCode }}</td>
+              <td class="cell-name">{{ c.catalogCourseName }}</td>
+              <td class="cell-soft">{{ c.degreeProgramCode }} - {{ c.degreeProgramName }}</td>
+              <td class="cell-soft">{{ c.beginDate }}</td>
+              <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
+              <td><span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span></td>
+              <td class="row-actions">
+                <app-row-menu [label]="'Actions for ' + c.catalogCourseCode">
+                  <button type="button" class="row-menu-item" (click)="openEditCourse(c)">Edit course</button>
+                  <button type="button" class="row-menu-item" (click)="openManageYears(c)">Manage years</button>
+                  <div class="row-menu-sep"></div>
+                  <button type="button" class="row-menu-item danger" (click)="deleteCourse(c)">Delete course</button>
+                </app-row-menu>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" style="padding:24px;color:var(--ink-faint);">
+              @if (activeFilterCount()) {
+                No courses match these filters. <button type="button" class="btn-link" (click)="clearFilters()">Clear filters</button>
+              } @else {
+                No courses have been created yet.
+              }
+            </td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
+  <app-pager [page]="page()" [totalPages]="totalPages()" [totalElements]="totalElements()" [pageSize]="pageSize()"
+    itemLabel="course" (pageChange)="goToPage($event)" (pageSizeChange)="onPageSizeChange($event)"></app-pager>
 }
 
 @if (editingCourse(); as course) {

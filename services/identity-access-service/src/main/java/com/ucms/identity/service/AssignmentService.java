@@ -6,13 +6,18 @@ import com.ucms.identity.security.AssignmentCacheInvalidator;
 import com.ucms.identity.web.dto.AssignmentClaim;
 import com.ucms.identity.web.dto.AssignmentResponse;
 import com.ucms.identity.web.dto.CreateAssignmentRequest;
+import com.ucms.identity.web.dto.EffectivePermission;
 import com.ucms.identity.web.dto.RolePermissionGrant;
+import com.ucms.identity.web.dto.ScopeHolderResponse;
 import com.ucms.identity.web.dto.SetOverrideRequest;
+import com.ucms.identity.web.dto.SetScopeHolderRequest;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,12 +37,15 @@ public class AssignmentService {
     private final AssignmentPermissionOverrideRepository overrideRepository;
     private final PermissionRepository permissionRepository;
     private final AssignmentCacheInvalidator cacheInvalidator;
+    private final RolePermissionRepository rolePermissionRepository;
 
     public AssignmentService(UserRepository userRepository, RoleRepository roleRepository,
                               RoleScopeAssignmentRepository assignmentRepository,
                               AssignmentPermissionOverrideRepository overrideRepository,
                               PermissionRepository permissionRepository,
-                              AssignmentCacheInvalidator cacheInvalidator) {
+                              AssignmentCacheInvalidator cacheInvalidator,
+                              RolePermissionRepository rolePermissionRepository) {
+        this.rolePermissionRepository = rolePermissionRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.assignmentRepository = assignmentRepository;
@@ -107,6 +115,81 @@ public class AssignmentService {
         assignment.setUpdatedBy(revokedBy);
         assignmentRepository.save(assignment);
         cacheInvalidator.evict(assignment.getUser().getId());
+    }
+
+    /** Every (module, action) the user is granted, per assignment scope: the role's
+     *  baseline with that assignment's overrides applied. The UI uses it to hide what the
+     *  user can't do; each service still enforces its own checks. */
+    @Transactional(readOnly = true)
+    public List<EffectivePermission> effectivePermissions(UUID userId) {
+        List<EffectivePermission> result = new ArrayList<>();
+        for (RoleScopeAssignment a : assignmentRepository.findByUserIdAndDeletedAtIsNull(userId)) {
+            Map<UUID, Boolean> overrides = new HashMap<>();
+            overrideRepository.findByAssignmentId(a.getId())
+                    .forEach(o -> overrides.put(o.getPermission().getId(), o.isGranted()));
+            Map<UUID, Permission> granted = new HashMap<>();
+            for (RolePermission rp : rolePermissionRepository.findByRoleId(a.getRole().getId())) {
+                UUID pid = rp.getPermission().getId();
+                if (overrides.getOrDefault(pid, rp.isGranted())) granted.put(pid, rp.getPermission());
+            }
+            overrides.forEach((pid, on) -> {
+                if (on && !granted.containsKey(pid)) permissionRepository.findById(pid).ifPresent(p -> granted.put(pid, p));
+            });
+            for (Permission p : granted.values()) {
+                result.add(new EffectivePermission(a.getScopeType().name(), a.getScopeId(), p.getModule(), p.getActionKey()));
+            }
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ScopeHolderResponse> holders(UUID roleId, ScopeType scopeType, Collection<UUID> scopeIds) {
+        if (scopeIds == null || scopeIds.isEmpty()) return List.of();
+        return assignmentRepository.findHolders(roleId, scopeType, scopeIds).stream()
+                .map(ScopeHolderResponse::from).toList();
+    }
+
+    /** Makes userId the single holder of a role at a scope (e.g. a degree program's
+     *  Program Head): revokes whoever held it, then assigns — or just clears it when
+     *  userId is null. Idempotent when the same user already holds it. */
+    @Transactional
+    public ScopeHolderResponse setHolder(SetScopeHolderRequest request, UUID actorId) {
+        if (request.scopeType() == ScopeType.GLOBAL) {
+            throw new IllegalArgumentException("A single-holder role must be scoped, not GLOBAL");
+        }
+        RoleScopeAssignment kept = null;
+        for (RoleScopeAssignment existing : assignmentRepository.lockHolders(request.roleId(), request.scopeType(), request.scopeId())) {
+            if (kept == null && existing.getUser().getId().equals(request.userId())) {
+                kept = existing;
+                continue;
+            }
+            existing.setDeletedAt(OffsetDateTime.now());
+            existing.setDeletedBy(actorId);
+            existing.setUpdatedBy(actorId);
+            assignmentRepository.save(existing);
+            cacheInvalidator.evict(existing.getUser().getId());
+        }
+        if (request.userId() == null) return null;
+        if (kept != null) return ScopeHolderResponse.from(kept);
+        User user = userRepository.findById(request.userId())
+                .filter(u -> u.getDeletedAt() == null)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
+        Role role = roleRepository.findById(request.roleId())
+                .filter(r -> r.getDeletedAt() == null)
+                .orElseThrow(() -> new EntityNotFoundException("Role not found"));
+        if (role.getKind() != user.getRole().getKind()) {
+            throw new IllegalArgumentException("A " + role.getName() + " must be a " + role.getKind().name().toLowerCase() + " account");
+        }
+        RoleScopeAssignment a = new RoleScopeAssignment();
+        a.setUser(user);
+        a.setRole(role);
+        a.setScopeType(request.scopeType());
+        a.setScopeId(request.scopeId());
+        a.setCreatedBy(actorId);
+        a.setUpdatedBy(actorId);
+        a = assignmentRepository.save(a);
+        cacheInvalidator.evict(user.getId());
+        return ScopeHolderResponse.from(a);
     }
 
     /** Served to academic-structure-service by GET /internal/assignments/{userId} (it used

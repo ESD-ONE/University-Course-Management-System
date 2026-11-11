@@ -105,7 +105,7 @@ public class SubmissionService {
         data.put("title", a.getTitle());
         events.publish("grading.submission-received", data);
 
-        return toMine(s, a, null);
+        return toMine(s, a, null); // nothing to grade yet on a fresh submission
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +114,7 @@ public class SubmissionService {
         assignmentService.requireCanView(a, caller);
         Submission s = submissions.findByAssignmentIdAndStudentId(a.getId(), caller.id())
                 .orElseThrow(() -> new EntityNotFoundException("You haven't submitted this assignment yet"));
-        return toMine(s, a, grades.findBySubmissionId(s.getId()).orElse(null));
+        return toMine(s, a, a.isGradesHidden() ? null : grades.findBySubmissionId(s.getId()).orElse(null));
     }
 
     /** Grading screen: every enrolled student, submitted or not. */

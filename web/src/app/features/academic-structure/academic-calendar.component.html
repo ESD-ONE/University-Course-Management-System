@@ -62,6 +62,7 @@
           <button class="btn btn-secondary btn-sm" (click)="openSemesterDialog()">+ Add Semester</button>
         </div>
         @if (y.semesters.length) {
+          <div class="table-scroll">
           <table>
             <thead><tr><th>Semester</th><th>Enrollment Window</th><th>Status</th><th></th></tr></thead>
             <tbody>
@@ -84,6 +85,7 @@
               }
             </tbody>
           </table>
+          </div>
         } @else {
           <p style="color:var(--ink-faint);font-size:13px;">No semesters configured yet for this year.</p>
         }

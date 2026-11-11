@@ -2,7 +2,6 @@ package com.ucms.grading.client;
 
 import com.ucms.grading.security.JwtValidator;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -14,6 +13,9 @@ public class BaseClient {
 
     public record GradingScale(String name, String bands, String status) {}
 
+    /** /grading-scales is paginated (page/size/content/...); only content is needed here. */
+    private record GradingScalePage(List<GradingScale> content) {}
+
     private final RestClient restClient;
     private final JwtValidator jwt;
 
@@ -22,11 +24,13 @@ public class BaseClient {
         this.jwt = jwt;
     }
 
+    /** Every grading scale — a small, admin-maintained catalog, so this requests
+     * /grading-scales' own max page size (100) rather than its default of 20. */
     public List<GradingScale> gradingScales() {
-        List<GradingScale> scales = Upstream.call("Base", null, () -> restClient.get()
-                .uri("/grading-scales")
+        GradingScalePage page = Upstream.call("Base", null, () -> restClient.get()
+                .uri(b -> b.path("/grading-scales").queryParam("size", 100).build())
                 .header("Authorization", "Bearer " + jwt.mintServiceToken())
-                .retrieve().body(new ParameterizedTypeReference<List<GradingScale>>() {}));
-        return scales == null ? List.of() : scales;
+                .retrieve().body(GradingScalePage.class));
+        return page == null ? List.of() : page.content();
     }
 }

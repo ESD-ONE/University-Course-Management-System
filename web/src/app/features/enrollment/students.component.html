@@ -30,23 +30,23 @@
   <div class="filter-field">
     <label for="stProgram">Program</label>
     <app-searchable-select inputId="stProgram" placeholder="All Programs" [options]="programOptions()"
-      [ngModel]="programFilter()" (ngModelChange)="programFilter.set($event)"></app-searchable-select>
+      [ngModel]="programFilter()" (ngModelChange)="onProgramFilterChange($event)"></app-searchable-select>
   </div>
   <div class="filter-field">
     <label for="stYear">Year of Study</label>
     <app-searchable-select inputId="stYear" placeholder="All Years" [options]="yearOptions()"
-      [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)"></app-searchable-select>
+      [ngModel]="yearFilter()" (ngModelChange)="onYearFilterChange($event)"></app-searchable-select>
   </div>
   @if (offeringId()) {
     <div class="filter-field">
       <label for="stStatus">Status</label>
       <app-searchable-select inputId="stStatus" placeholder="Enrolled & Waitlisted" [options]="statusOptions"
-        [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"></app-searchable-select>
+        [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)"></app-searchable-select>
     </div>
   }
   <div class="filter-field">
     <label for="stSearch">Student</label>
-    <app-search-input inputId="stSearch" placeholder="Name or student ID…" [value]="search()" (valueChange)="search.set($event)"></app-search-input>
+    <app-search-input inputId="stSearch" placeholder="Name or student ID…" [value]="search()" (valueChange)="onSearchChange($event)"></app-search-input>
   </div>
 </app-filter-bar>
 
@@ -55,50 +55,58 @@
 } @else if (loadError()) {
   <p style="color:var(--danger);">{{ loadError() }}</p>
 } @else if (selectedOffering()) {
-  <div class="card">
-    <table>
-      <thead><tr><th>Student</th><th>Student ID</th><th>Degree Program</th><th>Year</th><th>Enrolled On</th><th>Requirement</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-        @for (r of filteredRoster(); track r.id) {
-          <tr>
-            <td class="row-avatar"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(r.studentName) }}</div><span class="cell-name">{{ r.studentName }}</span></td>
-            <td class="cell-soft">{{ r.studentNumber ?? '—' }}</td>
-            <td class="cell-name">{{ r.studentProgramName ?? '—' }}</td>
-            <td class="cell-soft">{{ r.studentYearOfStudy ? 'Year ' + r.studentYearOfStudy : '—' }}</td>
-            <td class="cell-faint">{{ r.enrolledOn | date: 'dd MMM y' }}</td>
-            <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
-            <td><span class="badge" [class.b-success]="r.status === 'ENROLLED'" [class.b-gold]="r.status === 'WAITLISTED'">{{ r.status === 'ENROLLED' ? 'Enrolled' : 'Waitlisted' }}</span></td>
-            <td class="row-actions">
-              <app-row-menu [label]="'Actions for ' + r.studentName">
-                <button type="button" class="row-menu-item danger" (click)="remove(r)">Remove from course</button>
-              </app-row-menu>
-            </td>
-          </tr>
-        } @empty {
-          <tr><td colspan="8" style="padding:24px;color:var(--ink-faint);">No students match these filters.</td></tr>
-        }
-      </tbody>
-    </table>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Student</th><th>Student ID</th><th>Degree Program</th><th>Year</th><th>Enrolled On</th><th>Requirement</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          @for (r of filteredRoster(); track r.id) {
+            <tr>
+              <td class="row-avatar"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(r.studentName) }}</div><span class="cell-name">{{ r.studentName }}</span></td>
+              <td class="cell-soft">{{ r.studentNumber ?? '—' }}</td>
+              <td class="cell-name">{{ r.studentProgramName ?? '—' }}</td>
+              <td class="cell-soft">{{ r.studentYearOfStudy ? 'Year ' + r.studentYearOfStudy : '—' }}</td>
+              <td class="cell-faint">{{ r.enrolledOn | date: 'dd MMM y' }}</td>
+              <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
+              <td><span class="badge" [class.b-success]="r.status === 'ENROLLED'" [class.b-gold]="r.status === 'WAITLISTED'">{{ r.status === 'ENROLLED' ? 'Enrolled' : 'Waitlisted' }}</span></td>
+              <td class="row-actions">
+                <app-row-menu [label]="'Actions for ' + r.studentName">
+                  <button type="button" class="row-menu-item danger" (click)="remove(r)">Remove from course</button>
+                </app-row-menu>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" style="padding:24px;color:var(--ink-faint);">No students match these filters.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
+  <app-pager [page]="page()" [totalPages]="totalPages()" [totalElements]="totalElements()" [pageSize]="pageSize()"
+    itemLabel="student" (pageChange)="goToPage($event)" (pageSizeChange)="onPageSizeChange($event)"></app-pager>
 } @else {
-  <div class="card">
-    <table>
-      <thead><tr><th>Student</th><th>Student ID</th><th>Program</th><th>Year</th><th>Enrolled In</th></tr></thead>
-      <tbody>
-        @for (s of filteredAll(); track s.studentId) {
-          <tr>
-            <td class="row-avatar"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(s.name) }}</div><span class="cell-name">{{ s.name }}</span></td>
-            <td class="cell-soft">{{ s.studentNumber ?? '—' }}</td>
-            <td class="cell-name">{{ s.programName ?? '—' }}</td>
-            <td class="cell-soft">{{ s.yearOfStudy ? 'Year ' + s.yearOfStudy : '—' }}</td>
-            <td>@for (c of s.courseCodes; track c) { <span class="badge b-accent" style="margin-right:4px;">{{ c }}</span> }</td>
-          </tr>
-        } @empty {
-          <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">No students match these filters.</td></tr>
-        }
-      </tbody>
-    </table>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Student</th><th>Student ID</th><th>Program</th><th>Year</th><th>Enrolled In</th></tr></thead>
+        <tbody>
+          @for (s of pagedAll(); track s.studentId) {
+            <tr>
+              <td class="row-avatar"><div class="avatar" style="width:28px;height:28px;font-size:10px;">{{ initials(s.name) }}</div><span class="cell-name">{{ s.name }}</span></td>
+              <td class="cell-soft">{{ s.studentNumber ?? '—' }}</td>
+              <td class="cell-name">{{ s.programName ?? '—' }}</td>
+              <td class="cell-soft">{{ s.yearOfStudy ? 'Year ' + s.yearOfStudy : '—' }}</td>
+              <td>@for (c of s.courseCodes; track c) { <span class="badge b-accent" style="margin-right:4px;">{{ c }}</span> }</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" style="padding:24px;color:var(--ink-faint);">No students match these filters.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </div>
+  <app-pager [page]="page()" [totalPages]="allTotalPages()" [totalElements]="filteredAll().length" [pageSize]="pageSize()"
+    itemLabel="student" (pageChange)="goToPage($event)" (pageSizeChange)="onPageSizeChange($event)"></app-pager>
 }
 
 @if (toast(); as t) {

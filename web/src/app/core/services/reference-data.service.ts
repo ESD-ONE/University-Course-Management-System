@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { BASE_API_BASE_URL } from '../config/api.config';
+import { PagedResponse } from '../models/pagination.model';
 import {
   CourseCategoryResponse,
   CreateCourseCategoryRequest,
@@ -11,18 +12,31 @@ import {
   DepartmentResponse,
   FacultyResponse,
   GradingScaleResponse,
+  ReferenceCounts,
+  ReferenceListQuery,
   UpdateCourseCategoryRequest,
   UpdateDepartmentRequest,
   UpdateFacultyRequest,
   UpdateGradingScaleRequest,
 } from '../models/reference-data.model';
 
+function queryParams(query: ReferenceListQuery): HttpParams {
+  let params = new HttpParams().set('page', query.page ?? 0).set('size', query.size ?? 20);
+  if (query.status) params = params.set('status', query.status);
+  if (query.q) params = params.set('q', query.q);
+  return params;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReferenceDataService {
   constructor(private http: HttpClient) {}
 
-  listFaculties(): Observable<FacultyResponse[]> {
-    return this.http.get<FacultyResponse[]>(`${BASE_API_BASE_URL}/faculties`);
+  listFaculties(query: ReferenceListQuery = {}): Observable<PagedResponse<FacultyResponse>> {
+    return this.http.get<PagedResponse<FacultyResponse>>(`${BASE_API_BASE_URL}/faculties`, { params: queryParams(query) });
+  }
+
+  facultyCounts(): Observable<ReferenceCounts> {
+    return this.http.get<ReferenceCounts>(`${BASE_API_BASE_URL}/faculties/counts`);
   }
 
   createFaculty(request: CreateFacultyRequest): Observable<FacultyResponse> {
@@ -37,9 +51,14 @@ export class ReferenceDataService {
     return this.http.delete<void>(`${BASE_API_BASE_URL}/faculties/${id}`);
   }
 
-  listDepartments(facultyId?: string): Observable<DepartmentResponse[]> {
-    const params: Record<string, string> = facultyId ? { facultyId } : {};
-    return this.http.get<DepartmentResponse[]>(`${BASE_API_BASE_URL}/departments`, { params });
+  listDepartments(facultyId: string | undefined, query: ReferenceListQuery = {}): Observable<PagedResponse<DepartmentResponse>> {
+    let params = queryParams(query);
+    if (facultyId) params = params.set('facultyId', facultyId);
+    return this.http.get<PagedResponse<DepartmentResponse>>(`${BASE_API_BASE_URL}/departments`, { params });
+  }
+
+  departmentCounts(): Observable<ReferenceCounts> {
+    return this.http.get<ReferenceCounts>(`${BASE_API_BASE_URL}/departments/counts`);
   }
 
   createDepartment(request: CreateDepartmentRequest): Observable<DepartmentResponse> {
@@ -54,8 +73,12 @@ export class ReferenceDataService {
     return this.http.delete<void>(`${BASE_API_BASE_URL}/departments/${id}`);
   }
 
-  listGradingScales(): Observable<GradingScaleResponse[]> {
-    return this.http.get<GradingScaleResponse[]>(`${BASE_API_BASE_URL}/grading-scales`);
+  listGradingScales(query: ReferenceListQuery = {}): Observable<PagedResponse<GradingScaleResponse>> {
+    return this.http.get<PagedResponse<GradingScaleResponse>>(`${BASE_API_BASE_URL}/grading-scales`, { params: queryParams(query) });
+  }
+
+  gradingScaleCounts(): Observable<ReferenceCounts> {
+    return this.http.get<ReferenceCounts>(`${BASE_API_BASE_URL}/grading-scales/counts`);
   }
 
   createGradingScale(request: CreateGradingScaleRequest): Observable<GradingScaleResponse> {
@@ -70,8 +93,12 @@ export class ReferenceDataService {
     return this.http.delete<void>(`${BASE_API_BASE_URL}/grading-scales/${id}`);
   }
 
-  listCourseCategories(): Observable<CourseCategoryResponse[]> {
-    return this.http.get<CourseCategoryResponse[]>(`${BASE_API_BASE_URL}/course-categories`);
+  listCourseCategories(query: ReferenceListQuery = {}): Observable<PagedResponse<CourseCategoryResponse>> {
+    return this.http.get<PagedResponse<CourseCategoryResponse>>(`${BASE_API_BASE_URL}/course-categories`, { params: queryParams(query) });
+  }
+
+  courseCategoryCounts(): Observable<ReferenceCounts> {
+    return this.http.get<ReferenceCounts>(`${BASE_API_BASE_URL}/course-categories/counts`);
   }
 
   createCourseCategory(request: CreateCourseCategoryRequest): Observable<CourseCategoryResponse> {

@@ -108,6 +108,7 @@ export class AcademicCalendarComponent implements OnInit {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.yearForm.disable();
     const { name, startDate, endDate, status, createDefaultSemesters } = this.yearForm.getRawValue();
     const editingId = this.editingYearId();
 
@@ -118,12 +119,14 @@ export class AcademicCalendarComponent implements OnInit {
           next: (updated) => {
             this.years.update((list) => list.map((y) => (y.id === updated.id ? { ...updated, semesters: y.semesters } : y)));
             this.submitting.set(false);
+            this.yearForm.enable();
             this.showYearDialog.set(false);
             this.showToast(`"${updated.name}" updated.`, false);
             this.load();
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.yearForm.enable();
             this.dialogError.set(err.error?.message ?? 'Could not update the academic year.');
           },
         });
@@ -143,11 +146,13 @@ export class AcademicCalendarComponent implements OnInit {
           this.years.update((list) => [created, ...list]);
           this.selectedYearId.set(created.id);
           this.submitting.set(false);
+          this.yearForm.enable();
           this.showYearDialog.set(false);
           this.showToast(`Academic year "${created.name}" created.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.yearForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not create the academic year.');
         },
       });
@@ -190,6 +195,7 @@ export class AcademicCalendarComponent implements OnInit {
     }
     this.dialogError.set(null);
     this.submitting.set(true);
+    this.semesterForm.disable();
     const { name, sequence, status } = this.semesterForm.getRawValue();
     const editingId = this.editingSemesterId();
 
@@ -208,11 +214,13 @@ export class AcademicCalendarComponent implements OnInit {
               list.map((y) => (y.id === year.id ? { ...y, semesters: y.semesters.map((s) => (s.id === updated.id ? updated : s)) } : y)),
             );
             this.submitting.set(false);
+            this.semesterForm.enable();
             this.showSemesterDialog.set(false);
             this.showToast(`"${updated.name}" updated.`, false);
           },
           error: (err: HttpErrorResponse) => {
             this.submitting.set(false);
+            this.semesterForm.enable();
             this.dialogError.set(err.error?.message ?? 'Could not update the semester.');
           },
         });
@@ -227,11 +235,13 @@ export class AcademicCalendarComponent implements OnInit {
             list.map((y) => (y.id === year.id ? { ...y, semesters: [...y.semesters, created] } : y)),
           );
           this.submitting.set(false);
+          this.semesterForm.enable();
           this.showSemesterDialog.set(false);
           this.showToast(`"${created.name}" added to ${year.name}.`, false);
         },
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
+          this.semesterForm.enable();
           this.dialogError.set(err.error?.message ?? 'Could not add the semester.');
         },
       });

@@ -43,32 +43,34 @@ public class AcademicStructureClient {
      * — the caller must treat that as "cannot verify, so do not delete", never as "no
      * dependents".
      */
+    /** Both endpoints are paginated (page/size/content/totalElements/...); only
+     * totalElements is needed here, and size=1 keeps the response to a minimum. */
+    private record PageCount(long totalElements) {}
+
     public boolean hasDependents(UUID departmentId) {
         String serviceToken = jwt.mintServiceToken();
 
-        Object[] degreePrograms = restClient.get()
+        PageCount degreePrograms = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/degree-programs")
                         .queryParam("departmentId", departmentId)
+                        .queryParam("size", 1)
                         .build())
                 .header("Authorization", "Bearer " + serviceToken)
                 .retrieve()
-                .body(Object[].class);
-        if (degreePrograms != null && degreePrograms.length > 0) {
+                .body(PageCount.class);
+        if (degreePrograms != null && degreePrograms.totalElements() > 0) {
             return true;
         }
 
-        // /course-catalog?departmentId= is being added to academic-structure-service in
-        // parallel as part of this same fix (see gap-analysis-report.md G-05) — it is
-        // expected to behave like /degree-programs' departmentId filter, matching
-        // against owningDepartmentId.
-        Object[] courseCatalogEntries = restClient.get()
+        PageCount courseCatalogEntries = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/course-catalog")
                         .queryParam("departmentId", departmentId)
+                        .queryParam("size", 1)
                         .build())
                 .header("Authorization", "Bearer " + serviceToken)
                 .retrieve()
-                .body(Object[].class);
-        return courseCatalogEntries != null && courseCatalogEntries.length > 0;
+                .body(PageCount.class);
+        return courseCatalogEntries != null && courseCatalogEntries.totalElements() > 0;
     }
 
 }

@@ -1,14 +1,20 @@
 package com.ucms.enrollment.web;
 
+import com.ucms.enrollment.domain.CourseEnrollmentStatus;
 import com.ucms.enrollment.security.Caller;
 import com.ucms.enrollment.service.CourseEnrollmentService;
 import com.ucms.enrollment.web.dto.Dtos.CatalogEntryResponse;
 import com.ucms.enrollment.web.dto.Dtos.CourseEnrollmentResponse;
 import com.ucms.enrollment.web.dto.Dtos.EnrollRequest;
 import com.ucms.enrollment.web.dto.Dtos.EnrollmentCheckResponse;
+import com.ucms.enrollment.web.dto.Dtos.LearningTreeResponse;
 import com.ucms.enrollment.web.dto.Dtos.MyStudentResponse;
 import com.ucms.enrollment.web.dto.Dtos.SeatCountResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,6 +30,9 @@ import java.util.UUID;
 
 @RestController
 public class CourseEnrollmentController {
+
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 200;
 
     private final CourseEnrollmentService service;
 
@@ -42,14 +51,25 @@ public class CourseEnrollmentController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/learning/tree")
+    public LearningTreeResponse learningTree() {
+        return service.learningTree(Caller.current());
+    }
+
     @GetMapping("/course-enrollments/me")
     public List<CourseEnrollmentResponse> mine() {
         return service.mine(Caller.current());
     }
 
+    /** status is optional — narrows the roster to ENROLLED/WAITLISTED/DROPPED. Defaults
+     * to a size large enough to cover a typical course's whole capacity in one page. */
     @GetMapping("/course-enrollments")
-    public List<CourseEnrollmentResponse> roster(@RequestParam(name = "offeringId") UUID offeringId) {
-        return service.roster(offeringId, Caller.current());
+    public Page<CourseEnrollmentResponse> roster(@RequestParam(name = "offeringId") UUID offeringId,
+                                                  @RequestParam(name = "status", required = false) CourseEnrollmentStatus status,
+                                                  @RequestParam(name = "page", defaultValue = "0") int page,
+                                                  @RequestParam(name = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), Sort.by("createdAt").ascending());
+        return service.roster(offeringId, status, pageable, Caller.current());
     }
 
     @GetMapping("/course-enrollments/my-students")
