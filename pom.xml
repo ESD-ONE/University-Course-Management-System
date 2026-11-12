@@ -32,6 +32,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.3.4</spring-boot.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <!-- Spring Boot 3.3.4 manages Testcontainers 1.19.8, whose Docker client defaults
+             to API 1.32 when it can't complete its own version probe. The Jenkins host's
+             Docker Engine (29.x, MinAPIVersion 1.40) rejects that outright: "client
+             version 1.32 is too old". Overriding this one property is Spring Boot's own
+             documented way to bump just Testcontainers without touching spring-boot.version. -->
+        <testcontainers.version>1.21.3</testcontainers.version>
         <jacoco.version>0.8.12</jacoco.version>
         <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
         <!-- Shared by every module's jacoco:report — SonarQube reads this one file per
@@ -41,6 +47,19 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Declared ahead of spring-boot-dependencies' own import below: this
+                 project imports Spring Boot's BOM rather than extending it as <parent>,
+                 so setting the testcontainers.version property above has no effect —
+                 Spring Boot's own ${testcontainers.version} placeholder is interpolated
+                 against ITS properties when its BOM was published, not against ours. A
+                 direct dependencyManagement entry here is what actually wins. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
