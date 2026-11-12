@@ -11,12 +11,50 @@ pipeline {
         // docs/remaining-issues.md have landed and the scans come back clean.
         SECURITY_GATE = 'report'
         TRIVY_IMAGE = 'aquasec/trivy:0.58.1'
+        // 'report': findings mark the build UNSTABLE; 'fail': they fail it. Same
+        // report-first rollout as SECURITY_GATE above, since a brand-new SonarQube
+        // project starts with an unknown baseline of existing findings.
+        SONAR_GATE = 'report'
+        // infra/docker-compose.infra.yml's ucms-sonarqube, reachable by container name
+        // from this same host's Docker network; override per-environment if SonarQube
+        // ever moves off this host (e.g. a shared SonarCloud instance).
+        SONAR_HOST_URL = 'http://ucms-sonarqube:9000'
     }
 
     stages {
         stage('Build & Test') {
             steps {
                 sh './mvnw -B verify'
+            }
+        }
+
+        stage('Code Quality (SonarQube)') {
+            // SonarQube Community Edition — free/open-source static analysis, not a
+            // paid SaaS. Backend: sonar-maven-plugin over the whole reactor, picking up
+            // each module's target/site/jacoco/jacoco.xml (root pom.xml's jacoco-maven-
+            // plugin, bound to every module via inheritance) for coverage. Frontend:
+            // sonar-scanner against web/ (web/sonar-project.properties), same
+            // no-native-toolchain-on-Jenkins pattern as the Security Scan stage below.
+            // Needs a SonarQube user token in the 'sonarqube-token' Jenkins credential.
+            steps {
+                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                    script {
+                        def scan = '''
+                            status=0
+                            ./mvnw -B sonar:sonar -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" \
+                                -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend" || status=1
+                            docker run --rm --network ucms_data -v "$WORKSPACE/web:/usr/src" -w /usr/src \
+                                sonarsource/sonar-scanner-cli:11.2 \
+                                -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" || status=1
+                            exit $status
+                        '''
+                        if (env.SONAR_GATE == 'fail') {
+                            sh scan
+                        } else {
+                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { sh scan }
+                        }
+                    }
+                }
             }
         }
 
