@@ -39,26 +39,43 @@ pipeline {
             // sonar-scanner against web/ (web/sonar-project.properties), same
             // no-native-toolchain-on-Jenkins pattern as the Security Scan stage below.
             // Needs a SonarQube user token in the 'sonarqube-token' Jenkins credential.
+            // A missing/misconfigured credential is an infra gap, not a quality finding —
+            // it always just skips this stage (UNSTABLE) and lets Package/Deploy continue,
+            // regardless of SONAR_GATE. A build that failed outright here once already
+            // (no credential existed) blocked a real release deploy for no good reason;
+            // SONAR_GATE itself still governs the *scan's own* findings once it can run.
             steps {
-                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                    script {
-                        def scan = '''
-                            status=0
-                            ./mvnw -B sonar:sonar -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" \
-                                -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend" || status=1
-                            # --network host, not ucms_data: SonarQube isn't on that network
-                            # (see SONAR_HOST_URL above) — sharing the host's network
-                            # namespace is what lets this container reach 127.0.0.1:9010.
-                            docker run --rm --network host -v "$WORKSPACE/web:/usr/src" -w /usr/src \
-                                sonarsource/sonar-scanner-cli:11.2 \
-                                -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" || status=1
-                            exit $status
-                        '''
-                        if (env.SONAR_GATE == 'fail') {
-                            sh scan
-                        } else {
-                            catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { sh scan }
+                script {
+                    try {
+                        // Credential resolution happens here, before the closure body runs:
+                        // a missing/misconfigured 'sonarqube-token' throws
+                        // CredentialNotFoundException right at this call, so the catch below
+                        // only ever sees THAT failure mode — never a real scan/exit-code
+                        // failure from inside the closure, which propagates normally and is
+                        // still governed by SONAR_GATE below.
+                        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                            def scan = '''
+                                status=0
+                                ./mvnw -B sonar:sonar -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" \
+                                    -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend" || status=1
+                                # --network host, not ucms_data: SonarQube isn't on that network
+                                # (see SONAR_HOST_URL above) — sharing the host's network
+                                # namespace is what lets this container reach 127.0.0.1:9010.
+                                docker run --rm --network host -v "$WORKSPACE/web:/usr/src" -w /usr/src \
+                                    sonarsource/sonar-scanner-cli:11.2 \
+                                    -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" || status=1
+                                exit $status
+                            '''
+                            if (env.SONAR_GATE == 'fail') {
+                                sh scan
+                            } else {
+                                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { sh scan }
+                            }
                         }
+                    } catch (org.jenkinsci.plugins.credentialsbinding.impl.CredentialNotFoundException err) {
+                        echo "Code Quality (SonarQube) skipped: no 'sonarqube-token' Jenkins credential."
+                        echo "Add it under Manage Jenkins > Credentials to enable this stage."
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { error('SonarQube not configured') }
                     }
                 }
             }
