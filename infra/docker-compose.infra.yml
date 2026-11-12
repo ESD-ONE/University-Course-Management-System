@@ -161,6 +161,38 @@ services:
       ucms-postgres:
         condition: service_healthy
 
+  # Code quality: SonarQube Community Edition — free/open-source static analysis for
+  # the Java services and the Angular/TypeScript frontend, run from Jenkins as its own
+  # stage (see Jenkinsfile's "Code Quality" stage) via `mvn sonar:sonar` for the backend
+  # reactor and `sonar-scanner` for web/. Embedded H2 + bundled Elasticsearch, same as
+  # upstream defaults — fine for a project this size; point SONAR_JDBC_* at Postgres
+  # instead if analysis history ever needs to survive more than one container's volume.
+  # Needs the Docker host's vm.max_map_count >= 262144 for the bundled Elasticsearch
+  # (sysctl -w vm.max_map_count=262144; add to /etc/sysctl.conf to persist across
+  # reboots on the Contabo host) — the container exits on startup otherwise. Docker
+  # Desktop's own Linux VM on macOS/Windows already sets this high enough.
+  ucms-sonarqube:
+    image: sonarqube:10.7.0-community@sha256:0842dcd4c8f851ce44f8edaf45ac93f7c9079017d60d99f614663e60cef5efe9
+    container_name: ucms-sonarqube
+    restart: unless-stopped
+    <<: *hardening
+    networks: [data]
+    environment:
+      SONAR_WEB_JAVAOPTS: -Xmx512m
+      SONAR_CE_JAVAOPTS: -Xmx512m
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ucms_sonarqube_data:/opt/sonarqube/data
+      - ucms_sonarqube_logs:/opt/sonarqube/logs
+      - ucms_sonarqube_extensions:/opt/sonarqube/extensions
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/api/system/status 2>/dev/null | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
 networks:
   edge:
     name: ucms_edge
@@ -176,3 +208,6 @@ volumes:
   ucms_redis_data:
   ucms_rabbitmq_data:
   ucms_minio_data:
+  ucms_sonarqube_data:
+  ucms_sonarqube_logs:
+  ucms_sonarqube_extensions:
