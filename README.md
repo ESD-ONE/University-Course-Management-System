@@ -84,6 +84,31 @@ root [`Jenkinsfile`](Jenkinsfile) — a multibranch pipeline, same pattern as th
 `Deploy` stage (local shell, no SSH hop needed since Jenkins and the target host are the
 same machine) only runs on `develop`, `release`, and `main`.
 
+## Code quality (SonarQube)
+
+SonarQube Community Edition (free, open-source — `infra/docker-compose.infra.yml`'s
+`ucms-sonarqube`) statically analyzes both the backend and the frontend; the Jenkinsfile's
+`Code Quality (SonarQube)` stage runs it on every build:
+
+```bash
+cd infra && docker compose -f docker-compose.infra.yml --env-file .env up -d ucms-sonarqube
+# http://localhost:9000 — first login: admin / admin (you'll be prompted to change it)
+# Create a user token there, then:
+
+./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000 -Dsonar.token=<token> \
+  -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend"   # backend reactor, with coverage
+
+cd web && docker run --rm -v "$(pwd):/usr/src" -w /usr/src --network ucms_data \
+  sonarsource/sonar-scanner-cli:11.2 \
+  -Dsonar.host.url=http://ucms-sonarqube:9000 -Dsonar.token=<token>   # frontend (web/sonar-project.properties)
+```
+
+Coverage comes from `jacoco-maven-plugin` (root `pom.xml`, inherited by every service —
+`./mvnw test` alone produces each module's `target/site/jacoco/jacoco.xml`) and, for the
+frontend, `ng test --code-coverage` (`web/sonar-project.properties`'s
+`sonar.javascript.lcov.reportPaths`) — there are currently no `*.spec.ts` files, so
+frontend coverage reports as 0% until some are added.
+
 ## Project layout
 
 ```
