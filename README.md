@@ -92,15 +92,17 @@ SonarQube Community Edition (free, open-source — `infra/docker-compose.infra.y
 
 ```bash
 cd infra && docker compose -f docker-compose.infra.yml --env-file .env up -d ucms-sonarqube
-# http://localhost:9000 — first login: admin / admin (you'll be prompted to change it)
+# http://localhost:9010 — first login: admin / admin (you'll be prompted to change it).
+# Published as 9010, not SonarQube's native 9000 — the shared Contabo host already has
+# another tenant's MinIO on 9000/9001; locally you're free to re-map it to 9000 instead.
 # Create a user token there, then:
 
-./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9000 -Dsonar.token=<token> \
+./mvnw sonar:sonar -Dsonar.host.url=http://localhost:9010 -Dsonar.token=<token> \
   -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend"   # backend reactor, with coverage
 
-cd web && docker run --rm -v "$(pwd):/usr/src" -w /usr/src --network ucms_data \
+cd web && docker run --rm -v "$(pwd):/usr/src" -w /usr/src --network host \
   sonarsource/sonar-scanner-cli:11.2 \
-  -Dsonar.host.url=http://ucms-sonarqube:9000 -Dsonar.token=<token>   # frontend (web/sonar-project.properties)
+  -Dsonar.host.url=http://127.0.0.1:9010 -Dsonar.token=<token>   # frontend (web/sonar-project.properties)
 ```
 
 Coverage comes from `jacoco-maven-plugin` (root `pom.xml`, inherited by every service —

@@ -96,8 +96,16 @@ services:
       MINIO_ROOT_USER: ucms_admin
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
+      # S3 API stays loopback-only — nothing but our own services should ever call it
+      # directly; they already reach it by container name inside the data network.
       - "127.0.0.1:9002:9000"
-      - "127.0.0.1:9003:9001"
+      # Console (the browser login UI) is public by request — open 9003/tcp on the
+      # host firewall (ufw allow 9003/tcp) to actually reach it from outside. The root
+      # credentials above are a full-access login for every bucket; rotate
+      # MINIO_ROOT_PASSWORD to something strong and unique before exposing this, and
+      # prefer creating a separate, lower-privilege MinIO user for day-to-day browsing
+      # once this is live (mc admin user add) rather than handing out the root login.
+      - "9003:9001"
     volumes:
       - ucms_minio_data:/data
 
@@ -180,8 +188,13 @@ services:
     environment:
       SONAR_WEB_JAVAOPTS: -Xmx512m
       SONAR_CE_JAVAOPTS: -Xmx512m
+    # Public by request — open 9010/tcp on the host firewall (ufw allow 9010/tcp) to
+    # actually reach it from outside. Published as 9010, not SonarQube's native 9000:
+    # the Contabo host already has another tenant's MinIO bound to 9000/9001. Change
+    # the default admin/admin login before exposing this: that's the one credential
+    # standing between "public code quality dashboard" and "anyone can log in as admin".
     ports:
-      - "127.0.0.1:9000:9000"
+      - "9010:9000"
     volumes:
       - ucms_sonarqube_data:/opt/sonarqube/data
       - ucms_sonarqube_logs:/opt/sonarqube/logs
