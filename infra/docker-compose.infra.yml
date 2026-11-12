@@ -188,12 +188,13 @@ services:
     environment:
       SONAR_WEB_JAVAOPTS: -Xmx512m
       SONAR_CE_JAVAOPTS: -Xmx512m
-    # Public by request — open 9000/tcp on the host firewall (ufw allow 9000/tcp) to
-    # actually reach it from outside. Change the default admin/admin login before
-    # exposing this: that's the one credential standing between "public code quality
-    # dashboard" and "anyone can log in as admin".
+    # Public by request — open 9010/tcp on the host firewall (ufw allow 9010/tcp) to
+    # actually reach it from outside. Published as 9010, not SonarQube's native 9000:
+    # the Contabo host already has another tenant's MinIO bound to 9000/9001. Change
+    # the default admin/admin login before exposing this: that's the one credential
+    # standing between "public code quality dashboard" and "anyone can log in as admin".
     ports:
-      - "9000:9000"
+      - "9010:9000"
     volumes:
       - ucms_sonarqube_data:/opt/sonarqube/data
       - ucms_sonarqube_logs:/opt/sonarqube/logs

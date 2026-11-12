@@ -15,10 +15,13 @@ pipeline {
         // report-first rollout as SECURITY_GATE above, since a brand-new SonarQube
         // project starts with an unknown baseline of existing findings.
         SONAR_GATE = 'report'
-        // infra/docker-compose.infra.yml's ucms-sonarqube, reachable by container name
-        // from this same host's Docker network; override per-environment if SonarQube
-        // ever moves off this host (e.g. a shared SonarCloud instance).
-        SONAR_HOST_URL = 'http://ucms-sonarqube:9000'
+        // ucms-sonarqube is a standalone container on this same host (not on the app's
+        // ucms_data Docker network — it's managed out of band, alongside Postgres/Redis/
+        // RabbitMQ/MinIO, from /opt/ucms, not this repo's infra/docker-compose.infra.yml).
+        // Jenkins itself runs natively on the host (not in a container), so it reaches
+        // SonarQube's published port over loopback, same as any other host process would.
+        // Override per-environment if SonarQube ever moves off this host.
+        SONAR_HOST_URL = 'http://127.0.0.1:9010'
     }
 
     stages {
@@ -43,7 +46,10 @@ pipeline {
                             status=0
                             ./mvnw -B sonar:sonar -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" \
                                 -Dsonar.projectKey=ucms-backend -Dsonar.projectName="UCMS Backend" || status=1
-                            docker run --rm --network ucms_data -v "$WORKSPACE/web:/usr/src" -w /usr/src \
+                            # --network host, not ucms_data: SonarQube isn't on that network
+                            # (see SONAR_HOST_URL above) — sharing the host's network
+                            # namespace is what lets this container reach 127.0.0.1:9010.
+                            docker run --rm --network host -v "$WORKSPACE/web:/usr/src" -w /usr/src \
                                 sonarsource/sonar-scanner-cli:11.2 \
                                 -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.token="$SONAR_TOKEN" || status=1
                             exit $status
