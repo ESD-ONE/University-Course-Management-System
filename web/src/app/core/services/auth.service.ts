@@ -1,9 +1,10 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, signal } from '@angular/core';
+import { Inject, Injectable, computed, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import Keycloak from 'keycloak-js';
 import { firstValueFrom } from 'rxjs';
 import { API_BASE_URL, KEYCLOAK_URL } from '../config/api.config';
+import { KEYCLOAK } from '../config/keycloak';
 import { EffectivePermission } from '../models/roles.model';
 import { ProfileResponse } from '../models/user.model';
 import { RolesService } from './roles.service';
@@ -39,7 +40,6 @@ export class AuthService {
   private readonly permissionsSignal = signal<EffectivePermission[]>([]);
   readonly permissions = this.permissionsSignal.asReadonly();
 
-  private readonly keycloak = new Keycloak({ url: KEYCLOAK_URL, realm: 'ucms', clientId: 'ucms-web' });
   private expiredNotice = false;
 
   constructor(
@@ -47,6 +47,7 @@ export class AuthService {
     private userService: UserService,
     private rolesService: RolesService,
     private router: Router,
+    @Inject(KEYCLOAK) private readonly keycloak: Keycloak,
   ) {}
 
   /** True if the user is granted (module, action) somewhere — GLOBAL, or any scope at

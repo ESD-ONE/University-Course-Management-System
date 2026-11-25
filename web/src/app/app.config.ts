@@ -3,6 +3,7 @@ import { ApplicationConfig, inject, provideAppInitializer, provideZoneChangeDete
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
+import { keycloakProvider } from './core/config/keycloak';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { AuthService } from './core/services/auth.service';
 
@@ -11,6 +12,8 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
+    // The keycloak-js instance AuthService depends on (see core/config/keycloak.ts).
+    keycloakProvider,
     // Finish a redirect back from Keycloak's login page, or silently pick up an existing
     // Keycloak session, before the router activates any route — so guards see accurate
     // state on the very first navigation. If Keycloak can't be reached the app still
