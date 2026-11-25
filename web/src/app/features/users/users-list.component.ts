@@ -176,7 +176,9 @@ export class UsersListComponent implements OnInit {
   }
 
   onUserCreated(created: CreatedUserResponse): void {
-    this.showNewUserDialog.set(false);
+    // Leave the dialog open: it's now showing the one-time temporary password, which is
+    // never retrievable again — closing it here was losing that password before the
+    // admin ever saw it. The dialog's own close button dismisses it once they're done.
     this.load(this.activeTabId());
     this.loadSummary();
     this.showToast(`${created.name} added as ${created.role}.`);
