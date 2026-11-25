@@ -59,6 +59,7 @@ class AnalyticsReportingTest {
     private final UUID lecturerId = UUID.randomUUID();
     private final UUID studentId = UUID.randomUUID();
     private final UUID programId = UUID.randomUUID();
+    private final UUID nextUngradedAssignmentId = UUID.randomUUID();
     private SourceClients.Offering offering;
     private Report csvReport;
     private Report pdfReport;
@@ -81,7 +82,7 @@ class AnalyticsReportingTest {
         when(sources.lookupUsers(any())).thenReturn(Map.of(lecturerId,
                 new SourceClients.User(lecturerId, "Dr. N. Silva", "n@uni.edu", "LECTURER", "ACTIVE", null)));
         when(sources.offeringSummaries(any())).thenReturn(List.of(new SourceClients.OfferingSummary(offering.id(),
-                "COSC5105", "Intro to Programming", 12, 2, 20, 15, 5, 78.5)));
+                "COSC5105", "Intro to Programming", 12, 2, 20, 15, 5, 78.5, nextUngradedAssignmentId)));
         when(sources.courseResults()).thenReturn(List.of(
                 new SourceClients.CourseResult(offering.id(), UUID.randomUUID(), 88, 2),
                 new SourceClients.CourseResult(offering.id(), UUID.randomUUID(), 35, 2)));
@@ -137,7 +138,8 @@ class AnalyticsReportingTest {
                 .andExpect(jsonPath("$.totalStudents").value(12))
                 .andExpect(jsonPath("$.toGrade").value(5))
                 .andExpect(jsonPath("$.averagePerformance").value(78.5))
-                .andExpect(jsonPath("$.notSubmitted").value(4));
+                .andExpect(jsonPath("$.notSubmitted").value(4))
+                .andExpect(jsonPath("$.courses[0].nextUngradedAssignmentId").value(nextUngradedAssignmentId.toString()));
     }
 
     @Test

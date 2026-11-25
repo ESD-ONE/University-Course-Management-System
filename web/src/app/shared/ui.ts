@@ -59,6 +59,55 @@ export function saveBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const PREVIEWABLE: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  txt: 'text/plain',
+  mp4: 'video/mp4',
+};
+
+/** True if the browser can show this file itself (PDF, image, text, video). */
+export function canPreview(fileName: string | null | undefined): boolean {
+  const ext = (fileName ?? '').split('.').pop()?.toLowerCase() ?? '';
+  return ext in PREVIEWABLE;
+}
+
+/** Opens the file in a new tab when the browser can render it, otherwise downloads it.
+ * The type is taken from the file name because some endpoints serve every file as
+ * application/octet-stream, which a browser would only ever download. */
+export function openBlob(blob: Blob, fileName: string): void {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  const type = PREVIEWABLE[ext];
+  if (!type) {
+    saveBlob(blob, fileName);
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([blob], { type }));
+  // No 'noopener' here: with it window.open always returns null, which would look like a
+  // blocked pop-up and trigger the download fallback as well. A blob: URL is same-origin.
+  const win = window.open(url, '_blank');
+  if (!win) saveBlob(blob, fileName);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** A small emoji for a file, by extension — used in attachment chips. */
+export function fileIcon(fileName: string | null | undefined): string {
+  const ext = (fileName ?? '').split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'pdf') return '📕';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return '🖼️';
+  if (['doc', 'docx', 'odt', 'txt'].includes(ext)) return '📄';
+  if (['ppt', 'pptx', 'key'].includes(ext)) return '📊';
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return '📈';
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '🗜️';
+  if (['mp4', 'mov', 'webm'].includes(ext)) return '🎬';
+  return '📎';
+}
+
 export function initials(name: string | null | undefined): string {
   return (name ?? '?')
     .split(' ')

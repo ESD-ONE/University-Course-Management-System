@@ -3,8 +3,11 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AdminDashboard, LecturerDashboard, StudentDashboard } from '../../core/models/analytics.model';
 import { REGISTRATION_ACTION_LABELS } from '../../core/models/enrollment.model';
+import { UpcomingItem } from '../../core/models/grading.model';
 import { AnalyticsService } from '../../core/services/analytics.service';
 import { AuthService } from '../../core/services/auth.service';
+import { GradingService } from '../../core/services/grading.service';
+import { UpcomingListComponent } from '../../shared/upcoming-list.component';
 import { donutGradient, errorMessage, initials, percentOf, Segment, withColors } from '../../shared/ui';
 
 /**
@@ -16,12 +19,13 @@ import { donutGradient, errorMessage, initials, percentOf, Segment, withColors }
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, UpcomingListComponent],
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent {
   readonly auth = inject(AuthService);
   private analytics = inject(AnalyticsService);
+  private grading = inject(GradingService);
 
   readonly role = computed(() => this.auth.currentUser()?.role ?? 'STUDENT');
   readonly loading = signal(true);
@@ -31,6 +35,7 @@ export class DashboardComponent {
   readonly admin = signal<AdminDashboard | null>(null);
   readonly lecturer = signal<LecturerDashboard | null>(null);
   readonly student = signal<StudentDashboard | null>(null);
+  readonly upcoming = signal<UpcomingItem[]>([]);
 
   readonly donutGradient = donutGradient;
   readonly percentOf = percentOf;
@@ -57,6 +62,7 @@ export class DashboardComponent {
 
   constructor() {
     this.load();
+    this.grading.upcoming(7).subscribe({ next: (v) => this.upcoming.set(v), error: () => {} });
   }
 
   load(): void {

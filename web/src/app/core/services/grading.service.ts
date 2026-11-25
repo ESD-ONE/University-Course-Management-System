@@ -13,6 +13,7 @@ import {
   MySubmissionResponse,
   OfferingAnalyticsResponse,
   SubmissionRow,
+  UpcomingItem,
 } from '../models/grading.model';
 
 export interface AssignmentListQuery {
@@ -111,6 +112,14 @@ export class GradingService {
   offeringAnalytics(offeringId: string): Observable<OfferingAnalyticsResponse> {
     return this.http.get<OfferingAnalyticsResponse>(`${GRADING_API_BASE_URL}/stats/offering-analytics`, {
       params: new HttpParams().set('offeringId', offeringId),
+    });
+  }
+
+  /** Lecture sessions starting soon and assignments due soon, merged and sorted by time,
+   * scoped to the caller the same way the assignments list is. */
+  upcoming(days = 7): Observable<UpcomingItem[]> {
+    return this.http.get<UpcomingItem[]>(`${GRADING_API_BASE_URL}/dashboard/upcoming`, {
+      params: new HttpParams().set('days', days),
     });
   }
 }

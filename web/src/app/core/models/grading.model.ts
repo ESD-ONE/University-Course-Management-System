@@ -137,3 +137,20 @@ export interface OfferingAnalyticsResponse {
   classAverage: number | null;
   atRisk: AtRiskRow[];
 }
+
+export type UpcomingItemType = 'LECTURE' | 'ASSIGNMENT_DUE';
+
+/** One row of the role-scoped "what's coming up" dashboard feed — see
+ * docs/ASSIGNMENT_WEEK_LINKING_AND_DASHBOARD_ARCHITECTURE.md section 3.2. Exactly one of
+ * assignmentId/sessionId is set, matching type. */
+export interface UpcomingItem {
+  type: UpcomingItemType;
+  offeringId: string;
+  courseCode: string | null;
+  courseName: string | null;
+  title: string;
+  at: string;
+  assignmentId: string | null;
+  sessionId: string | null;
+  meetingUrl: string | null;
+}

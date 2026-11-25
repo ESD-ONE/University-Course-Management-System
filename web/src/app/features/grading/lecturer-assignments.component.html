@@ -82,47 +82,11 @@
 }
 
 @if (editing(); as e) {
-  <div class="modal-overlay" (click)="editing.set(null)">
-    <div class="modal-box" (click)="$event.stopPropagation()">
-      <div class="modal-head">
-        <div><h3>{{ e === 'new' ? 'Create Assignment' : 'Edit Assignment' }}</h3><p>{{ e === 'new' ? 'Saved as a draft — publish it when it is ready for students.' : 'Changes are visible to students immediately.' }}</p></div>
-        <button class="modal-close" (click)="editing.set(null)">✕</button>
-      </div>
-      <form [formGroup]="form" (ngSubmit)="save()">
-        <div class="modal-body">
-          @if (dialogError()) { <div class="modal-error">{{ dialogError() }}</div> }
-          <div class="field">
-            <label for="afCourse">Course</label>
-            <select id="afCourse" formControlName="offeringId">
-              @for (o of offerings(); track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
-            </select>
-          </div>
-          <div class="field">
-            <label for="afTitle">Title</label>
-            <input id="afTitle" type="text" formControlName="title" placeholder="e.g. Programming Exercise 2" />
-          </div>
-          <div class="field">
-            <label for="afDesc">Instructions</label>
-            <textarea id="afDesc" rows="4" formControlName="description" placeholder="What students need to do and submit"></textarea>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label for="afDue">Due</label>
-              <input id="afDue" type="datetime-local" formControlName="dueDate" />
-            </div>
-            <div class="field">
-              <label for="afMax">Max Marks</label>
-              <input id="afMax" type="number" min="1" max="1000" formControlName="maxMarks" />
-            </div>
-          </div>
-        </div>
-        <div class="modal-foot">
-          <button type="button" class="btn btn-secondary" (click)="editing.set(null)">Cancel</button>
-          <button type="submit" class="btn btn-primary" [disabled]="form.invalid || submitting()">{{ submitting() ? 'Saving…' : 'Save' }}</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <app-assignment-form-dialog
+    [assignment]="e === 'new' ? null : e"
+    [offerings]="offerings()"
+    (saved)="onSaved($event)"
+    (closed)="editing.set(null)" />
 }
 
 @if (toast(); as t) {

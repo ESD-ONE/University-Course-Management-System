@@ -45,25 +45,22 @@
   </app-filter-bar>
 
   @if (pagedCourses().length) {
-    <div class="card" style="padding:16px;overflow:hidden;">
-      <div class="table-scroll">
-        <div class="grid g3">
-          @for (c of pagedCourses(); track c.offeringId) {
-            <button type="button" class="tile-card" (click)="openOffering(c.offeringId)">
-              <div class="tile-card-title">{{ c.code }}</div>
-              <div class="tile-card-sub">{{ c.name }}</div>
-              <div class="tile-card-meta">
-                <span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span>
-                @if (!yearId) { <span class="badge b-violet">{{ c.academicYearName }}</span> }
-                <span style="font-size:11.5px;color:var(--ink-faint);">Year {{ c.yearOfStudy }}</span>
-                @if (c.myStatus) {
-                  <span class="badge" [class.b-success]="c.myStatus === 'ENROLLED'" [class.b-gold]="c.myStatus === 'WAITLISTED'" [class.b-ink]="c.myStatus === 'COMPLETED'">{{ c.myStatus }}</span>
-                }
-              </div>
-            </button>
-          }
-        </div>
-      </div>
+    <div class="grid g3 tile-grid">
+      @for (c of pagedCourses(); track c.offeringId) {
+        <button type="button" class="tile-card" (click)="openOffering(c.offeringId)">
+          <div class="tile-card-title">{{ c.code }}</div>
+          <div class="tile-card-sub">{{ c.name }}</div>
+          <div class="tile-card-meta">
+            <span class="badge" [class.b-success]="c.status === 'PUBLISHED'" [class.b-ink]="c.status === 'DRAFT' || c.status === 'CANCELLED'">{{ c.status }}</span>
+            @if (!yearId) { <span class="badge b-violet">{{ c.academicYearName }}</span> }
+            <span style="font-size:11.5px;color:var(--ink-faint);">Year {{ c.yearOfStudy }}</span>
+            @if (c.myStatus) {
+              <span class="badge" [class.b-success]="c.myStatus === 'ENROLLED'" [class.b-gold]="c.myStatus === 'WAITLISTED'" [class.b-ink]="c.myStatus === 'COMPLETED'">{{ c.myStatus }}</span>
+            }
+          </div>
+          <span class="tile-card-cta">Open course ›</span>
+        </button>
+      }
     </div>
     <app-pager
       [page]="page()"

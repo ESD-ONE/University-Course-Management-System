@@ -55,7 +55,8 @@ public class SourceClients {
     // Assignment & Grading
     public record CourseResult(UUID offeringId, UUID studentId, double percentage, int gradedAssignments) {}
     public record OfferingSummary(UUID offeringId, String courseCode, String courseName, long totalStudents,
-                                  int assignments, long submitted, long graded, long pending, Double classAverage) {}
+                                  int assignments, long submitted, long graded, long pending, Double classAverage,
+                                  UUID nextUngradedAssignmentId) {}
     public record CourseGrade(UUID offeringId, String courseCode, String courseName, int credits, String academicYearName,
                               String academicYearStatus, String semesterName, int gradedAssignments, Double percentage,
                               String letter, Double points) {}

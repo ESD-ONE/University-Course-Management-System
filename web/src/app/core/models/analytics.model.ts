@@ -38,6 +38,9 @@ export interface LecturerCourse {
   graded: number;
   submitted: number;
   classAverage: number | null;
+  /** The soonest-due assignment in this course that still has an ungraded submission —
+   * null if nothing is pending. Links the dashboard straight to what to grade next. */
+  nextUngradedAssignmentId: string | null;
 }
 
 export interface LecturerDashboard {

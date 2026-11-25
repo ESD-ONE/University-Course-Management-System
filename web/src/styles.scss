@@ -353,17 +353,79 @@ h1.page-title { font-size: 27px; font-weight: 800; letter-spacing: -.01em; margi
 .list-card.selected { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 
 /* ---------- clickable/static browse cards (Learning Hub year/program grids) ---------- */
+.tile-grid { margin-bottom: 4px; }
 .tile-card {
-  background: var(--surface); border: 1.5px solid var(--line-soft); border-radius: var(--radius-lg);
-  padding: 20px; cursor: pointer; text-align: left; width: 100%; display: flex; flex-direction: column; gap: 8px;
-  transition: border-color .15s var(--ease), box-shadow .15s var(--ease), transform .15s var(--ease);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 18px 20px; cursor: pointer; text-align: left; width: 100%; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
 }
-.tile-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-3px); }
+.tile-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+.tile-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tile-card.static { cursor: default; }
-.tile-card.static:hover { border-color: var(--line-soft); box-shadow: var(--shadow-sm); transform: none; }
+.tile-card.static:hover { border-color: var(--line); background: var(--surface); }
 .tile-card-title { font-size: 15px; font-weight: 800; color: var(--ink); }
-.tile-card-sub { font-size: 12px; color: var(--ink-soft); }
+.tile-card-sub { font-size: 12.5px; color: var(--ink-soft); }
 .tile-card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.tile-card-cta { font-size: 12px; font-weight: 600; color: var(--accent); margin-top: 4px; }
+
+/* ---------- readable-width page body (detail/workspace pages) ---------- */
+.page-narrow { max-width: 1080px; }
+
+/* ---------- course workspace ---------- */
+.ws-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.ws-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.ws-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 18px 0 6px; flex-wrap: wrap; }
+.ws-month { font-size: 12px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 8px; }
+.ws-week { padding: 0; overflow: visible; margin-bottom: 12px; }
+.ws-week-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 20px; background: none; border: none; cursor: pointer; text-align: left; border-radius: var(--radius-lg);
+}
+.ws-week-head:hover { background: var(--surface2); }
+.ws-week-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ws-week-title b { font-size: 15px; }
+.ws-week-dates { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+.ws-week-body { padding: 4px 20px 20px; border-top: 1px solid var(--line-soft); }
+.ws-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 0 4px; }
+.ws-draft-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: var(--gold-soft); color: var(--gold); border-radius: var(--radius-md); padding: 10px 14px; font-size: 12.5px; margin-top: 14px;
+}
+.ws-section-label { font-size: 11.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+.ws-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; background: var(--surface);
+}
+.ws-item-main { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.ws-item-icon {
+  width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0;
+  background: var(--accent-soft); font-size: 16px;
+}
+.ws-item-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.ws-item-sub { font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
+.ws-item-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.ws-empty { color: var(--ink-faint); font-size: 12.5px; margin: 14px 0 0; }
+.ws-inline-form { background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px; margin-top: 14px; }
+
+/* ---------- attachment chips (assignment briefs, submissions, materials) ---------- */
+.attachment {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-md); padding: 10px 12px; background: var(--surface2);
+}
+.attachment-name { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; min-width: 0; }
+.attachment-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.dropzone,
+.field label.dropzone {
+  display: block; text-align: center; cursor: pointer; padding: 20px; border: 1.5px dashed var(--line);
+  border-radius: var(--radius-md); background: var(--surface2); transition: border-color .15s var(--ease);
+  /* reset the form-label look a .field label would otherwise give it */
+  font-size: 13px; font-weight: 400; color: var(--ink); letter-spacing: normal; text-transform: none; margin-bottom: 0;
+}
+.dropzone:hover { border-color: var(--accent); }
+.dropzone b { display: block; font-size: 13px; margin-top: 4px; }
+.dropzone small { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 4px; }
 
 /* A master-detail list's own left panel: scrolls within itself instead of growing the
  * whole page, so the detail panel beside it (and the page header/filters above it) stay
