@@ -359,8 +359,8 @@ public class GradingService {
                 .collect(Collectors.toMap(g -> g.getSubmission().getId(), Function.identity()));
         List<OfferingSummaryResponse> result = new ArrayList<>();
         for (AcademicClient.Offering o : offerings.values()) {
-            Set<UUID> assignmentIds = all.stream().filter(a -> a.getCourseOfferingId().equals(o.id()))
-                    .map(Assignment::getId).collect(Collectors.toSet());
+            List<Assignment> forOAssignments = all.stream().filter(a -> a.getCourseOfferingId().equals(o.id())).toList();
+            Set<UUID> assignmentIds = forOAssignments.stream().map(Assignment::getId).collect(Collectors.toSet());
             List<Submission> forO = subs.stream().filter(s -> assignmentIds.contains(s.getAssignment().getId())).toList();
             long graded = forO.stream().filter(s -> gradeBySubmission.containsKey(s.getId())).count();
             double earned = 0, possible = 0;
@@ -371,8 +371,13 @@ public class GradingService {
                 possible += s.getAssignment().getMaxMarks();
             }
             Double average = possible == 0 ? null : Math.round(earned / possible * 1000.0) / 10.0;
+            UUID nextUngraded = forOAssignments.stream()
+                    .sorted(Comparator.comparing(Assignment::getDueDate))
+                    .filter(a -> forO.stream().anyMatch(s -> s.getAssignment().getId().equals(a.getId())
+                            && !gradeBySubmission.containsKey(s.getId())))
+                    .map(Assignment::getId).findFirst().orElse(null);
             result.add(new OfferingSummaryResponse(o.id(), o.code(), o.name(), enrolled.getOrDefault(o.id(), 0L),
-                    assignmentIds.size(), forO.size(), graded, forO.size() - graded, average));
+                    assignmentIds.size(), forO.size(), graded, forO.size() - graded, average, nextUngraded));
         }
         return result;
     }

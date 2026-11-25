@@ -30,7 +30,7 @@ public final class Dtos {
 
     public record LecturerCourse(UUID offeringId, String code, String name, String academicYearName, String semesterName,
                                  long enrolled, int capacity, String status, int assignments, long graded,
-                                 long submitted, Double classAverage) {}
+                                 long submitted, Double classAverage, UUID nextUngradedAssignmentId) {}
 
     public record LecturerDashboard(int myCourses, long totalStudents, long toGrade, Double averagePerformance,
                                     long graded, long pending, long notSubmitted, List<LecturerCourse> courses) {}

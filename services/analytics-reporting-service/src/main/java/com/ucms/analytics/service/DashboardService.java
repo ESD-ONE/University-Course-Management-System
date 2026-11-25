@@ -58,7 +58,8 @@ public class DashboardService {
                 avgCount++;
             }
             courses.add(new LecturerCourse(o.id(), o.code(), o.name(), o.academicYearName(), o.semesterName(),
-                    enrolled, o.capacity(), o.status(), assignments, gr, sub, avg));
+                    enrolled, o.capacity(), o.status(), assignments, gr, sub, avg,
+                    s == null ? null : s.nextUngradedAssignmentId()));
         }
         Double average = avgCount == 0 ? null : Math.round(avgSum / avgCount * 10.0) / 10.0;
         return new LecturerDashboard(mine.size(), totalStudents, pending, average, graded, pending, notSubmitted, courses);

@@ -5,8 +5,12 @@ import com.ucms.grading.client.BaseClient;
 import com.ucms.grading.client.EnrollmentClient;
 import com.ucms.grading.client.IdentityClient;
 import com.ucms.grading.domain.Assignment;
+import com.ucms.grading.domain.CourseWeek;
+import com.ucms.grading.domain.LectureSession;
 import com.ucms.grading.messaging.EventPublisher;
 import com.ucms.grading.repository.AssignmentRepository;
+import com.ucms.grading.repository.CourseWeekRepository;
+import com.ucms.grading.repository.LectureSessionRepository;
 import com.ucms.grading.repository.SubmissionRepository;
 import com.ucms.grading.storage.FileStorage;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +57,8 @@ class AssignmentGradingTest {
     @Autowired MockMvc mockMvc;
     @Autowired AssignmentRepository assignmentRepository;
     @Autowired SubmissionRepository submissionRepository;
+    @Autowired CourseWeekRepository weekRepository;
+    @Autowired LectureSessionRepository lectureSessionRepository;
     @MockBean AcademicClient academic;
     @MockBean EnrollmentClient enrollment;
     @MockBean IdentityClient identity;
@@ -300,5 +306,69 @@ class AssignmentGradingTest {
     @Test
     void noToken_isUnauthorized() throws Exception {
         mockMvc.perform(get("/assignments")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void offeringSummary_reportsSoonestDueUngradedAssignment() throws Exception {
+        Assignment soon = assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(2));
+        Assignment later = assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(5));
+        submit(soon);
+        submit(later);
+        mockMvc.perform(get("/grades/offerings/" + offering.id() + "/summary").header("Authorization", token("LECTURER", lecturerId)))
+                .andExpect(jsonPath("$.nextUngradedAssignmentId").value(soon.getId().toString()));
+    }
+
+    @Test
+    void upcoming_mergesAssignmentsDueSoonAndPublishedLectures_sortedByTime() throws Exception {
+        assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(3)); // "Programming Exercise 2"
+        assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(20)); // outside the 7-day window
+
+        CourseWeek week = new CourseWeek();
+        week.setCourseOfferingId(offering.id());
+        week.setWeekNumber(1);
+        week.setStartDate(java.time.LocalDate.now());
+        week.setEndDate(java.time.LocalDate.now().plusDays(6));
+        week.setStatus(CourseWeek.Status.PUBLISHED);
+        week = weekRepository.save(week);
+
+        LectureSession published = new LectureSession();
+        published.setCourseOfferingId(offering.id());
+        published.setWeek(week);
+        published.setTitle("Week 1 lecture");
+        published.setStartsAt(OffsetDateTime.now().plusDays(1));
+        published.setEndsAt(OffsetDateTime.now().plusDays(1).plusHours(1));
+        published.setDeliveryMode(LectureSession.DeliveryMode.ONLINE);
+        published.setMeetingUrl("https://example.test/meet");
+        published.setStatus(LectureSession.Status.PUBLISHED);
+        lectureSessionRepository.save(published);
+
+        LectureSession draft = new LectureSession();
+        draft.setCourseOfferingId(offering.id());
+        draft.setWeek(week);
+        draft.setTitle("Unpublished lecture");
+        draft.setStartsAt(OffsetDateTime.now().plusDays(2));
+        draft.setEndsAt(OffsetDateTime.now().plusDays(2).plusHours(1));
+        draft.setDeliveryMode(LectureSession.DeliveryMode.ONLINE);
+        draft.setStatus(LectureSession.Status.DRAFT);
+        lectureSessionRepository.save(draft);
+
+        // Lecturer sees both the draft and published session, plus the in-window assignment.
+        mockMvc.perform(get("/dashboard/upcoming").header("Authorization", token("LECTURER", lecturerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].type").value("LECTURE"))
+                .andExpect(jsonPath("$[0].title").value("Week 1 lecture"))
+                .andExpect(jsonPath("$[1].type").value("LECTURE"))
+                .andExpect(jsonPath("$[1].title").value("Unpublished lecture"))
+                .andExpect(jsonPath("$[2].type").value("ASSIGNMENT_DUE"))
+                .andExpect(jsonPath("$[2].courseCode").value("COSC5105"));
+
+        // Student (per the fixture's mocked enrollment) sees only the published session
+        // and the assignment — not the draft lecture.
+        mockMvc.perform(get("/dashboard/upcoming").header("Authorization", token("STUDENT", studentId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].title").value("Week 1 lecture"))
+                .andExpect(jsonPath("$[1].type").value("ASSIGNMENT_DUE"));
     }
 }

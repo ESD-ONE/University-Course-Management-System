@@ -61,9 +61,12 @@ public final class Dtos {
 
     public record GradeHistoryResponse(List<CourseGradeRow> courses, Double gpa, int creditsGraded) {}
 
+    /** nextUngradedAssignmentId: the soonest-due assignment in this offering that still
+     * has at least one ungraded submission — null if nothing is pending. Lets the
+     * lecturer dashboard link its grading-progress bar straight to what to grade next. */
     public record OfferingSummaryResponse(UUID offeringId, String courseCode, String courseName, long totalStudents,
                                           int assignments, long submitted, long graded, long pending,
-                                          Double classAverage) {}
+                                          Double classAverage, UUID nextUngradedAssignmentId) {}
 
     public record CourseResultRow(UUID offeringId, UUID studentId, double percentage, int gradedAssignments) {}
 
@@ -83,4 +86,10 @@ public final class Dtos {
 
     public record OfferingAnalyticsResponse(List<AssignmentTrendPoint> assignments, Double weightedCourseAverage,
                                             Double classAverage, List<AtRiskRow> atRisk) {}
+
+    /** One row of the role-scoped "what's coming up" dashboard feed — a lecture about to
+     * start, or an assignment due soon. type is "LECTURE" or "ASSIGNMENT_DUE"; exactly one
+     * of assignmentId/sessionId is set, matching type. */
+    public record UpcomingItem(String type, UUID offeringId, String courseCode, String courseName, String title,
+                               OffsetDateTime at, UUID assignmentId, UUID sessionId, String meetingUrl) {}
 }
