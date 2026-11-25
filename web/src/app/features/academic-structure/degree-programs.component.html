@@ -123,8 +123,8 @@
                     <tbody>
                       @for (c of expandedCourses(); track c.id) {
                         <tr>
-                          <td class="cell-code">{{ c.catalogCourseCode }}</td>
-                          <td class="cell-name">{{ c.catalogCourseName }}</td>
+                          <td class="cell-code"><a class="btn-link" [routerLink]="['/app/learning/offerings', c.id]" title="Open course workspace">{{ c.catalogCourseCode }}</a></td>
+                          <td class="cell-name"><a [routerLink]="['/app/learning/offerings', c.id]" style="color:inherit;text-decoration:none;" title="Open course workspace">{{ c.catalogCourseName }}</a></td>
                           <td class="cell-soft">Year {{ c.yearOfStudy }}</td>
                           <td class="cell-soft">{{ c.semesterName ?? '—' }}</td>
                           <td class="cell-soft">{{ c.capacity }}</td>
@@ -132,6 +132,7 @@
                           <td class="cell-soft">{{ lecturerName(c.lecturerId) }}</td>
                           <td class="row-actions">
                             <app-row-menu [label]="'Actions for ' + c.catalogCourseCode">
+                              <button type="button" class="row-menu-item" (click)="openWorkspace(c)">Open course workspace</button>
                               <button type="button" class="row-menu-item" (click)="openEditCourse(c)">Edit course details</button>
                               <button type="button" class="row-menu-item" (click)="openAddAssignment(c)">Add Assignment</button>
                               <div class="row-menu-sep"></div>
@@ -398,57 +399,11 @@
 }
 
 @if (addingAssignmentFor(); as course) {
-  <div class="modal-overlay" (click)="closeAddAssignmentDialog()">
-    <div class="modal-box" (click)="$event.stopPropagation()">
-      <div class="modal-head">
-        <div>
-          <h3>Add Assignment</h3>
-          <p>{{ course.catalogCourseCode }} — {{ course.catalogCourseName }}</p>
-        </div>
-        <button class="modal-close" (click)="closeAddAssignmentDialog()">✕</button>
-      </div>
-      <form [formGroup]="assignmentForm" (ngSubmit)="submitAssignment()">
-        <div class="modal-body">
-          @if (assignmentError()) { <div class="modal-error">{{ assignmentError() }}</div> }
-          <div class="field">
-            <label for="newAssignTitle">Title</label>
-            <input id="newAssignTitle" type="text" formControlName="title" placeholder="e.g. Assignment 1 — Loops and Arrays" />
-          </div>
-          <div class="field">
-            <label for="newAssignDescription">Description</label>
-            <textarea id="newAssignDescription" formControlName="description" rows="3" placeholder="Optional instructions…"></textarea>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <label for="newAssignDue">Due Date</label>
-              <input id="newAssignDue" type="datetime-local" formControlName="dueDate" />
-            </div>
-            <div class="field">
-              <label for="newAssignMax">Max Marks</label>
-              <input id="newAssignMax" type="number" min="1" max="1000" formControlName="maxMarks" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="newAssignBrief">Brief (optional)</label>
-            <label for="newAssignBrief" class="list-card" style="display:block;text-align:center;cursor:pointer;padding:20px;border-style:dashed;">
-              <div style="font-size:20px;">📎</div>
-              <b style="font-size:13px;">{{ assignmentBriefFile()?.name ?? 'Choose an image or PDF to attach' }}</b>
-              <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">PDF or image · Max 20MB</div>
-              <input #briefFileInput id="newAssignBrief" type="file" accept="application/pdf,image/*" style="display:none;" (change)="pickAssignmentBrief($event)" />
-            </label>
-            @if (assignmentBriefFile()) {
-              <button type="button" class="btn-link" style="margin-top:6px;cursor:pointer;" (click)="clearAssignmentBrief(briefFileInput)">Remove file</button>
-            }
-          </div>
-          <p class="hint" style="margin:-10px 0 0;">Created as a draft — publish it from the Assignments screen when it's ready for students.</p>
-        </div>
-        <div class="modal-foot">
-          <button type="button" class="btn btn-secondary" (click)="closeAddAssignmentDialog()">Cancel</button>
-          <button type="submit" class="btn btn-primary" [disabled]="savingAssignment()">{{ savingAssignment() ? 'Creating…' : 'Create Assignment' }}</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <app-assignment-form-dialog
+    [fixedOfferingId]="course.id"
+    [fixedOfferingLabel]="course.catalogCourseCode + ' — ' + course.catalogCourseName"
+    (saved)="onAssignmentSaved($event)"
+    (closed)="addingAssignmentFor.set(null)" />
 }
 
 @if (toast(); as t) {

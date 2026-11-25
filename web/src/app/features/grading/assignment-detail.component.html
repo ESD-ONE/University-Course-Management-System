@@ -1,0 +1,83 @@
+@if (current(); as a) {
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <div class="card">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="badge" [class.b-gold]="!pastDue()" [class.b-danger]="pastDue()">{{ dueLabel(a) }}</span>
+        @if (a.status === 'CLOSED') { <span class="badge b-ink">Closed</span> }
+        <span class="badge" [class.b-success]="a.mySubmissionStatus === 'GRADED'" [class.b-accent]="a.mySubmissionStatus === 'SUBMITTED'" [class.b-ink]="a.mySubmissionStatus === 'NOT_SUBMITTED'">{{ statusLabel(a) }}</span>
+      </div>
+      <h2 style="margin:14px 0 4px;font-size:18px;">{{ a.title }}</h2>
+      <div style="font-size:12.5px;color:var(--ink-soft);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <span>{{ a.courseCode }} · {{ a.courseName }}</span>
+        @if (showCourseLink) { <a class="btn-link" [routerLink]="['/app/learning/offerings', a.offeringId]">Open course ›</a> }
+      </div>
+
+      <div style="display:flex;gap:40px;margin-top:16px;flex-wrap:wrap;">
+        <div><div class="stat-label">Due</div><div style="font-size:14px;font-weight:700;margin-top:4px;">{{ a.dueDate | date: 'EEE dd MMM y, HH:mm' }}</div></div>
+        <div><div class="stat-label">Max marks</div><div style="font-size:14px;font-weight:700;margin-top:4px;">{{ a.maxMarks }}</div></div>
+      </div>
+
+      <div class="ws-section-label">Instructions</div>
+      <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;white-space:pre-line;margin:0;">{{ a.description || 'No instructions provided.' }}</p>
+
+      @if (a.briefFileName) {
+        <div class="ws-section-label">Brief</div>
+        <div class="attachment">
+          <span class="attachment-name"><span>{{ fileIcon(a.briefFileName) }}</span><span>{{ a.briefFileName }}</span></span>
+          <div class="attachment-actions">
+            @if (canPreview(a.briefFileName)) { <button type="button" class="btn btn-secondary btn-sm" (click)="brief(a, 'view')">View</button> }
+            <button type="button" class="btn btn-secondary btn-sm" (click)="brief(a, 'download')">Download</button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;font-size:14px;">Your submission</h3>
+
+      @if (message(); as m) {
+        <div class="info-strip" [style.background]="m.error ? 'var(--danger-soft)' : 'var(--success-soft)'" [style.color]="m.error ? 'var(--danger)' : 'var(--success)'" style="margin-bottom:12px;">{{ m.text }}</div>
+      }
+
+      @if (a.mySubmissionStatus === 'GRADED') {
+        @if (a.myMarks !== null) {
+          <div class="info-strip" style="margin-bottom:12px;">
+            <b style="font-size:15px;">{{ a.myMarks }} / {{ a.maxMarks }}</b>
+            @if (a.myFeedback) { <div style="margin-top:6px;">“{{ a.myFeedback }}”</div> }
+          </div>
+        } @else {
+          <div class="info-strip" style="margin-bottom:12px;">Graded — your lecturer hasn't released the result yet.</div>
+        }
+      }
+
+      @if (a.myFileName) {
+        <div class="attachment" style="margin-bottom:12px;">
+          <span class="attachment-name">
+            <span>{{ fileIcon(a.myFileName) }}</span>
+            <span>{{ a.myFileName }}</span>
+          </span>
+          <div class="attachment-actions">
+            @if (canPreview(a.myFileName)) { <button type="button" class="btn btn-secondary btn-sm" (click)="mySubmission(a, 'view')">View</button> }
+            <button type="button" class="btn btn-secondary btn-sm" (click)="mySubmission(a, 'download')">Download</button>
+          </div>
+        </div>
+        <div class="cell-faint" style="font-size:11.5px;margin:-6px 0 12px;">Submitted {{ a.mySubmittedAt | date: 'dd MMM y, HH:mm' }}</div>
+      }
+
+      @if (canSubmit()) {
+        <label class="dropzone">
+          <div style="font-size:20px;">⬆️</div>
+          <b>{{ file()?.name ?? (a.myFileName ? 'Choose a new file to replace it' : 'Choose a file to upload') }}</b>
+          <small>Max 20MB</small>
+          <input type="file" hidden [disabled]="uploading()" (change)="pick($event)" />
+        </label>
+        <button type="button" class="btn btn-primary btn-block" style="margin-top:12px;" [disabled]="!file() || uploading()" (click)="submit()">
+          {{ uploading() ? 'Uploading…' : a.myFileName ? 'Replace submission' : 'Submit assignment' }}
+        </button>
+        <p style="font-size:11px;color:var(--ink-faint);margin:10px 0 0;">You can replace your submission any time before the deadline, until it's graded.</p>
+      } @else if (a.mySubmissionStatus === 'NOT_SUBMITTED') {
+        <p style="font-size:12.5px;color:var(--ink-faint);margin:0;">{{ pastDue() ? 'The deadline has passed.' : 'This assignment is closed for submissions.' }}</p>
+      }
+    </div>
+  </div>
+}

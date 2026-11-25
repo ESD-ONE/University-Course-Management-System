@@ -1,0 +1,87 @@
+<div class="modal-overlay" (click)="closed.emit()">
+  <div class="modal-box" style="max-width:560px;" (click)="$event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <h3>{{ isEdit ? 'Edit Assignment' : 'New Assignment' }}</h3>
+        <p>{{ isEdit ? 'Changes are visible to students immediately.' : 'Saved as a draft — publish it when it is ready for students.' }}</p>
+      </div>
+      <button type="button" class="modal-close" (click)="closed.emit()" aria-label="Close">✕</button>
+    </div>
+    <form [formGroup]="form" (ngSubmit)="save()">
+      <div class="modal-body">
+        @if (error()) { <div class="modal-error">{{ error() }}</div> }
+
+        <div class="field">
+          <label for="afCourse">Course</label>
+          @if (courseLocked) {
+            <div class="attachment" style="background:var(--surface2);"><span class="attachment-name">📘 <span>{{ courseLabel() }}</span></span></div>
+          } @else {
+            <select id="afCourse" formControlName="offeringId">
+              @for (o of offerings; track o.id) { <option [value]="o.id">{{ o.code }} — {{ o.name }} ({{ o.academicYearName }})</option> }
+            </select>
+          }
+        </div>
+
+        <div class="field">
+          <label for="afTitle">Title</label>
+          <input id="afTitle" type="text" formControlName="title" placeholder="e.g. Programming Exercise 2" />
+          @if (form.controls.title.touched && form.controls.title.invalid) { <small style="color:var(--danger);">A title is required.</small> }
+        </div>
+
+        <div class="field">
+          <label for="afDesc">Instructions</label>
+          <textarea id="afDesc" rows="4" formControlName="description" placeholder="What students need to do and submit"></textarea>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="afDue">Due</label>
+            <input id="afDue" type="datetime-local" formControlName="dueDate" />
+          </div>
+          <div class="field">
+            <label for="afMax">Max marks</label>
+            <input id="afMax" type="number" min="1" max="1000" formControlName="maxMarks" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="afWeek">Week</label>
+          <select id="afWeek" formControlName="weekId">
+            <option value="">Not tied to a week</option>
+            @for (w of weeks(); track w.id) {
+              <option [value]="w.id">Week {{ w.weekNumber }}{{ w.title ? ' — ' + w.title : '' }} ({{ w.startDate | date: 'dd MMM' }} – {{ w.endDate | date: 'dd MMM' }})</option>
+            }
+          </select>
+          @if (!weeks().length) { <small style="color:var(--ink-faint);">This course has no weeks yet — add them in the course workspace.</small> }
+        </div>
+
+        <div class="field" style="margin-bottom:0;">
+          <label>Brief / materials <span style="color:var(--ink-faint);font-weight:400;">(optional)</span></label>
+          @if (brief(); as f) {
+            <div class="attachment">
+              <span class="attachment-name"><span>{{ fileIcon(f.name) }}</span><span>{{ f.name }}</span></span>
+              <div class="attachment-actions"><button type="button" class="btn btn-secondary btn-sm" (click)="brief.set(null)">Remove</button></div>
+            </div>
+          } @else {
+            @if (assignment?.briefFileName) {
+              <div class="attachment" style="margin-bottom:8px;">
+                <span class="attachment-name"><span>{{ fileIcon(assignment!.briefFileName) }}</span><span>{{ assignment!.briefFileName }}</span></span>
+                <span class="cell-faint" style="font-size:11.5px;">current file</span>
+              </div>
+            }
+            <label class="dropzone">
+              <div style="font-size:20px;">📎</div>
+              <b>{{ assignment?.briefFileName ? 'Replace the file' : 'Attach a file' }}</b>
+              <small>PDF, slides, a document or a starter zip — max 20MB</small>
+              <input type="file" hidden (change)="pickBrief($event)" />
+            </label>
+          }
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-secondary" (click)="closed.emit()">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Saving…' : isEdit ? 'Save changes' : 'Create assignment' }}</button>
+      </div>
+    </form>
+  </div>
+</div>

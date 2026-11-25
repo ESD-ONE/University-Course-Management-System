@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   AcademicYearResponse,
@@ -18,19 +19,15 @@ import { ScopeHolderResponse } from '../../core/models/roles.model';
 import { UserResponse } from '../../core/models/user.model';
 import { AcademicStructureService } from '../../core/services/academic-structure.service';
 import { AuthService } from '../../core/services/auth.service';
-import { GradingService } from '../../core/services/grading.service';
 import { RolesService } from '../../core/services/roles.service';
 import { UserService } from '../../core/services/user.service';
 import { SearchableSelectComponent } from '../../shared/searchable-select.component';
 import { SearchInputComponent } from '../../shared/search-input.component';
 import { RowMenuComponent } from '../../shared/row-menu.component';
 import { FilterBarComponent } from '../../shared/filter-bar.component';
+import { AssignmentFormDialogComponent } from '../grading/assignment-form-dialog.component';
+import { AssignmentResponse } from '../../core/models/grading.model';
 import { countActive, matchesText, numberOptions, showingSummary, statusOptions, uniqueOptions } from '../../shared/filters';
-
-function toLocalInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /**
  * "Program Management → Degree Programs" — which reference degrees (managed on the
@@ -43,7 +40,7 @@ function toLocalInput(d: Date): string {
 @Component({
   selector: 'app-degree-programs',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, AssignmentFormDialogComponent],
   templateUrl: './degree-programs.component.html',
 })
 export class DegreeProgramsComponent implements OnInit {
@@ -51,7 +48,7 @@ export class DegreeProgramsComponent implements OnInit {
   private academicStructureService = inject(AcademicStructureService);
   private userService = inject(UserService);
   private rolesService = inject(RolesService);
-  private gradingService = inject(GradingService);
+  private router = inject(Router);
   readonly auth = inject(AuthService);
   private loadRequestId = 0;
 
@@ -190,16 +187,6 @@ export class DegreeProgramsComponent implements OnInit {
   /** "Add Assignment" — a new, draft assignment on one specific course offering (a row
    * of the expanded "Show courses" table), never directly on the degree program. */
   readonly addingAssignmentFor = signal<CourseAcademicYearResponse | null>(null);
-  readonly assignmentError = signal<string | null>(null);
-  readonly savingAssignment = signal(false);
-  readonly assignmentBriefFile = signal<File | null>(null);
-
-  readonly assignmentForm = this.fb.group({
-    title: ['', [Validators.required, Validators.maxLength(200)]],
-    description: [''],
-    dueDate: ['', Validators.required],
-    maxMarks: [100, [Validators.required, Validators.min(1), Validators.max(1000)]],
-  });
 
   readonly assignedReferenceIdsForDialogYear = computed(
     () => new Set(this.assignDialogYearAssignments().map((a) => a.degreeProgramId)),
@@ -626,72 +613,18 @@ export class DegreeProgramsComponent implements OnInit {
   }
 
   openAddAssignment(course: CourseAcademicYearResponse): void {
-    const due = new Date(Date.now() + 7 * 86400000);
-    due.setHours(23, 59, 0, 0);
-    this.assignmentForm.reset({ title: '', description: '', dueDate: toLocalInput(due), maxMarks: 100 });
-    this.assignmentError.set(null);
-    this.assignmentBriefFile.set(null);
     this.addingAssignmentFor.set(course);
   }
 
-  pickAssignmentBrief(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
-    this.assignmentBriefFile.set(file);
-  }
-
-  clearAssignmentBrief(input: HTMLInputElement): void {
-    input.value = '';
-    this.assignmentBriefFile.set(null);
-  }
-
-  submitAssignment(): void {
+  onAssignmentSaved(saved: AssignmentResponse): void {
     const course = this.addingAssignmentFor();
-    if (!course || this.assignmentForm.invalid) {
-      this.assignmentError.set('Enter a title, due date and maximum marks.');
-      return;
-    }
-    this.assignmentError.set(null);
-    this.savingAssignment.set(true);
-    this.assignmentForm.disable();
-    const v = this.assignmentForm.getRawValue();
-    const brief = this.assignmentBriefFile();
-    this.gradingService
-      .create({
-        offeringId: course.id,
-        title: v.title ?? '',
-        description: v.description || null,
-        dueDate: new Date(v.dueDate ?? '').toISOString(),
-        maxMarks: Number(v.maxMarks),
-      })
-      .subscribe({
-        next: (saved) => {
-          const finish = (message: string) => {
-            this.savingAssignment.set(false);
-            this.assignmentForm.enable();
-            this.addingAssignmentFor.set(null);
-            this.showToast(message, false);
-          };
-          const createdMsg = `"${saved.title}" created as a draft for ${course.catalogCourseCode} — publish it from Assignments when ready.`;
-          if (brief) {
-            this.gradingService.uploadBrief(saved.id, brief).subscribe({
-              next: () => finish(`${createdMsg} Brief attached.`),
-              error: () => finish(`${createdMsg} Could not attach the brief — add it from the Assignments screen.`),
-            });
-          } else {
-            finish(createdMsg);
-          }
-        },
-        error: (err: HttpErrorResponse) => {
-          this.savingAssignment.set(false);
-          this.assignmentForm.enable();
-          this.assignmentError.set(err.error?.message ?? 'Could not create this assignment.');
-        },
-      });
+    this.addingAssignmentFor.set(null);
+    this.showToast(`"${saved.title}" created as a draft for ${course?.catalogCourseCode ?? 'this course'} — publish it from the course workspace when it's ready.`, false);
   }
 
-  closeAddAssignmentDialog(): void {
-    this.addingAssignmentFor.set(null);
-    this.assignmentBriefFile.set(null);
+  /** The course's week-by-week workspace: lectures, materials, assignments. */
+  openWorkspace(course: CourseAcademicYearResponse): void {
+    this.router.navigate(['/app/learning/offerings', course.id]);
   }
 
   private showToast(message: string, error: boolean): void {

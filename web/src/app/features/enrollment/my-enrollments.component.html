@@ -24,15 +24,24 @@
         <tbody>
           @for (r of rows(); track r.id) {
             <tr>
-              <td class="cell-code">{{ r.courseCode }}</td>
-              <td class="cell-name">{{ r.courseName }}</td>
+              <td class="cell-code">
+                @if (r.status === 'ENROLLED') { <a class="btn-link" [routerLink]="['/app/learning/offerings', r.offeringId]">{{ r.courseCode }}</a> }
+                @else { {{ r.courseCode }} }
+              </td>
+              <td class="cell-name">
+                @if (r.status === 'ENROLLED') { <a [routerLink]="['/app/learning/offerings', r.offeringId]" style="color:inherit;text-decoration:none;">{{ r.courseName }}</a> }
+                @else { {{ r.courseName }} }
+              </td>
               <td class="cell-soft">{{ r.lecturerName ?? '—' }}</td>
               <td><span class="badge" [class.b-accent]="r.requirementType === 'CORE'" [class.b-violet]="r.requirementType !== 'CORE'">{{ r.requirementType === 'CORE' ? 'Core' : 'Elective' }}</span></td>
               <td class="cell-soft">{{ r.credits ?? '—' }}</td>
               <td class="cell-soft">{{ r.academicYearName }}{{ r.semesterName ? ' · ' + r.semesterName : '' }}</td>
               <td><span class="badge" [class.b-success]="r.status === 'ENROLLED'" [class.b-gold]="r.status === 'WAITLISTED'">{{ r.status === 'ENROLLED' ? 'Enrolled' : 'Waitlisted' }}</span></td>
-              <td style="text-align:right;">
-                <button class="btn btn-secondary btn-sm" (click)="confirming.set(r)">{{ r.status === 'WAITLISTED' ? 'Leave Waitlist' : 'Drop' }}</button>
+              <td style="text-align:right;white-space:nowrap;">
+                @if (r.status === 'ENROLLED') {
+                  <a class="btn btn-primary btn-sm" [routerLink]="['/app/learning/offerings', r.offeringId]">Open course</a>
+                }
+                <button class="btn btn-secondary btn-sm" style="margin-left:6px;" (click)="confirming.set(r)">{{ r.status === 'WAITLISTED' ? 'Leave waitlist' : 'Drop' }}</button>
               </td>
             </tr>
           }
