@@ -28,7 +28,7 @@ import static org.awaitility.Awaitility.await;
  * delivered by replica B too, because the user's live stream may be held by B.
  */
 @Testcontainers
-class LivePushFanoutTest {
+class LivePushFanoutIT {
 
     @Container
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);

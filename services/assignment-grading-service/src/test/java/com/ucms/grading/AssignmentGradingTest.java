@@ -202,6 +202,18 @@ class AssignmentGradingTest {
     }
 
     @Test
+    void aStudentCannotDownloadAnotherStudentsSubmission() throws Exception {
+        Assignment a = assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(3));
+        String submissionId = submit(a);
+        // A classmate enrolled in the same course - still not their file.
+        when(enrollment.isEnrolled(strangerId, offering.id())).thenReturn(true);
+
+        mockMvc.perform(get("/submissions/" + submissionId + "/file").header("Authorization", token("STUDENT", strangerId)))
+                .andExpect(status().isForbidden());
+        verify(storage, never()).get(anyString());
+    }
+
+    @Test
     void resubmittingReplaces_butNotAfterGrading() throws Exception {
         Assignment a = assignment(Assignment.Status.OPEN, OffsetDateTime.now().plusDays(3));
         String submissionId = submit(a);
