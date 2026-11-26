@@ -78,9 +78,9 @@ describe('CourseWorkspaceComponent', () => {
     expect(views.find((v) => v.id === 'w2')?.assignments).toEqual([]);
   });
 
-  it('unscheduledAssignments are those with no weekId', () => {
+  it('otherAssignments are those with no weekId', () => {
     const c = make();
-    expect(c.unscheduledAssignments().map((a) => a.id)).toEqual(['a2']);
+    expect(c.otherAssignments().map((a) => a.id)).toEqual(['a2']);
   });
 
   it('groups weeks by month', () => {

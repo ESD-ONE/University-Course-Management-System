@@ -68,40 +68,36 @@ describe('LecturerAssignmentsComponent', () => {
     expect(c.activeFilterCount()).toBe(2);
   });
 
-  it('openNew prepares a blank draft form', () => {
+  // The form itself lives in AssignmentFormDialogComponent (see its own spec); this
+  // screen only opens the dialog and reacts to what it saved.
+  it('openNew opens the dialog for a new assignment', () => {
     const c = make();
     c.openNew();
     expect(c.editing()).toBe('new');
-    expect(c.form.controls.offeringId.value).toBe('o1'); // defaults to first offering
-    expect(c.form.controls.maxMarks.value).toBe(100);
   });
 
-  it('openEdit loads the assignment and locks its offering', () => {
+  it('openEdit opens the dialog for that assignment', () => {
     const c = make();
     c.openEdit(assignments[1]);
     expect(c.editing()).toBe(assignments[1]);
-    expect(c.form.controls.title.value).toBe('Quiz');
-    expect(c.form.controls.offeringId.disabled).toBeTrue();
   });
 
-  it('save creates a new draft and reloads', () => {
-    grading.create.and.returnValue(of({ title: 'New' } as AssignmentResponse));
+  it('onSaved after creating closes the dialog, reports the draft and reloads', () => {
     const c = make();
     c.openNew();
-    c.form.patchValue({ title: 'New', dueDate: '2026-01-01T10:00', maxMarks: 20 });
     grading.list.calls.reset();
-    c.save();
-    expect(grading.create).toHaveBeenCalled();
+    c.onSaved({ title: 'New' } as AssignmentResponse);
+    expect(c.editing()).toBeNull();
     expect(c.toast()?.message).toContain('created as a draft');
     expect(grading.list).toHaveBeenCalled();
   });
 
-  it('save does nothing when the form is invalid', () => {
+  it('onSaved after editing reports the update', () => {
     const c = make();
-    c.openNew();
-    c.form.patchValue({ title: '' }); // required
-    c.save();
-    expect(grading.create).not.toHaveBeenCalled();
+    c.openEdit(assignments[1]);
+    c.onSaved(assignments[1]);
+    expect(c.editing()).toBeNull();
+    expect(c.toast()?.message).toContain('"Quiz" updated');
   });
 
   it('setStatus publishes and reports it', () => {

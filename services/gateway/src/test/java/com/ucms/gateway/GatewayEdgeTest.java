@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
  * by a mock — signature checking is JwtValidator's own concern; the subject of the token
  * is the caller id the rate limiter keys on.
  */
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayEdgeTest {
 
