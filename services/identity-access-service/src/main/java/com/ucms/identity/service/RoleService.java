@@ -76,8 +76,9 @@ public class RoleService {
 
     @Transactional
     public RoleResponse updateRolePermission(UUID roleId, UpdateRolePermissionRequest request, UUID updatedBy) {
-        Role role = roleRepository.findById(roleId)
-                .filter(r -> r.getDeletedAt() == null)
+        // Locks the role's row for the rest of this transaction: a second change to the
+        // same role waits here, then sees the grant the first one made.
+        Role role = roleRepository.lockById(roleId)
                 .orElseThrow(() -> new EntityNotFoundException("Role not found"));
 
         // G-10: wire the DTO's version field up for real. A null version (the field is
