@@ -1,0 +1,12 @@
+# Integration tests (*IT.java): layered on top of the "test" profile, which keeps the
+# test Keycloak key and switches events off. This puts the database back to how
+# production runs it - PostgreSQL, Flyway migrations, Hibernate validating the result.
+# The connection URL and credentials come from the test's container at run time.
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true

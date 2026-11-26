@@ -3,6 +3,7 @@ import { of, throwError } from 'rxjs';
 import { DashboardComponent } from './dashboard.component';
 import { AuthService } from '../../core/services/auth.service';
 import { AnalyticsService } from '../../core/services/analytics.service';
+import { GradingService } from '../../core/services/grading.service';
 import { AdminDashboard, LecturerDashboard, StudentDashboard } from '../../core/models/analytics.model';
 import { ProfileResponse, RoleKind } from '../../core/models/user.model';
 
@@ -29,11 +30,15 @@ describe('DashboardComponent', () => {
     analytics.lecturerDashboard.and.returnValue(of({} as LecturerDashboard));
     analytics.studentDashboard.and.returnValue(of({} as StudentDashboard));
     asRole('STUDENT');
+    // The dashboard also loads the "coming up" feed on construction.
+    const grading = jasmine.createSpyObj<GradingService>('GradingService', ['upcoming']);
+    grading.upcoming.and.returnValue(of([]));
 
     TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useValue: auth },
         { provide: AnalyticsService, useValue: analytics },
+        { provide: GradingService, useValue: grading },
       ],
     });
   });

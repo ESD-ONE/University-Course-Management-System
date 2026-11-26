@@ -36,9 +36,14 @@
              to API 1.32 when it can't complete its own version probe. The Jenkins host's
              Docker Engine (29.x, MinAPIVersion 1.40) rejects that outright: "client
              version 1.32 is too old". Overriding this one property is Spring Boot's own
-             documented way to bump just Testcontainers without touching spring-boot.version. -->
-        <testcontainers.version>1.21.3</testcontainers.version>
+             documented way to bump just Testcontainers without touching spring-boot.version.
+             1.21.4, not 1.21.3: against Docker 29.9 the 1.21.3 client still fails to find
+             Docker at all ("Could not find a valid Docker environment", status 400). -->
+        <testcontainers.version>1.21.4</testcontainers.version>
         <jacoco.version>0.8.12</jacoco.version>
+        <!-- The version Spring Boot 3.3.4 manages; set here because this project imports
+             Spring Boot's BOM, which carries no plugin versions. -->
+        <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
         <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
         <!-- Shared by every module's jacoco:report — SonarQube reads this one file per
              module rather than needing a path listed per service. -->
@@ -103,6 +108,29 @@
                     </configuration>
                 </plugin>
                 <plugin>
+                    <!-- Integration tests (*IT.java) start real infrastructure in containers,
+                         so they run in `verify`, after the fast unit/API tests in `test`. -->
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven-failsafe-plugin.version}</version>
+                    <configuration>
+                        <!-- Same reasons as surefire above. -->
+                        <argLine>@{argLine} -Dnet.bytebuddy.experimental=true</argLine>
+                        <!-- Failsafe runs after `package` and would otherwise test against
+                             the repackaged Spring Boot jar, whose classes sit under
+                             BOOT-INF/ where the test classpath cannot find them. -->
+                        <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
                     <groupId>org.sonarsource.scanner.maven</groupId>
                     <artifactId>sonar-maven-plugin</artifactId>
                     <version>${sonar-maven-plugin.version}</version>
@@ -114,6 +142,10 @@
              target/site/jacoco/jacoco.xml per module, which sonar:sonar at the reactor
              root picks up automatically (see docs/V3 "Code Quality" slide / Jenkinsfile). -->
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>

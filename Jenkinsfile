@@ -31,6 +31,21 @@ pipeline {
             }
         }
 
+        stage('Frontend Test') {
+            steps {
+                // Unit tests in headless Chromium, in the same throwaway node container
+                // pattern as Frontend Build below. Runs before Code Quality because it
+                // writes web/coverage/web/lcov.info, which the frontend SonarQube scan
+                // reads (web/sonar-project.properties).
+                sh '''
+                    set -e
+                    docker run --rm -v "$WORKSPACE/web:/app" -w /app \
+                        -e CHROME_BIN=/usr/bin/chromium node:20-alpine \
+                        sh -c "apk add --no-cache chromium > /dev/null && npm ci && npm run test:ci"
+                '''
+            }
+        }
+
         stage('Code Quality (SonarQube)') {
             // SonarQube Community Edition — free/open-source static analysis, not a
             // paid SaaS. Backend: sonar-maven-plugin over the whole reactor, picking up
@@ -191,7 +206,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+            junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml', allowEmptyResults: true
         }
     }
 }

@@ -2,17 +2,19 @@ import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { MyAssignmentsComponent } from './my-assignments.component';
 import { GradingService } from '../../core/services/grading.service';
-import { AssignmentResponse, MySubmissionResponse } from '../../core/models/grading.model';
+import { AssignmentResponse } from '../../core/models/grading.model';
 import { PagedResponse } from '../../core/models/pagination.model';
 
+// Submitting, the due label and the brief live in AssignmentDetailComponent (see its own
+// spec); this screen only loads the list and decides which assignment is selected.
 describe('MyAssignmentsComponent', () => {
   let grading: jasmine.SpyObj<GradingService>;
 
-  const future = new Date(Date.now() + 2 * 86400000).toISOString();
-  const past = new Date(Date.now() - 86400000).toISOString();
+  const DAY = 86400000;
+  const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
 
   function assignment(p: Partial<AssignmentResponse>): AssignmentResponse {
-    return { id: 'a1', title: 'HW1', status: 'OPEN', dueDate: future, mySubmissionStatus: 'NOT_SUBMITTED', maxMarks: 100, ...p } as AssignmentResponse;
+    return { id: 'a1', title: 'HW1', status: 'OPEN', dueDate: inDays(2), mySubmissionStatus: 'NOT_SUBMITTED', maxMarks: 100, ...p } as AssignmentResponse;
   }
   function list(items: AssignmentResponse[]) {
     return of({ content: items } as unknown as PagedResponse<AssignmentResponse>);
@@ -22,7 +24,7 @@ describe('MyAssignmentsComponent', () => {
   }
 
   beforeEach(() => {
-    grading = jasmine.createSpyObj<GradingService>('GradingService', ['list', 'submit', 'downloadBrief']);
+    grading = jasmine.createSpyObj<GradingService>('GradingService', ['list']);
     grading.list.and.returnValue(list([assignment({ id: 'a1' })]));
     TestBed.configureTestingModule({ providers: [{ provide: GradingService, useValue: grading }] });
   });
@@ -34,65 +36,47 @@ describe('MyAssignmentsComponent', () => {
     ]));
     const c = make();
     expect(c.selectedId()).toBe('todo');
+    expect(c.selected()?.id).toBe('todo');
+    expect(c.loading()).toBeFalse();
   });
 
-  it('canSubmit is true for an open, not-past-due, ungraded assignment', () => {
+  it('falls back to the first assignment when none is waiting for a submission', () => {
+    grading.list.and.returnValue(list([
+      assignment({ id: 'later', dueDate: inDays(5), mySubmissionStatus: 'GRADED' }),
+      assignment({ id: 'sooner', dueDate: inDays(1), mySubmissionStatus: 'SUBMITTED' }),
+    ]));
     const c = make();
-    expect(c.canSubmit()).toBeTrue();
+    expect(c.selectedId()).toBe('sooner');
   });
 
-  it('canSubmit is false once past due', () => {
-    grading.list.and.returnValue(list([assignment({ id: 'a1', dueDate: past })]));
+  it('lists assignments by due date, soonest first', () => {
+    grading.list.and.returnValue(list([
+      assignment({ id: 'later', dueDate: inDays(5) }),
+      assignment({ id: 'sooner', dueDate: inDays(1) }),
+    ]));
     const c = make();
-    expect(c.pastDue()).toBeTrue();
-    expect(c.canSubmit()).toBeFalse();
+    expect(c.assignments().map((a) => a.id)).toEqual(['sooner', 'later']);
   });
 
-  it('canSubmit is false once graded', () => {
-    grading.list.and.returnValue(list([assignment({ id: 'a1', mySubmissionStatus: 'GRADED' })]));
+  it('keeps the current selection when the list is reloaded', () => {
     const c = make();
-    expect(c.canSubmit()).toBeFalse();
+    c.selectedId.set('a1');
+    grading.list.and.returnValue(list([assignment({ id: 'a0', dueDate: inDays(1) }), assignment({ id: 'a1' })]));
+    c.load();
+    expect(c.selectedId()).toBe('a1');
   });
 
-  it('dueLabel describes the remaining time', () => {
+  it('shows an error when the list cannot be loaded', () => {
+    grading.list.and.returnValue(throwError(() => new Error('network')));
     const c = make();
-    expect(c.dueLabel(assignment({ dueDate: past }))).toBe('Past due');
-    expect(c.dueLabel(assignment({ dueDate: new Date(Date.now() + 2 * 86400000).toISOString() }))).toContain('Due in');
+    expect(c.loadError()).toBeTruthy();
+    expect(c.loading()).toBeFalse();
   });
 
-  it('pick rejects a file over 20MB', () => {
+  it('statusLabel describes the student\'s own submission', () => {
     const c = make();
-    const big = new File([new Uint8Array(21 * 1024 * 1024)], 'big.pdf');
-    c.pick({ target: { files: [big] } } as unknown as Event);
-    expect(c.file()).toBeNull();
-    expect(c.toast()?.error).toBeTrue();
-  });
-
-  it('submit uploads the file for the selected assignment and reloads', () => {
-    grading.submit.and.returnValue(of({} as MySubmissionResponse));
-    const c = make();
-    const f = new File(['x'], 'hw.pdf');
-    c.pick({ target: { files: [f] } } as unknown as Event);
-    grading.list.calls.reset();
-    c.submit();
-    expect(grading.submit).toHaveBeenCalledWith('a1', f);
-    expect(c.file()).toBeNull();
-    expect(grading.list).toHaveBeenCalled();
-  });
-
-  it('submit does nothing with no file selected', () => {
-    const c = make();
-    c.submit();
-    expect(grading.submit).not.toHaveBeenCalled();
-  });
-
-  it('downloadBrief saves the returned blob', () => {
-    const createUrl = spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
-    spyOn(URL, 'revokeObjectURL');
-    grading.downloadBrief.and.returnValue(of(new Blob()));
-    const c = make();
-    c.downloadBrief(assignment({ id: 'a1', briefFileName: 'brief.pdf' }));
-    expect(grading.downloadBrief).toHaveBeenCalledWith('a1');
-    expect(createUrl).toHaveBeenCalled();
+    expect(c.statusLabel(assignment({}))).toBe('To do');
+    expect(c.statusLabel(assignment({ mySubmissionStatus: 'SUBMITTED' }))).toBe('Submitted');
+    expect(c.statusLabel(assignment({ mySubmissionStatus: 'GRADED' }))).toBe('Graded');
   });
 });

@@ -27,7 +27,7 @@ import static org.awaitility.Awaitility.await;
  * Two notification-service replicas sharing one Redis: a push made on replica A must be
  * delivered by replica B too, because the user's live stream may be held by B.
  */
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class LivePushFanoutTest {
 
     @Container
