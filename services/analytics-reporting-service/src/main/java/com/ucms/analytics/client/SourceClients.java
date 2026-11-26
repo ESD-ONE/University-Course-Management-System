@@ -45,6 +45,8 @@ public class SourceClients {
                                   List<MonthCount> enrollmentsByMonth) {}
     public record Registration(UUID id, String studentName, String studentNumber, String targetType, String targetLabel,
                                String actorName, String actorRole, String action, OffsetDateTime createdAt) {}
+    /** /registrations is paginated (page/size/content/...), newest first. */
+    public record RegistrationPage(List<Registration> content, int totalPages) {}
     public record MyEnrollment(UUID offeringId, String courseCode, String courseName, Integer credits,
                                String requirementType, String lecturerName, String academicYearName,
                                String semesterName, String status) {}
@@ -144,11 +146,23 @@ public class SourceClients {
                 .header("Authorization", service()).retrieve().body(EnrollmentStats.class));
     }
 
+    /** The newest registrations, at most {@code limit} of them. /registrations serves at
+     * most 100 a page, so a larger limit is read page by page. */
     public List<Registration> registrations(int limit) {
-        List<Registration> rows = Upstream.call("Enrollment", null, () -> enrollment.get()
-                .uri(b -> b.path("/registrations").queryParam("limit", limit).build())
-                .header("Authorization", service()).retrieve().body(new ParameterizedTypeReference<List<Registration>>() {}));
-        return rows == null ? List.of() : rows;
+        List<Registration> newest = new ArrayList<>();
+        int size = Math.min(limit, 100);
+        int page = 0, totalPages;
+        do {
+            int p = page;
+            RegistrationPage result = Upstream.call("Enrollment", null, () -> enrollment.get()
+                    .uri(b -> b.path("/registrations").queryParam("page", p).queryParam("size", size).build())
+                    .header("Authorization", service()).retrieve().body(RegistrationPage.class));
+            if (result == null || result.content() == null) break;
+            newest.addAll(result.content());
+            totalPages = result.totalPages();
+            page++;
+        } while (page < totalPages && newest.size() < limit);
+        return newest.size() > limit ? newest.subList(0, limit) : newest;
     }
 
     public List<MyEnrollment> myEnrollments(String userToken) {
