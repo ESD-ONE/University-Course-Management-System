@@ -30,9 +30,9 @@
              the primary fix, this is defense in depth for every usage after. -->
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>3.3.4</spring-boot.version>
-        <spring-cloud.version>2023.0.3</spring-cloud.version>
-        <!-- Spring Boot 3.3.4 manages Testcontainers 1.19.8, whose Docker client defaults
+        <spring-boot.version>3.3.13</spring-boot.version>
+        <spring-cloud.version>2023.0.6</spring-cloud.version>
+        <!-- Spring Boot 3.3.x manages Testcontainers 1.19.8, whose Docker client defaults
              to API 1.32 when it can't complete its own version probe. The Jenkins host's
              Docker Engine (29.x, MinAPIVersion 1.40) rejects that outright: "client
              version 1.32 is too old". Overriding this one property is Spring Boot's own
@@ -40,14 +40,22 @@
              1.21.4, not 1.21.3: against Docker 29.9 the 1.21.3 client still fails to find
              Docker at all ("Could not find a valid Docker environment", status 400). -->
         <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- Security patches newer than the ones Spring Boot ${spring-boot.version} ships.
+             3.3.13 is the last 3.3 release, so fixes made after it only reach this project
+             through these. Each stays on the same minor line as the version Spring Boot
+             manages (Tomcat 10.1, Netty 4.1, PostgreSQL driver 42.7). Remove them when
+             Spring Boot itself is upgraded past 3.3. -->
+        <tomcat.version>10.1.62</tomcat.version>
+        <netty.version>4.1.141.Final</netty.version>
+        <postgresql.version>42.7.15</postgresql.version>
         <jacoco.version>0.8.12</jacoco.version>
-        <!-- The version Spring Boot 3.3.4 manages; set here because this project imports
+        <!-- The version Spring Boot 3.3.x manages; set here because this project imports
              Spring Boot's BOM, which carries no plugin versions. -->
         <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
         <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
         <!-- The release that belongs to Spring Cloud ${spring-cloud.version}. The BOM manages
              the Spring Cloud Contract libraries but, like Spring Boot's, no plugin versions. -->
-        <spring-cloud-contract.version>4.1.4</spring-cloud-contract.version>
+        <spring-cloud-contract.version>4.1.6</spring-cloud-contract.version>
         <!-- Shared by every module's jacoco:report — SonarQube reads this one file per
              module rather than needing a path listed per service. -->
         <jacoco.report.path>${project.build.directory}/site/jacoco/jacoco.xml</jacoco.report.path>
@@ -67,6 +75,35 @@
                 <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- The security patch versions set in <properties> above. Like Testcontainers,
+                 they have to be declared here, ahead of Spring Boot's BOM, to win. -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
