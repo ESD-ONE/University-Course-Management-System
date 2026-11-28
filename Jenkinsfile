@@ -27,6 +27,12 @@ pipeline {
     stages {
         stage('Build & Test') {
             steps {
+                // Clean every module first. The workspace is kept between builds, and
+                // the test results are published from the report files left in it
+                // (see the junit step at the end). When a build stops early, the
+                // modules it never reached still hold the reports of an older build,
+                // which were then shown as failures of this one.
+                sh './mvnw -B -q clean'
                 sh './mvnw -B verify'
             }
         }
