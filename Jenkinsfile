@@ -33,6 +33,8 @@ pipeline {
                 // modules it never reached still hold the reports of an older build,
                 // which were then shown as failures of this one.
                 sh './mvnw -B -q clean'
+                // The same for the frontend's results, which Maven does not clean.
+                sh 'rm -rf web/test-results'
                 sh './mvnw -B verify'
             }
         }
@@ -42,7 +44,8 @@ pipeline {
                 // Unit tests in headless Chromium, in the same throwaway node container
                 // pattern as Frontend Build below. Runs before Code Quality because it
                 // writes web/coverage/web/lcov.info, which the frontend SonarQube scan
-                // reads (web/sonar-project.properties).
+                // reads (web/sonar-project.properties). It also writes
+                // web/test-results/karma.xml, published by the junit step at the end.
                 sh '''
                     set -e
                     docker run --rm -v "$WORKSPACE/web:/app" -w /app \
@@ -212,7 +215,7 @@ pipeline {
 
     post {
         always {
-            junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml', allowEmptyResults: true
+            junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml, web/test-results/*.xml', allowEmptyResults: true
         }
     }
 }
