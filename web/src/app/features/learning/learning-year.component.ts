@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LearningProgramNode, LearningYearNode } from '../../core/models/learning.model';
@@ -17,7 +16,7 @@ const DEFAULT_PAGE_SIZE = 12;
 @Component({
   selector: 'app-learning-year',
   standalone: true,
-  imports: [CommonModule, RouterLink, SearchInputComponent, FilterBarComponent, PagerComponent],
+  imports: [RouterLink, SearchInputComponent, FilterBarComponent, PagerComponent],
   templateUrl: './learning-year.component.html',
 })
 export class LearningYearComponent {

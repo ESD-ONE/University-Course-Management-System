@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, input, output } from '@angular/core';
 
 /**
@@ -10,7 +9,7 @@ import { Component, computed, input, output } from '@angular/core';
 @Component({
   selector: 'app-pager',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     @if (totalElements() > 0) {
       <div class="pagination-bar">

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { UpcomingItem } from '../core/models/grading.model';
@@ -18,7 +17,7 @@ interface Row extends UpcomingItem {
 @Component({
   selector: 'app-upcoming-list',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   template: `
     @if (rows().length) {
       <div class="upcoming-list">

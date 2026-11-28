@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CatalogEntry } from '../../core/models/enrollment.model';
@@ -22,7 +21,7 @@ const DEFAULT_PAGE_SIZE = 12;
 @Component({
   selector: 'app-browse-courses',
   standalone: true,
-  imports: [CommonModule, FormsModule, SearchableSelectComponent, SearchInputComponent, FilterBarComponent, PagerComponent],
+  imports: [FormsModule, SearchableSelectComponent, SearchInputComponent, FilterBarComponent, PagerComponent],
   templateUrl: './browse-courses.component.html',
 })
 export class BrowseCoursesComponent {

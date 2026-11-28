@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -30,7 +29,7 @@ const YEAR_OF_STUDY_OPTIONS = [1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n),
 @Component({
   selector: 'app-admin-courses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, PagerComponent],
   templateUrl: './admin-courses.component.html',
 })
 export class AdminCoursesComponent {

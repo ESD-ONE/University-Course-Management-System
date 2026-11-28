@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
@@ -40,7 +39,7 @@ import { countActive, matchesText, numberOptions, showingSummary, statusOptions,
 @Component({
   selector: 'app-degree-programs',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, AssignmentFormDialogComponent],
+  imports: [ReactiveFormsModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, RowMenuComponent, FilterBarComponent, AssignmentFormDialogComponent],
   templateUrl: './degree-programs.component.html',
 })
 export class DegreeProgramsComponent implements OnInit {
