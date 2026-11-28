@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -122,20 +123,29 @@ class GatewayEdgeIT {
     @Test
     void enrollmentWritesAreLimitedPerUserWithRetryAfter() {
         String student = user();
-        for (int i = 0; i < 10; i++) {
-            client.post().uri("/api/enrollment/enrollments")
+
+        // The bucket holds 10 writes and refills at 2 a second. On a slow machine a token
+        // or two comes back while the first ten are being sent, so the write that gets
+        // limited is not always the 11th. Keep writing until the limit is hit.
+        int accepted = 0;
+        EntityExchangeResult<String> limited = null;
+        for (int i = 0; i < 40 && limited == null; i++) {
+            EntityExchangeResult<String> result = client.post().uri("/api/enrollment/enrollments")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + student)
-                    .exchange().expectStatus().isOk();
+                    .exchange().expectBody(String.class).returnResult();
+            if (result.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+                limited = result;
+            } else {
+                assertThat(result.getStatus()).isEqualTo(HttpStatus.OK);
+                accepted++;
+            }
         }
-        client.post().uri("/api/enrollment/enrollments")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + student)
-                .exchange()
-                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
-                .expectHeader().exists(HttpHeaders.RETRY_AFTER)
-                .expectHeader().valueEquals("X-RateLimit-Remaining", "0")
-                .expectBody()
-                .jsonPath("$.code").isEqualTo("RATE_LIMITED")
-                .jsonPath("$.message").value(m -> assertThat((String) m).startsWith("Too many requests"));
+
+        assertThat(limited).as("a student who keeps writing is rate limited").isNotNull();
+        assertThat(accepted).as("writes let through before the limit").isGreaterThanOrEqualTo(10);
+        assertThat(limited.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isNotNull();
+        assertThat(limited.getResponseHeaders().getFirst("X-RateLimit-Remaining")).isEqualTo("0");
+        assertThat(limited.getResponseBody()).contains("\"code\":\"RATE_LIMITED\"").contains("Too many requests");
 
         // Another student has their own bucket, and the limited student can still read.
         client.post().uri("/api/enrollment/enrollments")
