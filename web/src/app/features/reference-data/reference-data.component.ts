@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -56,13 +55,12 @@ function freshList<T>(): ListState<T> {
   imports: [
     ReactiveFormsModule,
     FormsModule,
-    CommonModule,
     SearchableSelectComponent,
     SearchInputComponent,
     RowMenuComponent,
     FilterBarComponent,
-    PagerComponent,
-  ],
+    PagerComponent
+],
   templateUrl: './reference-data.component.html',
 })
 export class ReferenceDataComponent implements OnInit {

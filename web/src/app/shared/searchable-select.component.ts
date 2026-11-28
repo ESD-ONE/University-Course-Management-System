@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, ElementRef, EventEmitter, HostListener, Input, Output, computed, forwardRef, inject, signal } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
@@ -22,7 +21,7 @@ export interface SearchableSelectOption {
 @Component({
   selector: 'app-searchable-select',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './searchable-select.component.html',
   providers: [
     {

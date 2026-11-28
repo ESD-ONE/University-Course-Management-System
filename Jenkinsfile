@@ -128,13 +128,15 @@ pipeline {
         stage('Security Scan') {
             // Everything that ships: the backend jars (every transitive dependency) and
             // the frontend's production npm packages. HIGH/CRITICAL with a fix available.
+            // Findings accepted for now are listed, each with its reason, in .trivyignore.
             steps {
                 script {
                     def scan = '''
                         status=0
                         docker run --rm -v "$WORKSPACE/services:/src:ro" -v ucms-trivy-cache:/root/.cache \
+                            -v "$WORKSPACE/.trivyignore:/.trivyignore:ro" \
                             "$TRIVY_IMAGE" rootfs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
-                            --exit-code 1 /src > trivy-backend.txt 2>&1 || status=1
+                            --ignorefile /.trivyignore --exit-code 1 /src > trivy-backend.txt 2>&1 || status=1
                         docker run --rm -v "$WORKSPACE/web:/app" -w /app node:20-alpine \
                             npm audit --omit=dev --audit-level=high > npm-audit.txt 2>&1 || status=1
                         exit $status
@@ -194,8 +196,9 @@ pipeline {
                         status=0
                         for image in $(docker compose --env-file .env -f docker-compose.deploy.yml config --images | sort -u); do
                             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ucms-trivy-cache:/root/.cache \
+                                -v "$WORKSPACE/.trivyignore:/.trivyignore:ro" \
                                 "$TRIVY_IMAGE" image --scanners vuln --severity CRITICAL --ignore-unfixed \
-                                --exit-code 1 "$image" >> "$WORKSPACE/trivy-images.txt" 2>&1 || status=1
+                                --ignorefile /.trivyignore --exit-code 1 "$image" >> "$WORKSPACE/trivy-images.txt" 2>&1 || status=1
                         done
                         exit $status
                     '''

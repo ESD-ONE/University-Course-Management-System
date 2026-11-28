@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -24,7 +23,7 @@ import { SearchableSelectComponent } from '../../shared/searchable-select.compon
 @Component({
   selector: 'app-create-course',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, SearchableSelectComponent],
+  imports: [ReactiveFormsModule, RouterLink, SearchableSelectComponent],
   templateUrl: './create-course.component.html',
 })
 export class CreateCourseComponent implements OnInit {

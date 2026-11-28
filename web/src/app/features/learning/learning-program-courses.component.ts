@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -26,7 +25,7 @@ interface MergedOffering extends LearningOfferingNode {
 @Component({
   selector: 'app-learning-program-courses',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, FilterBarComponent, PagerComponent],
+  imports: [FormsModule, RouterLink, SearchableSelectComponent, SearchInputComponent, FilterBarComponent, PagerComponent],
   templateUrl: './learning-program-courses.component.html',
 })
 export class LearningProgramCoursesComponent {

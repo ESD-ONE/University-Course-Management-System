@@ -25,103 +25,105 @@ spring:
         refetch-instances: true
         refetch-instances-interval: 15s
     gateway:
-      httpclient:
-        connect-timeout: 2000
-        response-timeout: 60s
-      # Every route: circuit breaker (fast 503 while a service is down), then — for reads
-      # only — up to two retries on another replica when one can't be reached. Writes are
-      # never retried: a retried POST could enroll a student twice.
-      routes:
-        # The live notification stream is one long request: no timeout, no retry, no breaker.
-        - id: notification-stream
-          uri: lb://notification-service
-          predicates:
-            - Path=/api/notification/notifications/stream
-          filters:
-            - StripPrefix=2
-          metadata:
-            response-timeout: -1
-        - id: identity-access-service
-          uri: lb://identity-access-service
-          predicates:
-            - Path=/api/identity/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: identity-access-service, fallbackUri: "forward:/fallback/identity-access-service" }
-            - &read-retry
-              name: Retry
-              args:
-                retries: 2
-                methods: GET
-                statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
-                exceptions: java.io.IOException
-                backoff: { firstBackoff: 50ms, maxBackoff: 500ms, factor: 2, basedOnPreviousValue: false }
-        - id: base-service
-          uri: lb://base-service
-          predicates:
-            - Path=/api/base/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: base-service, fallbackUri: "forward:/fallback/base-service" }
-            - *read-retry
-        - id: academic-structure-service
-          uri: lb://academic-structure-service
-          predicates:
-            - Path=/api/academic/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: academic-structure-service, fallbackUri: "forward:/fallback/academic-structure-service" }
-            - *read-retry
-        - id: enrollment-service
-          uri: lb://enrollment-service
-          predicates:
-            - Path=/api/enrollment/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: enrollment-service, fallbackUri: "forward:/fallback/enrollment-service" }
-            - *read-retry
-        - id: assignment-grading-service
-          uri: lb://assignment-grading-service
-          predicates:
-            - Path=/api/grading/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: assignment-grading-service, fallbackUri: "forward:/fallback/assignment-grading-service" }
-            - *read-retry
-        - id: notification-service
-          uri: lb://notification-service
-          predicates:
-            - Path=/api/notification/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: notification-service, fallbackUri: "forward:/fallback/notification-service" }
-            - *read-retry
-        - id: analytics-reporting-service
-          uri: lb://analytics-reporting-service
-          predicates:
-            - Path=/api/analytics/**
-          filters:
-            - StripPrefix=2
-            - name: CircuitBreaker
-              args: { name: analytics-reporting-service, fallbackUri: "forward:/fallback/analytics-reporting-service" }
-            - *read-retry
-      # The Gateway is the only thing a browser talks to — CORS is handled here once,
-      # not per-service. Angular dev server runs on 4200; a real deployed FE origin
-      # replaces this once one exists.
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:4200}"
-            allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
-            allowedHeaders: "*"
-            exposedHeaders: [Retry-After, X-RateLimit-Remaining, X-Request-Id]
-            allowCredentials: true
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 60s
+          # Every route: circuit breaker (fast 503 while a service is down), then — for reads
+          # only — up to two retries on another replica when one can't be reached. Writes are
+          # never retried: a retried POST could enroll a student twice.
+          routes:
+            # The live notification stream is one long request: no timeout, no retry, no breaker.
+            - id: notification-stream
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notification/notifications/stream
+              filters:
+                - StripPrefix=2
+              metadata:
+                response-timeout: -1
+            - id: identity-access-service
+              uri: lb://identity-access-service
+              predicates:
+                - Path=/api/identity/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: identity-access-service, fallbackUri: "forward:/fallback/identity-access-service" }
+                - &read-retry
+                  name: Retry
+                  args:
+                    retries: 2
+                    methods: GET
+                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+                    exceptions: java.io.IOException
+                    backoff: { firstBackoff: 50ms, maxBackoff: 500ms, factor: 2, basedOnPreviousValue: false }
+            - id: base-service
+              uri: lb://base-service
+              predicates:
+                - Path=/api/base/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: base-service, fallbackUri: "forward:/fallback/base-service" }
+                - *read-retry
+            - id: academic-structure-service
+              uri: lb://academic-structure-service
+              predicates:
+                - Path=/api/academic/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: academic-structure-service, fallbackUri: "forward:/fallback/academic-structure-service" }
+                - *read-retry
+            - id: enrollment-service
+              uri: lb://enrollment-service
+              predicates:
+                - Path=/api/enrollment/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: enrollment-service, fallbackUri: "forward:/fallback/enrollment-service" }
+                - *read-retry
+            - id: assignment-grading-service
+              uri: lb://assignment-grading-service
+              predicates:
+                - Path=/api/grading/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: assignment-grading-service, fallbackUri: "forward:/fallback/assignment-grading-service" }
+                - *read-retry
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/notification/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: notification-service, fallbackUri: "forward:/fallback/notification-service" }
+                - *read-retry
+            - id: analytics-reporting-service
+              uri: lb://analytics-reporting-service
+              predicates:
+                - Path=/api/analytics/**
+              filters:
+                - StripPrefix=2
+                - name: CircuitBreaker
+                  args: { name: analytics-reporting-service, fallbackUri: "forward:/fallback/analytics-reporting-service" }
+                - *read-retry
+          # The Gateway is the only thing a browser talks to — CORS is handled here once,
+          # not per-service. Angular dev server runs on 4200; a real deployed FE origin
+          # replaces this once one exists.
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "${CORS_ALLOWED_ORIGIN:http://localhost:4200}"
+                allowedMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+                allowedHeaders: "*"
+                exposedHeaders: [Retry-After, X-RateLimit-Remaining, X-Request-Id]
+                allowCredentials: true
 
 ucms:
   # Keycloak's signing keys are fetched from url; tokens must carry issuer (the public URL

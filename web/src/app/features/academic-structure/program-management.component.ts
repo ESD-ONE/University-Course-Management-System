@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, signal } from '@angular/core';
 import { DegreeProgramsComponent } from './degree-programs.component';
 import { ReferenceDegreeDetailsComponent } from './reference-degree-details.component';
@@ -11,7 +10,7 @@ type ProgramManagementTab = 'reference' | 'years';
 @Component({
   selector: 'app-program-management',
   standalone: true,
-  imports: [CommonModule, ReferenceDegreeDetailsComponent, DegreeProgramsComponent],
+  imports: [ReferenceDegreeDetailsComponent, DegreeProgramsComponent],
   templateUrl: './program-management.component.html',
 })
 export class ProgramManagementComponent {

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CourseEnrollmentResponse } from '../../core/models/enrollment.model';
@@ -10,7 +9,7 @@ import { errorMessage, Toaster } from '../../shared/ui';
 @Component({
   selector: 'app-my-enrollments',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './my-enrollments.component.html',
 })
 export class MyEnrollmentsComponent {
