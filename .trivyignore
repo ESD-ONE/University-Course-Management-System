@@ -1,0 +1,18 @@
+# Vulnerabilities the security scan reports but that are accepted for now.
+#
+# All three are in Spring Framework 6.2.19, the last open-source 6.2 release. Their
+# only open-source fix is Spring Framework 7.0.9, which needs Spring Boot 4.
+# (6.2.20 has the fix too, but is for Spring Enterprise Support customers only.)
+#
+# Remove this whole file when the project moves to Spring Boot 4.
+# Accepted 2026-11-28. Review by 2027-02-28 if the upgrade has not happened.
+
+# XSLT views. No service has an XSLT view.
+CVE-2026-47884
+
+# WebFlux functional endpoints. No service defines one; the gateway uses configured routes.
+CVE-2026-47892
+
+# Server-Sent Events. The notification stream uses them. Spring rates this low: it
+# needs a signed-in attacker and action by another user, and cannot expose data.
+CVE-2026-47890
