@@ -80,9 +80,12 @@ class KeycloakIT {
                     "/opt/keycloak/data/import/ucms-realm.json")
             .withCommand("start-dev", "--import-realm")
             .withExposedPorts(8080)
+            // Generous on purpose. Keycloak rebuilds its configuration on every start in
+            // dev mode, which takes about 75 seconds on the build host when it is idle and
+            // has taken over 3 minutes when the host was busy.
             .waitingFor(Wait.forHttp("/auth/realms/ucms/.well-known/openid-configuration")
                     .forPort(8080)
-                    .withStartupTimeout(Duration.ofMinutes(3)));
+                    .withStartupTimeout(Duration.ofMinutes(6)));
 
     private static String keycloakUrl() {
         return "http://" + KEYCLOAK.getHost() + ":" + KEYCLOAK.getMappedPort(8080) + "/auth";
