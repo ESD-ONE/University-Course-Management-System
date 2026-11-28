@@ -1,0 +1,14 @@
+description: "analytics-reporting-service reads every student's result per course for the grade reports"
+name: "course results"
+request:
+  method: "GET"
+  url: "/stats/course-results"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - offeringId: "11111111-1111-1111-1111-111111111111"
+      studentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      percentage: 78.5
+      gradedAssignments: 2

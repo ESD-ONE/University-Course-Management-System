@@ -1,0 +1,14 @@
+description: "notification-service reads the caller's notification preferences"
+name: "my profile"
+request:
+  method: "GET"
+  url: "/users/me"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    notifyEmail: true
+    notifyAssignments: true
+    notifyGrades: false
+    notifyRegistrations: true

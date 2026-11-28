@@ -1,0 +1,14 @@
+description: "base-service counts the catalog courses of a department before deleting it"
+name: "count catalog courses of department"
+request:
+  method: "GET"
+  urlPath: "/course-catalog"
+  queryParameters:
+    departmentId: "55555555-5555-5555-5555-555555555555"
+    size: 1
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    totalElements: 1

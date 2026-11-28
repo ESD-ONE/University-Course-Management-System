@@ -1,0 +1,25 @@
+description: "notification-service tells a student they are no longer enrolled in a course"
+name: "enrollment_course_dropped"
+label: "enrollment.course-dropped"
+input:
+  triggeredBy: "courseDropped()"
+outputMessage:
+  sentTo: "ucms.events"
+  headers:
+    amqp_receivedRoutingKey: "enrollment.course-dropped"
+  body:
+    eventId: "0e0e0e0e-0e0e-0e0e-0e0e-0e0e0e0e0e0e"
+    type: "enrollment.course-dropped"
+    occurredAt: "2025-09-02T08:30:00Z"
+    data:
+      studentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      courseCode: "COSC5105"
+      courseName: "Introduction to Programming"
+  matchers:
+    body:
+      - path: "$.eventId"
+        type: "by_regex"
+        predefined: "uuid"
+      - path: "$.occurredAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z"

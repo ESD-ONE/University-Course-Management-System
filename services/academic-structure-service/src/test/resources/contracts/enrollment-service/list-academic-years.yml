@@ -1,0 +1,13 @@
+description: "enrollment-service reads the academic years to find the active one"
+name: "list academic years"
+request:
+  method: "GET"
+  url: "/academic-years"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - id: "66666666-6666-6666-6666-666666666666"
+      name: "2025/2026"
+      status: "ACTIVE"

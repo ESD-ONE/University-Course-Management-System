@@ -1,0 +1,24 @@
+description: "analytics-reporting-service reads the enrollment totals for the admin dashboard"
+name: "enrollment stats"
+request:
+  method: "GET"
+  url: "/stats"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    activeProgramEnrollments: 5
+    activeCourseEnrollments: 42
+    waitlisted: 3
+    byProgram:
+      - degreeProgramId: "44444444-4444-4444-4444-444444444444"
+        degreeProgramName: "BSc in Computer Science"
+        activeStudents: 5
+    byOffering:
+      - offeringId: "11111111-1111-1111-1111-111111111111"
+        enrolled: 42
+        waitlisted: 3
+    enrollmentsByMonth:
+      - month: "2025-09"
+        count: 12

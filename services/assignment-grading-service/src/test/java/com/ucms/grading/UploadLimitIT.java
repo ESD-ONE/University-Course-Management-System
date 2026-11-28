@@ -10,6 +10,7 @@ import com.ucms.grading.repository.AssignmentRepository;
 import com.ucms.grading.repository.SubmissionRepository;
 import com.ucms.grading.storage.FileStorage;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.OkHttp3ClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -57,6 +59,19 @@ class UploadLimitIT {
     @MockBean EventPublisher events;
 
     private final UUID studentId = UUID.randomUUID();
+
+    /**
+     * Pins the HTTP client. Left to pick, the test client takes the first HTTP library it
+     * finds on the test classpath. The contract test libraries bring Apache HttpClient,
+     * which fails with "Broken pipe" when the server rejects a large upload before reading
+     * all of it, so the 413 is never seen. OkHttp (already here through the MinIO client)
+     * reads the early response.
+     */
+    @BeforeEach
+    @SuppressWarnings("removal")
+    void useAnHttpClientThatReadsAnEarlyRejection() {
+        http.getRestTemplate().setRequestFactory(new OkHttp3ClientHttpRequestFactory());
+    }
 
     @AfterEach
     void cleanUp() {

@@ -1,0 +1,16 @@
+description: "assignment-grading-service reads the student or lecturer behind a submission"
+name: "get user"
+request:
+  method: "GET"
+  url: "/users/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    name: "K. Perera"
+    email: "k.perera@uni.edu"
+    role: "STUDENT"
+    status: "ACTIVE"
+    studentId: "STU-2025-0001"

@@ -1,0 +1,16 @@
+description: "academic-structure-service reads the scoped roles a user holds"
+name: "user assignments"
+request:
+  method: "GET"
+  url: "/internal/assignments/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - id: "dddddddd-dddd-dddd-dddd-dddddddddddd"
+      roleId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      scopeType: "DEPARTMENT"
+      scopeId: "55555555-5555-5555-5555-555555555555"
+      overrides:
+        cccccccc-cccc-cccc-cccc-cccccccccccc: false

@@ -1,0 +1,24 @@
+description: "notification-service tells a student they are on the waitlist of a full course"
+name: "enrollment_student_waitlisted"
+label: "enrollment.student-waitlisted"
+input:
+  triggeredBy: "studentWaitlisted()"
+outputMessage:
+  sentTo: "ucms.events"
+  headers:
+    amqp_receivedRoutingKey: "enrollment.student-waitlisted"
+  body:
+    eventId: "0e0e0e0e-0e0e-0e0e-0e0e-0e0e0e0e0e0e"
+    type: "enrollment.student-waitlisted"
+    occurredAt: "2025-09-02T08:30:00Z"
+    data:
+      studentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      courseCode: "COSC5105"
+  matchers:
+    body:
+      - path: "$.eventId"
+        type: "by_regex"
+        predefined: "uuid"
+      - path: "$.occurredAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z"

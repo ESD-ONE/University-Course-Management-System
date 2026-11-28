@@ -1,0 +1,20 @@
+description: "enrollment-service reads every degree program to show program names"
+name: "list programs"
+request:
+  method: "GET"
+  urlPath: "/degree-programs"
+  queryParameters:
+    size: 100
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - id: "44444444-4444-4444-4444-444444444444"
+        code: "BSC-CS"
+        name: "BSc in Computer Science"
+        departmentId: "55555555-5555-5555-5555-555555555555"
+        durationYears: 4
+        totalCredits: 120
+        status: "ACTIVE"
