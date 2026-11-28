@@ -1,0 +1,16 @@
+{
+  "name": "ucms-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end tests for UCMS, run in a real browser against the stack in infra/docker-compose.e2e.yml",
+  "scripts": {
+    "test": "playwright test",
+    "test:chromium": "playwright test --project=chromium",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "20.17.10",
+    "typescript": "5.6.3"
+  }
+}

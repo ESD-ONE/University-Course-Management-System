@@ -1,0 +1,374 @@
+# The whole system on one machine, for the end-to-end tests in ../e2e. It is separate
+# from the real stack on purpose: its own project name, networks and volumes, no fixed
+# container names, and one published port (the web container). So it can be started on a
+# machine that also runs docker-compose.infra.yml and docker-compose.deploy.yml without
+# touching them.
+#
+# It uses the same images and Dockerfiles as those two files: when a service, a setting
+# or an image version changes there, change it here too.
+#
+# Start and stop it with ./e2e-up.sh and ./e2e-down.sh. Settings and (throwaway) secrets
+# are in e2e.env.
+name: ucms-e2e
+
+x-messaging: &messaging
+  RABBITMQ_HOST: ucms-rabbitmq
+  RABBITMQ_PORT: 5672
+  RABBITMQ_USER: ucms_admin
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+
+x-keycloak: &keycloak
+  KEYCLOAK_URL: http://ucms-keycloak:8080/auth
+  KEYCLOAK_ISSUER: ${KEYCLOAK_PUBLIC_URL}/realms/ucms
+
+x-storage: &storage
+  MINIO_ENDPOINT: http://ucms-minio:9000
+  MINIO_ACCESS_KEY: ucms_admin
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+
+x-redis: &redis
+  REDIS_HOST: ucms-redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+# Same limits as production, so a service that only works with more room fails here.
+# The services' pinned Java base image exists for amd64 only. Naming the platform makes
+# the stack also start on an ARM machine (Apple Silicon), where Docker emulates it; on
+# amd64 it changes nothing.
+x-service: &service
+  platform: linux/amd64
+  # As in production: a service that dies comes back by itself.
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  mem_limit: 768m
+  networks: [app]
+
+# Generous start period: eight JVMs start together, and under emulation they are slow.
+x-service-healthcheck: &service-healthcheck
+  interval: 5s
+  timeout: 3s
+  retries: 30
+  start_period: 300s
+
+services:
+  # ---- infrastructure (docker-compose.infra.yml) ----
+  ucms-postgres:
+    image: postgres:15.19-alpine@sha256:54e0dd8e8cddcdbb9156c2486eed5a43eccb7214d7c6828097d41ce049fb3984
+    command: ["postgres", "-c", "max_connections=200"]
+    networks: [app]
+    environment:
+      POSTGRES_USER: ucms_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ucms
+      IDENTITY_ACCESS_SVC_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
+      BASE_SVC_PASSWORD: ${BASE_SVC_PASSWORD}
+      ACADEMIC_STRUCTURE_SVC_PASSWORD: ${ACADEMIC_STRUCTURE_SVC_PASSWORD}
+      ENROLLMENT_SVC_PASSWORD: ${ENROLLMENT_SVC_PASSWORD}
+      ASSIGNMENT_GRADING_SVC_PASSWORD: ${ASSIGNMENT_GRADING_SVC_PASSWORD}
+      NOTIFICATION_SVC_PASSWORD: ${NOTIFICATION_SVC_PASSWORD}
+      ANALYTICS_SVC_PASSWORD: ${ANALYTICS_SVC_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-schemas.sh:/docker-entrypoint-initdb.d/init-schemas.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ucms_admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ucms-redis:
+    image: redis:7.4.11-alpine@sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193
+    networks: [app]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+
+  ucms-rabbitmq:
+    image: rabbitmq:3.13.7-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
+    networks: [app]
+    environment:
+      RABBITMQ_DEFAULT_USER: ucms_admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  ucms-minio:
+    image: cgr.dev/chainguard/minio@sha256:268d68a2a3b6fc65f905a61f84d7eab6345ce6bff14f551e2b028ec31e6a1341
+    networks: [app]
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ucms_admin
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+
+  # Catches the emails notification-service sends.
+  ucms-mailpit:
+    image: axllent/mailpit:v1.20@sha256:7eef0f38dbc85e4e264f2edf5d70fbb694826791e05cb2cae4fc9e3282f968f5
+    networks: [app]
+
+  # Built from the same Dockerfile as production, so the realm import and the custom
+  # password provider are the real ones.
+  ucms-keycloak:
+    build:
+      context: ./keycloak
+    networks: [app]
+    environment:
+      KC_DB_URL: jdbc:postgresql://ucms-postgres:5432/ucms
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: keycloak_svc
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_DB_POOL_MAX_SIZE: "20"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_SVC_IDENTITY_ACCESS_SECRET: ${KC_SVC_IDENTITY_ACCESS_SECRET}
+      KC_SVC_BASE_SECRET: ${KC_SVC_BASE_SECRET}
+      KC_SVC_ACADEMIC_STRUCTURE_SECRET: ${KC_SVC_ACADEMIC_STRUCTURE_SECRET}
+      KC_SVC_ENROLLMENT_SECRET: ${KC_SVC_ENROLLMENT_SECRET}
+      KC_SVC_ASSIGNMENT_GRADING_SECRET: ${KC_SVC_ASSIGNMENT_GRADING_SECRET}
+      KC_SVC_NOTIFICATION_SECRET: ${KC_SVC_NOTIFICATION_SECRET}
+      KC_SVC_ANALYTICS_REPORTING_SECRET: ${KC_SVC_ANALYTICS_REPORTING_SECRET}
+    healthcheck:
+      # The image has no curl/wget; bash's /dev/tcp talks to the management port.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      ucms-postgres:
+        condition: service_healthy
+
+  # ---- application (docker-compose.deploy.yml), one replica each ----
+  identity-access-service:
+    <<: *service
+    build:
+      context: ../services/identity-access-service
+    environment:
+      <<: [*messaging, *keycloak, *redis]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: identity_access_svc
+      DB_PASSWORD: ${IDENTITY_ACCESS_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_IDENTITY_ACCESS_SECRET}
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+    depends_on:
+      ucms-postgres:
+        condition: service_healthy
+      ucms-rabbitmq:
+        condition: service_healthy
+      ucms-keycloak:
+        condition: service_healthy
+
+  base-service:
+    <<: *service
+    build:
+      context: ../services/base-service
+    environment:
+      <<: *keycloak
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: base_svc
+      DB_PASSWORD: ${BASE_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_BASE_SECRET}
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+    depends_on:
+      ucms-keycloak:
+        condition: service_healthy
+
+  academic-structure-service:
+    <<: *service
+    build:
+      context: ../services/academic-structure-service
+    environment:
+      <<: [*keycloak, *redis]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: academic_structure_svc
+      DB_PASSWORD: ${ACADEMIC_STRUCTURE_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ACADEMIC_STRUCTURE_SECRET}
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
+    depends_on:
+      identity-access-service:
+        condition: service_healthy
+
+  enrollment-service:
+    <<: *service
+    build:
+      context: ../services/enrollment-service
+    environment:
+      <<: [*messaging, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: enrollment_svc
+      DB_PASSWORD: ${ENROLLMENT_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ENROLLMENT_SECRET}
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8085/actuator/health"]
+    depends_on:
+      academic-structure-service:
+        condition: service_healthy
+
+  assignment-grading-service:
+    <<: *service
+    build:
+      context: ../services/assignment-grading-service
+    environment:
+      <<: [*messaging, *storage, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: assignment_grading_svc
+      DB_PASSWORD: ${ASSIGNMENT_GRADING_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ASSIGNMENT_GRADING_SECRET}
+      MINIO_BUCKET: ucms-assignments
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      BASE_SERVICE_URI: http://base-service:8083
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/actuator/health"]
+    depends_on:
+      enrollment-service:
+        condition: service_healthy
+      base-service:
+        condition: service_healthy
+
+  notification-service:
+    <<: *service
+    build:
+      context: ../services/notification-service
+    environment:
+      <<: [*messaging, *keycloak, *redis]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: notification_svc
+      DB_PASSWORD: ${NOTIFICATION_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_NOTIFICATION_SECRET}
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      UCMS_MAIL_ENABLED: "true"
+      UCMS_MAIL_FROM: no-reply@ucms.local
+      UCMS_APP_URL: ${UCMS_APP_URL}
+      SMTP_HOST: ucms-mailpit
+      SMTP_PORT: 1025
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/actuator/health"]
+    depends_on:
+      enrollment-service:
+        condition: service_healthy
+
+  analytics-reporting-service:
+    <<: *service
+    build:
+      context: ../services/analytics-reporting-service
+    environment:
+      <<: [*messaging, *storage, *keycloak]
+      DB_HOST: ucms-postgres
+      DB_PORT: 5432
+      DB_NAME: ucms
+      DB_USER: analytics_svc
+      DB_PASSWORD: ${ANALYTICS_SVC_PASSWORD}
+      KEYCLOAK_CLIENT_SECRET: ${KC_SVC_ANALYTICS_REPORTING_SECRET}
+      MINIO_REPORTS_BUCKET: ucms-reports
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      ASSIGNMENT_GRADING_SERVICE_URI: http://assignment-grading-service:8086
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8088/actuator/health"]
+    depends_on:
+      assignment-grading-service:
+        condition: service_healthy
+
+  gateway:
+    <<: *service
+    build:
+      context: ../services/gateway
+    environment:
+      <<: [*keycloak, *redis]
+      IDENTITY_SERVICE_URI: http://identity-access-service:8081
+      BASE_SERVICE_URI: http://base-service:8083
+      ACADEMIC_STRUCTURE_SERVICE_URI: http://academic-structure-service:8084
+      ENROLLMENT_SERVICE_URI: http://enrollment-service:8085
+      ASSIGNMENT_GRADING_SERVICE_URI: http://assignment-grading-service:8086
+      NOTIFICATION_SERVICE_URI: http://notification-service:8087
+      ANALYTICS_REPORTING_SERVICE_URI: http://analytics-reporting-service:8088
+      CORS_ALLOWED_ORIGIN: ${UCMS_APP_URL}
+    healthcheck:
+      <<: *service-healthcheck
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+    depends_on:
+      identity-access-service:
+        condition: service_healthy
+      base-service:
+        condition: service_healthy
+      academic-structure-service:
+        condition: service_healthy
+      enrollment-service:
+        condition: service_healthy
+      assignment-grading-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      analytics-reporting-service:
+        condition: service_healthy
+
+  # The only container a browser reaches: the app, and /api and /auth proxied on the
+  # same address. Loopback only.
+  web:
+    build:
+      context: ../web
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, NET_BIND_SERVICE]
+    mem_limit: 256m
+    networks: [app]
+    volumes:
+      # The real nginx.conf with only its per-IP limits raised; e2e-up.sh writes it. Those
+      # limits assume each user has their own address, and here every test browser comes
+      # from one. The per-user limits in the gateway are untouched.
+      - ./.e2e/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:${E2E_WEB_PORT}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+networks:
+  app:
+
+volumes:
+  postgres_data:

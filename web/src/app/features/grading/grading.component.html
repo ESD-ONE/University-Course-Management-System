@@ -113,6 +113,7 @@
                   <span class="cell-faint">— / {{ assignment()?.maxMarks }}</span>
                 } @else {
                   <input type="number" min="0" [max]="assignment()?.maxMarks ?? 100" [value]="r.draftMarks ?? ''" placeholder="—"
+                    [attr.aria-label]="'Marks for ' + (r.studentName ?? 'former student')"
                     [disabled]="saving()"
                     (input)="setMarks(r, $any($event.target).value)"
                     style="width:70px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
@@ -122,6 +123,7 @@
               <td>
                 @if (r.status !== 'NOT_SUBMITTED') {
                   <input type="text" [value]="r.draftFeedback" placeholder="Optional feedback"
+                    [attr.aria-label]="'Feedback for ' + (r.studentName ?? 'former student')"
                     [disabled]="saving()"
                     (input)="setFeedback(r, $any($event.target).value)"
                     style="width:100%;min-width:160px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;" />
