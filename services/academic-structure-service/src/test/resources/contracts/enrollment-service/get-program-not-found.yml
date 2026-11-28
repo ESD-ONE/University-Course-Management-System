@@ -1,0 +1,7 @@
+description: "an unknown degree program is a 404, which enrollment-service reports as \"Degree program not found\""
+name: "get program not found"
+request:
+  method: "GET"
+  url: "/degree-programs/99999999-9999-9999-9999-999999999999"
+response:
+  status: 404

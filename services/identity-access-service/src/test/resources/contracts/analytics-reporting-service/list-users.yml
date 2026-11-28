@@ -1,0 +1,21 @@
+description: "analytics-reporting-service reads every user, page by page, for its reports"
+name: "list users"
+request:
+  method: "GET"
+  urlPath: "/users"
+  queryParameters:
+    page: 0
+    size: 100
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        name: "K. Perera"
+        email: "k.perera@uni.edu"
+        role: "STUDENT"
+        status: "ACTIVE"
+        studentId: "STU-2025-0001"
+    totalPages: 1

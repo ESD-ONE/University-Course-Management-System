@@ -1,0 +1,19 @@
+description: "analytics-reporting-service reads the calling student's assignments for their dashboard"
+name: "my assignments"
+request:
+  method: "GET"
+  urlPath: "/assignments"
+  queryParameters:
+    size: 100
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - id: "13131313-1313-1313-1313-131313131313"
+        courseCode: "COSC5105"
+        title: "Essay 1"
+        dueDate: "2025-10-01T17:00:00Z"
+        status: "OPEN"
+        mySubmissionStatus: "NOT_SUBMITTED"

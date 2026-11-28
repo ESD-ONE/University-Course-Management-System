@@ -1,0 +1,22 @@
+description: "assignment-grading-service reads the offering an assignment belongs to"
+name: "get offering"
+request:
+  method: "GET"
+  url: "/course-offerings/11111111-1111-1111-1111-111111111111"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    id: "11111111-1111-1111-1111-111111111111"
+    code: "COSC5105"
+    name: "Introduction to Programming"
+    credits: 3
+    degreeProgramId: "44444444-4444-4444-4444-444444444444"
+    academicYearId: "66666666-6666-6666-6666-666666666666"
+    academicYearName: "2025/2026"
+    academicYearStatus: "ACTIVE"
+    semesterName: "Semester 1"
+    capacity: 60
+    lecturerId: "88888888-8888-8888-8888-888888888888"
+    status: "PUBLISHED"

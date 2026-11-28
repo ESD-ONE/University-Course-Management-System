@@ -1,0 +1,24 @@
+description: "analytics-reporting-service reads the latest registrations for the admin dashboard and the registrations report"
+name: "recent registrations"
+request:
+  method: "GET"
+  urlPath: "/registrations"
+  queryParameters:
+    page: 0
+    size: 5
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - id: "ffffffff-ffff-ffff-ffff-ffffffffffff"
+        studentName: "K. Perera"
+        studentNumber: "STU-2025-0001"
+        targetType: "COURSE"
+        targetLabel: "COSC5105 Introduction to Programming"
+        actorName: "A. Admin"
+        actorRole: "ADMIN"
+        action: "ENROLLED"
+        createdAt: "2025-09-02T08:30:00Z"
+    totalPages: 1

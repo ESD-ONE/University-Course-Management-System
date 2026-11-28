@@ -1,0 +1,15 @@
+description: "assignment-grading-service checks that a student is enrolled before accepting a submission"
+name: "check enrollment"
+request:
+  method: "GET"
+  urlPath: "/course-enrollments/check"
+  queryParameters:
+    studentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    offeringId: "11111111-1111-1111-1111-111111111111"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    enrolled: true
+    status: "ENROLLED"

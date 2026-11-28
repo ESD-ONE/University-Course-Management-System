@@ -1,0 +1,28 @@
+description: "notification-service emails a scheduled report to its recipients"
+name: "analytics_report_generated"
+label: "analytics.report-generated"
+input:
+  triggeredBy: "reportGenerated()"
+outputMessage:
+  sentTo: "ucms.events"
+  headers:
+    amqp_receivedRoutingKey: "analytics.report-generated"
+  body:
+    eventId: "0e0e0e0e-0e0e-0e0e-0e0e-0e0e0e0e0e0e"
+    type: "analytics.report-generated"
+    occurredAt: "2025-09-02T08:30:00Z"
+    data:
+      recipients: "registrar@uni.edu"
+      reportName: "Course Pass Rate"
+      generatedAt: "2025-09-02T06:00:00Z"
+  matchers:
+    body:
+      - path: "$.eventId"
+        type: "by_regex"
+        predefined: "uuid"
+      - path: "$.occurredAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z"
+      - path: "$.data.generatedAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)"

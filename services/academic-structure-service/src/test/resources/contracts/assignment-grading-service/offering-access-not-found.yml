@@ -1,0 +1,7 @@
+description: "access to an unknown course offering is a 404"
+name: "offering access not found"
+request:
+  method: "GET"
+  url: "/course-offerings/99999999-9999-9999-9999-999999999999/access"
+response:
+  status: 404

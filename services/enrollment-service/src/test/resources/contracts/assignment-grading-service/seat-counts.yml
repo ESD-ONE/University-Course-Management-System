@@ -1,0 +1,15 @@
+description: "assignment-grading-service reads how many students each offering has"
+name: "seat counts"
+request:
+  method: "GET"
+  urlPath: "/offerings/seats"
+  queryParameters:
+    ids: "11111111-1111-1111-1111-111111111111"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - offeringId: "11111111-1111-1111-1111-111111111111"
+      enrolled: 42
+      waitlisted: 3

@@ -1,0 +1,16 @@
+description: "academic-structure-service reads every role and its permissions to decide what a caller may do"
+name: "list roles"
+request:
+  method: "GET"
+  url: "/roles"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      permissions:
+        - permissionId: "cccccccc-cccc-cccc-cccc-cccccccccccc"
+          module: "Courses"
+          actionKey: "View"
+          granted: true

@@ -1,0 +1,27 @@
+description: "notification-service welcomes a new user"
+name: "identity_user_created"
+label: "identity.user-created"
+input:
+  triggeredBy: "userCreated()"
+outputMessage:
+  sentTo: "ucms.events"
+  headers:
+    amqp_receivedRoutingKey: "identity.user-created"
+  body:
+    eventId: "0e0e0e0e-0e0e-0e0e-0e0e-0e0e0e0e0e0e"
+    type: "identity.user-created"
+    occurredAt: "2025-09-02T08:30:00Z"
+    data:
+      userId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      name: "K. Perera"
+  matchers:
+    body:
+      - path: "$.eventId"
+        type: "by_regex"
+        predefined: "uuid"
+      - path: "$.occurredAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z"
+      - path: "$.data.userId"
+        type: "by_regex"
+        predefined: "uuid"

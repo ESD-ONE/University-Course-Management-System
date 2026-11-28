@@ -1,0 +1,16 @@
+description: "assignment-grading-service reads the grading scales to turn a percentage into a letter grade"
+name: "list grading scales"
+request:
+  method: "GET"
+  urlPath: "/grading-scales"
+  queryParameters:
+    size: 100
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - name: "Standard"
+        bands: "A:80,B:65,C:50,F:0"
+        status: "ACTIVE"

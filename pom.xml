@@ -45,6 +45,9 @@
              Spring Boot's BOM, which carries no plugin versions. -->
         <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
         <sonar-maven-plugin.version>4.0.0.4121</sonar-maven-plugin.version>
+        <!-- The release that belongs to Spring Cloud ${spring-cloud.version}. The BOM manages
+             the Spring Cloud Contract libraries but, like Spring Boot's, no plugin versions. -->
+        <spring-cloud-contract.version>4.1.4</spring-cloud-contract.version>
         <!-- Shared by every module's jacoco:report — SonarQube reads this one file per
              module rather than needing a path listed per service. -->
         <jacoco.report.path>${project.build.directory}/site/jacoco/jacoco.xml</jacoco.report.path>
@@ -134,6 +137,26 @@
                     <groupId>org.sonarsource.scanner.maven</groupId>
                     <artifactId>sonar-maven-plugin</artifactId>
                     <version>${sonar-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <!-- Contract tests: a service that other services call keeps one YAML
+                         contract per endpoint or event under src/test/resources/contracts.
+                         This plugin turns each into a test that runs in `test` against the
+                         real controller; the calling service runs its real client against
+                         the same file (its *ContractTest classes). A provider module adds
+                         this plugin and names its own base class. -->
+                    <groupId>org.springframework.cloud</groupId>
+                    <artifactId>spring-cloud-contract-maven-plugin</artifactId>
+                    <version>${spring-cloud-contract.version}</version>
+                    <extensions>true</extensions>
+                    <configuration>
+                        <testFramework>JUNIT5</testFramework>
+                        <testMode>MOCKMVC</testMode>
+                        <!-- Generate on every build. With the default (only when a contract
+                             changed) a build that does not start from `clean` skips the
+                             generated tests without saying so. -->
+                        <incrementalContractTests>false</incrementalContractTests>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -1,0 +1,29 @@
+description: "notification-service tells the students of an offering about a new assignment"
+name: "grading_assignment_published"
+label: "grading.assignment-published"
+input:
+  triggeredBy: "assignmentPublished()"
+outputMessage:
+  sentTo: "ucms.events"
+  headers:
+    amqp_receivedRoutingKey: "grading.assignment-published"
+  body:
+    eventId: "0e0e0e0e-0e0e-0e0e-0e0e-0e0e0e0e0e0e"
+    type: "grading.assignment-published"
+    occurredAt: "2025-09-02T08:30:00Z"
+    data:
+      offeringId: "11111111-1111-1111-1111-111111111111"
+      title: "Essay 1"
+      courseCode: "COSC5105"
+      dueDate: "2025-10-01T17:00Z"
+  matchers:
+    body:
+      - path: "$.eventId"
+        type: "by_regex"
+        predefined: "uuid"
+      - path: "$.occurredAt"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z"
+      - path: "$.data.dueDate"
+        type: "by_regex"
+        value: "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+(Z|[+-][0-9:]+)"

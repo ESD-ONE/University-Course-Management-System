@@ -1,0 +1,14 @@
+description: "base-service counts the degree programs of a department before deleting it"
+name: "count programs of department"
+request:
+  method: "GET"
+  urlPath: "/degree-programs"
+  queryParameters:
+    departmentId: "55555555-5555-5555-5555-555555555555"
+    size: 1
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    totalElements: 1

@@ -1,0 +1,7 @@
+description: "an unknown user is a 404, which notification-service reports as \"User not found\""
+name: "get user not found"
+request:
+  method: "GET"
+  url: "/users/99999999-9999-9999-9999-999999999999"
+response:
+  status: 404

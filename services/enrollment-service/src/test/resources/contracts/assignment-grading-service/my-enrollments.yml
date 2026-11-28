@@ -1,0 +1,15 @@
+description: "assignment-grading-service reads the courses the calling student is enrolled in"
+name: "my enrollments"
+request:
+  method: "GET"
+  url: "/course-enrollments/me"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+      offeringId: "11111111-1111-1111-1111-111111111111"
+      courseCode: "COSC5105"
+      courseName: "Introduction to Programming"
+      status: "ENROLLED"

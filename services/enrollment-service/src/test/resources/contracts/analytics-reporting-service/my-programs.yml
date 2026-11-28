@@ -1,0 +1,18 @@
+description: "analytics-reporting-service reads the calling student's degree programs for their dashboard"
+name: "my programs"
+request:
+  method: "GET"
+  url: "/program-enrollments/me"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - degreeProgramId: "44444444-4444-4444-4444-444444444444"
+      degreeProgramCode: "BSC-CS"
+      degreeProgramName: "BSc in Computer Science"
+      totalCredits: 120
+      durationYears: 4
+      currentYearOfStudy: 1
+      intakeAcademicYearName: "2025/2026"
+      status: "ACTIVE"

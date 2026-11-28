@@ -1,0 +1,14 @@
+description: "analytics-reporting-service reads the user counts for the dashboard"
+name: "user summary"
+request:
+  method: "GET"
+  url: "/users/summary"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    total: 120
+    active: 110
+    students: 100
+    staff: 20

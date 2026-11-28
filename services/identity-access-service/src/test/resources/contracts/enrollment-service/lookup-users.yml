@@ -1,0 +1,18 @@
+description: "enrollment-service reads several users by id in one call"
+name: "lookup users"
+request:
+  method: "GET"
+  urlPath: "/users/lookup"
+  queryParameters:
+    ids: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    - id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+      name: "K. Perera"
+      email: "k.perera@uni.edu"
+      role: "STUDENT"
+      status: "ACTIVE"
+      studentId: "STU-2025-0001"

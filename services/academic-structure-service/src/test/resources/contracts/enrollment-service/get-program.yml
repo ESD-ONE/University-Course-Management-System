@@ -1,0 +1,17 @@
+description: "enrollment-service reads a degree program before it registers a student in it"
+name: "get program"
+request:
+  method: "GET"
+  url: "/degree-programs/44444444-4444-4444-4444-444444444444"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    id: "44444444-4444-4444-4444-444444444444"
+    code: "BSC-CS"
+    name: "BSc in Computer Science"
+    departmentId: "55555555-5555-5555-5555-555555555555"
+    durationYears: 4
+    totalCredits: 120
+    status: "ACTIVE"

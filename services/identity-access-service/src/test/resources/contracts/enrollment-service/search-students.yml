@@ -1,0 +1,22 @@
+description: "enrollment-service searches active students by name for admin registration"
+name: "search students"
+request:
+  method: "GET"
+  urlPath: "/users"
+  queryParameters:
+    role: "STUDENT"
+    status: "ACTIVE"
+    size: 50
+    q: "perera"
+response:
+  status: 200
+  headers:
+    Content-Type: "application/json"
+  body:
+    content:
+      - id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        name: "K. Perera"
+        email: "k.perera@uni.edu"
+        role: "STUDENT"
+        status: "ACTIVE"
+        studentId: "STU-2025-0001"
