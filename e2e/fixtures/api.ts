@@ -73,11 +73,11 @@ export class ApiError extends Error {
  * tokens last five minutes, so one is fetched per test rather than kept for the run.
  */
 export async function apiFor(browser: Browser, role: Role, baseURL: string): Promise<Api> {
-  const context = await browser.newContext({ storageState: sessionFile(role), baseURL });
+  const context = await browser.newContext({ storageState: sessionFile(role), baseURL, ignoreHTTPSErrors: true });
   try {
     const page = await context.newPage();
     const token = await accessTokenFrom(page, () => page.goto('/app/dashboard'));
-    return new Api(await request.newContext({ baseURL }), token);
+    return new Api(await request.newContext({ baseURL, ignoreHTTPSErrors: true }), token);
   } finally {
     await context.close();
   }

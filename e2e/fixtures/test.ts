@@ -48,7 +48,7 @@ async function useSignedInPage(
   baseURL: string,
   use: (page: Page) => Promise<void>,
 ): Promise<void> {
-  const context = await browser.newContext({ storageState: sessionFile(role), baseURL });
+  const context = await browser.newContext({ storageState: sessionFile(role), baseURL, ignoreHTTPSErrors: true });
   const page = await context.newPage();
   await use(page);
   await context.close();
