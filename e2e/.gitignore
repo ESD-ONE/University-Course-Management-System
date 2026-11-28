@@ -1,0 +1,5 @@
+node_modules/
+playwright-report/
+test-results/
+# Saved sign-in sessions and the names of the users created for a run.
+.auth/
