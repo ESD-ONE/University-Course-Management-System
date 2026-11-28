@@ -2,7 +2,7 @@
 # from the real stack on purpose: its own project name, networks and volumes, no fixed
 # container names, and one published port (the web container). So it can be started on a
 # machine that also runs docker-compose.infra.yml and docker-compose.deploy.yml without
-# touching them.
+# touching them. The app is served on https://localhost:8091.
 #
 # It uses the same images and Dockerfiles as those two files: when a service, a setting
 # or an image version changes there, change it here too.
@@ -352,12 +352,19 @@ services:
     mem_limit: 256m
     networks: [app]
     volumes:
-      # The real nginx.conf with only its per-IP limits raised; e2e-up.sh writes it. Those
-      # limits assume each user has their own address, and here every test browser comes
-      # from one. The per-user limits in the gateway are untouched.
+      # The real nginx.conf with two changes, written by e2e-up.sh:
+      # - It also listens on 443 with this stack's own certificate. Production is reached
+      #   over HTTPS too (ended by a proxy in front of this container). Keycloak marks
+      #   its session cookies "Secure", and not every browser sends those over plain
+      #   http://localhost: WebKit on Linux does not.
+      # - Its per-IP limits are raised. They assume each user has their own address, and
+      #   here every test browser comes from one. The gateway's per-user limits are
+      #   untouched.
       - ./.e2e/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.e2e/cert.pem:/etc/nginx/e2e/cert.pem:ro
+      - ./.e2e/key.pem:/etc/nginx/e2e/key.pem:ro
     ports:
-      - "127.0.0.1:${E2E_WEB_PORT}:80"
+      - "127.0.0.1:${E2E_WEB_PORT}:443"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 5s

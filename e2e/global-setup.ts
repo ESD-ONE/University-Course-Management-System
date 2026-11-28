@@ -19,11 +19,11 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const browser = await chromium.launch();
   try {
     // 1. The admin signs in; the token the app receives is reused for the setup calls.
-    const adminContext = await browser.newContext({ baseURL });
+    const adminContext = await browser.newContext({ baseURL, ignoreHTTPSErrors: true });
     const adminPage = await adminContext.newPage();
     const adminToken = await accessTokenFrom(adminPage, () => signIn(adminPage, USERS.admin));
     await adminContext.storageState({ path: sessionFile('admin') });
-    const admin = new Api(await request.newContext({ baseURL }), adminToken);
+    const admin = new Api(await request.newContext({ baseURL, ignoreHTTPSErrors: true }), adminToken);
 
     // 2. The other accounts.
     const userIds = { admin: (await admin.get('/api/identity/users/me')).id } as Record<Role, string>;
@@ -46,7 +46,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
     // 5. A saved session for each of the new accounts.
     for (const user of [USERS.setupAdmin, USERS.lecturer, USERS.student, USERS.otherStudent]) {
-      const context = await browser.newContext({ baseURL });
+      const context = await browser.newContext({ baseURL, ignoreHTTPSErrors: true });
       await signIn(await context.newPage(), user);
       await context.storageState({ path: sessionFile(user.role) });
       await context.close();

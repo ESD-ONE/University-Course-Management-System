@@ -65,7 +65,8 @@ test('an assignment is published, submitted, graded and the student sees the gra
   // The student sees the marks and feedback on the assignment...
   await studentPage.reload();
   await studentPage.getByRole('button', { name: title }).click();
-  await expect(studentPage.getByText('85 / 100')).toBeVisible();
+  // Exact, because the student may also still see the live "you scored 85 / 100" pop-up.
+  await expect(studentPage.getByText('85 / 100', { exact: true })).toBeVisible();
   await expect(studentPage.getByText('Clear and well argued.')).toBeVisible();
 
   // ...and the course grade on their grades page.

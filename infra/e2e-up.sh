@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Builds and starts the end-to-end test stack (docker-compose.e2e.yml) and waits until
-# every container is healthy. The app is then at http://localhost:8091.
+# every container is healthy. The app is then at https://localhost:8091 (with a
+# certificate made for this stack, which a browser will warn about).
 #
 #   ./e2e-up.sh            build what is missing, then start
 #   ./e2e-up.sh --rebuild  rebuild the service jars and the frontend first
 #
 #   E2E_WEB_PORT=8191 ./e2e-up.sh   use another port when 8091 is taken
 #
-# Needs Docker, JDK 17+ and Node 20+ (or Docker alone for the frontend build).
+# Needs Docker, openssl, JDK 17+ and Node 20+ (or Docker alone for the frontend build).
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -36,31 +37,42 @@ if [ "$REBUILD" = "--rebuild" ] || [ ! -f "$ROOT/web/dist/web/browser/index.html
     fi
 fi
 
-# All test browsers reach the web container from one address, so its per-IP limits
-# (sign-in, token exchange, API, live streams) would treat a test run as one abusive
-# client. Start it with the real nginx.conf, with only those limits raised.
 mkdir -p .e2e
-sed -E -e 's#(limit_req_zone .* rate=)[0-9]+r/[sm];#\11000r/s;#' \
+
+# A certificate for https://localhost, for this stack only. Throwaway: it is not trusted
+# by anything, and the tests are told to accept it.
+if [ ! -f .e2e/cert.pem ] || [ ! -f .e2e/key.pem ]; then
+    echo "==> Making a certificate for the test stack"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+        -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+        -keyout .e2e/key.pem -out .e2e/cert.pem 2>/dev/null
+    # The web container's nginx starts without the right to read other users' files.
+    chmod 644 .e2e/key.pem
+fi
+
+# The web container starts with the real nginx.conf, with two changes (see the "web"
+# service in docker-compose.e2e.yml for why): it also serves HTTPS on 443, and its
+# per-IP limits are raised.
+sed -E -e 's#^( *)listen 80;#\1listen 80; listen 443 ssl; ssl_certificate /etc/nginx/e2e/cert.pem; ssl_certificate_key /etc/nginx/e2e/key.pem;#' \
+       -e 's#(limit_req_zone .* rate=)[0-9]+r/[sm];#\11000r/s;#' \
        -e 's#(limit_conn sse_conn )[0-9]+;#\11000;#' \
        "$ROOT/web/nginx.conf" > .e2e/nginx.conf
 
 echo "==> Starting the stack (first start takes a few minutes)"
 "${COMPOSE[@]}" up -d --build --wait --wait-timeout 900
 
-# The realm only lets the web app sign in from the addresses it lists, and 8091 is the
-# only local one that fits this stack. On any other port, add this stack's address to
-# its own Keycloak (never to the realm file, which production imports too).
-if [ "$E2E_WEB_PORT" != "8091" ]; then
-    echo "==> Allowing sign-in from port $E2E_WEB_PORT"
-    "${COMPOSE[@]}" exec -T -e HOME=/tmp ucms-keycloak bash -c '
-        set -e
-        kc=/opt/keycloak/bin/kcadm.sh
-        $kc config credentials --server http://localhost:8080/auth --realm master \
-            --user admin --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
-        id=$($kc get clients -r ucms -q clientId=ucms-web --fields id --format csv --noquotes)
-        $kc update "clients/$id" -r ucms -s "redirectUris=[\"'"http://localhost:$E2E_WEB_PORT"'/*\"]" \
-            -s "attributes.\"post.logout.redirect.uris\"='"http://localhost:$E2E_WEB_PORT"'/*"
-    '
-fi
+# The realm only lets the web app sign in from the addresses it lists, and this stack's
+# HTTPS address is not one of them. Add it to this stack's own Keycloak (never to the realm
+# file, which production imports too).
+echo "==> Allowing sign-in from https://localhost:$E2E_WEB_PORT"
+"${COMPOSE[@]}" exec -T -e HOME=/tmp ucms-keycloak bash -c '
+    set -e
+    kc=/opt/keycloak/bin/kcadm.sh
+    $kc config credentials --server http://localhost:8080/auth --realm master \
+        --user admin --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
+    id=$($kc get clients -r ucms -q clientId=ucms-web --fields id --format csv --noquotes)
+    $kc update "clients/$id" -r ucms -s "redirectUris=[\"'"https://localhost:$E2E_WEB_PORT"'/*\"]" \
+        -s "attributes.\"post.logout.redirect.uris\"='"https://localhost:$E2E_WEB_PORT"'/*"
+'
 
-echo "==> Ready: http://localhost:$E2E_WEB_PORT"
+echo "==> Ready: https://localhost:$E2E_WEB_PORT"

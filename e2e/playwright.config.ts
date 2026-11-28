@@ -2,9 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * The tests run against the stack started by infra/e2e-up.sh. Set E2E_BASE_URL when it is
- * on another port, for example E2E_BASE_URL=http://localhost:8191.
+ * on another port, for example E2E_BASE_URL=https://localhost:8191.
  */
-export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8091';
+export const BASE_URL = process.env.E2E_BASE_URL ?? 'https://localhost:8091';
 
 export default defineConfig({
   testDir: './tests',
@@ -20,6 +20,8 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: BASE_URL,
+    // The stack serves HTTPS with a certificate made for it by e2e-up.sh.
+    ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

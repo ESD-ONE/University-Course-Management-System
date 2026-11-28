@@ -16,12 +16,12 @@ as artifacts for 14 days.
 ## What you need
 
 - Docker, with about 6 GB of memory available to it
-- JDK 17 or later, and Node 20 or later
+- JDK 17 or later, Node 20 or later, and `openssl`
 
 ## Run the tests
 
 ```bash
-# 1. Start the system (a few minutes the first time). It is at http://localhost:8091.
+# 1. Start the system (a few minutes the first time). It is at https://localhost:8091.
 ../infra/e2e-up.sh
 
 # 2. Install the test tools (once).
@@ -60,7 +60,7 @@ Start the system on another port and tell the tests where it is:
 
 ```bash
 E2E_WEB_PORT=8191 ../infra/e2e-up.sh
-E2E_BASE_URL=http://localhost:8191 npx playwright test
+E2E_BASE_URL=https://localhost:8191 npx playwright test
 E2E_WEB_PORT=8191 ../infra/e2e-down.sh
 ```
 
@@ -82,6 +82,11 @@ it here too.
 
 On an ARM machine (Apple Silicon) the Java services run under emulation, because their
 base image exists for amd64 only. They start more slowly but behave the same.
+
+It is served over HTTPS, as production is, with a certificate `e2e-up.sh` makes for this
+stack. The tests accept it; your own browser will warn about it. HTTPS is needed, not
+optional: Keycloak marks its session cookies "Secure", and WebKit on Linux does not send
+those over plain `http://localhost`.
 
 Two things differ from production on purpose, both because every test browser comes from
 one machine:
